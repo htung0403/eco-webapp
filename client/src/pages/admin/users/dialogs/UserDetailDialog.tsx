@@ -1,0 +1,10 @@
+import { X } from 'lucide-react';
+import type { UserAccount } from '../types';
+import { RoleBadgeList, StatusBadge, HubBadgeList } from '../UserDisplay';
+
+export default function UserDetailDialog({ user, onClose }: { user: UserAccount | null; onClose: () => void }) {
+  if (!user) return null;
+  return <div className="fixed inset-0 z-[9999] flex justify-end"><button type="button" aria-label="Đóng" className="fixed inset-0 bg-black/40 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose} /><div className="relative flex h-screen w-full max-w-[680px] flex-col border-l border-border bg-[#f8fafc] shadow-2xl dialog-slide-in"><div className="flex items-center justify-between border-b border-border bg-white px-6 py-4"><h2 className="text-[16px] font-extrabold text-foreground">Chi tiết nhân sự</h2><button onClick={onClose} className="rounded-full p-2 hover:bg-muted"><X size={18} /></button></div><div className="flex-1 space-y-3 overflow-y-auto p-6 custom-scrollbar"><Info label="ID" value={String(user.id)} /><Info label="Username" value={user.username} /><Info label="Họ tên" value={user.name} /><Info label="Điện thoại" value={user.phone} /><Section label="Quyền"><RoleBadgeList roleMask={user.role_mask} /></Section>{user.status !== undefined && user.status !== null && <Section label="Trạng thái"><StatusBadge status={user.status} /></Section>}<Section label="Bưu cục"><HubBadgeList user={user} /></Section></div></div></div>;
+}
+function Section({ label, children }: { label: string; children: React.ReactNode }) { return <div className="rounded-2xl border border-border bg-white p-4 shadow-sm"><div className="mb-2 text-[11px] font-bold uppercase text-muted-foreground">{label}</div>{children}</div>; }
+function Info({ label, value }: { label: string; value?: string }) { return <div className="rounded-2xl border border-border bg-white p-4 shadow-sm"><div className="text-[11px] font-bold uppercase text-muted-foreground">{label}</div><div className="mt-1 font-bold text-foreground">{value || '—'}</div></div>; }

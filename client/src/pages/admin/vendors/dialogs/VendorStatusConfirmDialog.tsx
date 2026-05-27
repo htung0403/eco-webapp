@@ -1,0 +1,8 @@
+import { createPortal } from 'react-dom';
+import { Power, X } from 'lucide-react';
+
+interface Props { isOpen: boolean; vendorName: string; nextStatus: string; isSubmitting: boolean; error?: string; onClose: () => void; onConfirm: () => void; }
+export default function VendorStatusConfirmDialog({ isOpen, vendorName, nextStatus, isSubmitting, error, onClose, onConfirm }: Props) {
+  if (!isOpen) return null;
+  return createPortal(<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4"><div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-border bg-card px-5 py-4"><div className="flex items-center gap-2 text-[15px] font-extrabold"><Power size={18} className="text-primary" />Xác nhận trạng thái</div><button onClick={onClose} className="rounded-full p-2 text-muted-foreground hover:bg-muted"><X size={18} /></button></div><div className="p-5 text-[13px] font-medium text-muted-foreground">Bạn muốn chuyển NCC <b className="text-foreground">{vendorName}</b> sang trạng thái <b className="text-foreground">{nextStatus}</b>?{error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 font-bold text-red-600">{error}</div>}</div><div className="flex justify-end gap-3 border-t border-border bg-card p-5"><button onClick={onClose} className="rounded-xl border border-border bg-white px-5 py-3 text-[13px] font-bold text-muted-foreground hover:bg-muted">Hủy</button><button onClick={onConfirm} disabled={isSubmitting} className="rounded-xl bg-primary px-6 py-3 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60">Xác nhận</button></div></div></div>, document.body);
+}

@@ -1,0 +1,24 @@
+export enum TruckStatus {
+  AVAILABLE = 'AVAILABLE',
+  ASSIGNED = 'ASSIGNED',
+  IN_TRIP = 'IN_TRIP',
+  MAINTENANCE = 'MAINTENANCE',
+  INACTIVE = 'INACTIVE',
+  IN_USE = 'IN_USE',
+}
+
+export enum TruckType {
+  INTERNAL = 'INTERNAL',
+  VENDOR = 'VENDOR',
+  VAN = 'VAN',
+  LIGHT_TRUCK = 'LIGHT_TRUCK',
+  MEDIUM_TRUCK = 'MEDIUM_TRUCK',
+  HEAVY_TRUCK = 'HEAVY_TRUCK',
+  CONTAINER = 'CONTAINER',
+}
+
+export enum TruckOwnershipType {
+  INTERNAL = 'INTERNAL',
+  RENTED = 'RENTED',
+  VENDOR = 'VENDOR',
+}

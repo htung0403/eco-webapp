@@ -1,0 +1,56 @@
+export type TruckStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE' | string;
+
+export interface DriverSummary {
+  id: string | number;
+  name?: string | null;
+  full_name?: string | null;
+  username?: string | null;
+  phone?: string | null;
+}
+
+export interface Truck {
+  id: string | number;
+  license_plate: string;
+  payload: number;
+  driver_id?: string | number | null;
+  driver?: DriverSummary | null;
+  fuel_consumption_limit: number;
+  status: TruckStatus;
+}
+
+export interface TruckListResponse {
+  data?: Truck[];
+  items?: Truck[];
+  trucks?: Truck[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  meta?: {
+    total?: number;
+    page?: number;
+    limit?: number;
+    totalPages?: number;
+    total_pages?: number;
+  };
+}
+
+export interface TruckFilters {
+  keyword: string;
+  status: string[];
+  driver_id: string;
+  page: number;
+  limit: number;
+}
+
+export interface TruckFormState {
+  license_plate: string;
+  payload: string;
+  driver_id: string;
+  fuel_consumption_limit: string;
+  status: string;
+}
+
+export interface FilterOption {
+  value: string;
+  label: string;
+}

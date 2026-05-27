@@ -1,0 +1,172 @@
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { WaybillsService } from './waybills.service';
+import { Roles } from '../common/roles';
+import { WaybillPriority, WaybillStatus } from './dto/waybill.enums';
+
+const manager = { id: 'u1', role_mask: Roles.MANAGER, hub_id: '1' } as any;
+const warehouse = { id: 'u2', role_mask: Roles.WAREHOUSE, hub_id: '1' } as any;
+const accountant = { id: 'u3', role_mask: Roles.ACCOUNTANT, hub_id: '1' } as any;
+
+const makeWaybill = (overrides: Record<string, any> = {}) => ({
+  id: '1',
+  waybill_code: 'ECO1',
+  sender_info: 'Sender | 090 | A',
+  receiver_info: 'Receiver | 091 | B',
+  origin_hub_id: '1',
+  dest_hub_id: '2',
+  current_hub_id: '1',
+  current_state: WaybillStatus.RECEIVED,
+  status: WaybillStatus.RECEIVED,
+  priority: WaybillPriority.NORMAL,
+  cod_amount: 0,
+  freight_amount: 0,
+  cc_amount: 0,
+  package_count: 1,
+  created_at: new Date('2026-01-01'),
+  ...overrides,
+});
+
+const createQueryBuilder = () => {
+  const qb: any = {
+    where: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getManyAndCount: jest.fn().mockResolvedValue([[makeWaybill()], 1]),
+  };
+  return qb;
+};
+
+describe('WaybillsService', () => {
+  let service: WaybillsService;
+  let waybillsRepository: any;
+  let hubsRepository: any;
+
+  beforeEach(() => {
+    waybillsRepository = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => value),
+      findOne: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+      createQueryBuilder: jest.fn(createQueryBuilder),
+    };
+    hubsRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: '1', is_active: true }),
+    };
+    service = new WaybillsService(waybillsRepository, hubsRepository);
+    jest.spyOn(Date, 'now').mockReturnValue(1770000000000);
+    jest.spyOn(Math, 'random').mockReturnValue(0.123);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('create creates RECEIVED waybill and generates unique waybill_code', async () => {
+    waybillsRepository.findOne.mockResolvedValue(null);
+    const result = await service.create({ sender_name: 'A', sender_phone: '1', sender_address: 'HN', receiver_name: 'B', receiver_phone: '2', receiver_address: 'HCM', origin_hub_id: '1', dest_hub_id: '2', weight: 3 }, manager);
+    expect(result.waybill_code).toMatch(/^ECO/);
+    expect(result.status).toBe(WaybillStatus.RECEIVED);
+    expect(waybillsRepository.save).toHaveBeenCalledWith(expect.objectContaining({ current_state: WaybillStatus.RECEIVED }));
+  });
+
+  it('create blocks missing or inactive hub', async () => {
+    hubsRepository.findOne.mockResolvedValueOnce(null);
+    await expect(service.create({ sender_name: 'A', sender_phone: '1', sender_address: 'HN', receiver_name: 'B', receiver_phone: '2', receiver_address: 'HCM', origin_hub_id: '1', dest_hub_id: '2', weight: 3 }, manager)).rejects.toThrow(BadRequestException);
+  });
+
+  it('findAll applies keyword/status/hub/priority/date filters', async () => {
+    const qb = createQueryBuilder();
+    waybillsRepository.createQueryBuilder.mockReturnValue(qb);
+    await service.findAll({ keyword: 'ECO', status: WaybillStatus.RECEIVED, origin_hub_id: '1', dest_hub_id: '2', priority: WaybillPriority.HIGH, from_date: '2026-01-01', to_date: '2026-01-31' }, manager);
+    expect(qb.andWhere).toHaveBeenCalledWith('waybill.current_state IN (:...statuses)', { statuses: [WaybillStatus.RECEIVED] });
+    expect(qb.andWhere).toHaveBeenCalledWith('waybill.origin_hub_id = :originHubId', { originHubId: '1' });
+    expect(qb.andWhere).toHaveBeenCalledWith('waybill.priority IN (:...priorities)', { priorities: [WaybillPriority.HIGH] });
+  });
+
+  it('user hub only sees waybills in assigned hub scope', async () => {
+    const qb = createQueryBuilder();
+    waybillsRepository.createQueryBuilder.mockReturnValue(qb);
+    await service.findAll({}, warehouse);
+    expect(qb.andWhere).toHaveBeenCalled();
+  });
+
+  it('receive transitions RECEIVED to IN_WAREHOUSE', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill());
+    const result = await service.receive('1', { delivery_photo_url: 'https://example.com/receive.jpg' }, warehouse);
+    expect(result.status).toBe(WaybillStatus.IN_WAREHOUSE);
+    expect(result.received_by).toBe(warehouse.id);
+    expect(result.delivery_photo_url).toBe('https://example.com/receive.jpg');
+  });
+
+  it('receive blocks wrong status', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.IN_WAREHOUSE, current_state: WaybillStatus.IN_WAREHOUSE }));
+    await expect(service.receive('1', { delivery_photo_url: 'https://example.com/receive.jpg' }, warehouse)).rejects.toThrow(BadRequestException);
+  });
+
+  it('updateStatus accepts valid state machine transition', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill());
+    const result = await service.updateStatus('1', { status: WaybillStatus.IN_WAREHOUSE }, warehouse);
+    expect(result.status).toBe(WaybillStatus.IN_WAREHOUSE);
+  });
+
+  it('updateStatus blocks skipped transition', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill());
+    await expect(service.updateStatus('1', { status: WaybillStatus.IN_TRANSIT }, warehouse)).rejects.toThrow(BadRequestException);
+  });
+
+  it('assignPriority blocks URGENT without reason', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill());
+    await expect(service.assignPriority('1', { priority: WaybillPriority.URGENT }, manager)).rejects.toThrow(BadRequestException);
+  });
+
+  it('assignRoute blocks invalid status', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.RECEIVED }));
+    await expect(service.assignRoute('1', { route_code: 'R1' }, manager)).rejects.toThrow(BadRequestException);
+  });
+
+  it('updateCodFee blocks negative numbers', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill());
+    await expect(service.updateCodFee('1', { cod_amount: -1 }, accountant)).rejects.toThrow(BadRequestException);
+  });
+
+  it('ACCOUNTANT can update COD after MANIFEST_CLOSED and WAREHOUSE cannot', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.MANIFEST_CLOSED, current_state: WaybillStatus.MANIFEST_CLOSED }));
+    await expect(service.updateCodFee('1', { cod_amount: 100 }, accountant)).resolves.toMatchObject({ status: WaybillStatus.MANIFEST_CLOSED });
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.MANIFEST_CLOSED, current_state: WaybillStatus.MANIFEST_CLOSED }));
+    await expect(service.updateCodFee('1', { cod_amount: 100 }, warehouse)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('cancel only allows RECEIVED or IN_WAREHOUSE', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.IN_WAREHOUSE }));
+    await expect(service.cancel('1', { reason: 'customer request' }, warehouse)).resolves.toMatchObject({ status: WaybillStatus.CANCELLED });
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.IN_TRANSIT }));
+    await expect(service.cancel('1', { reason: 'customer request' }, warehouse)).rejects.toThrow(BadRequestException);
+  });
+
+  it('softDelete blocks MANIFEST_CLOSED waybill', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.MANIFEST_CLOSED }));
+    await expect(service.softDelete('1', manager)).rejects.toThrow(BadRequestException);
+  });
+
+  it('response omits fee fields for non-manager users', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ cod_amount: 10, freight_amount: 20, cc_amount: 30 }));
+    const result = await service.findOne('1', warehouse);
+    expect(result).not.toHaveProperty('cod_amount');
+    expect(result).not.toHaveProperty('freight_amount');
+    expect(result).not.toHaveProperty('cc_amount');
+  });
+
+  it('getByCode returns accessible waybill by code', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill());
+    await expect(service.getByCode('ECO1', warehouse)).resolves.toMatchObject({ waybill_code: 'ECO1' });
+  });
+
+  it('getInventory, getIncoming and getOverdue delegate to filtered lists', async () => {
+    const findAll = jest.spyOn(service, 'findAll').mockResolvedValue({ items: [], meta: {} } as any);
+    await service.getInventory({}, warehouse);
+    await service.getIncoming({}, warehouse);
+    await service.getOverdue({}, warehouse);
+    expect(findAll).toHaveBeenCalledTimes(3);
+  });
+});

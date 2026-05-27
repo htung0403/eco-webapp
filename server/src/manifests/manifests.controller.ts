@@ -1,0 +1,92 @@
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequireRoles } from '../auth/decorators/require-roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/roles';
+import { UserEntity } from '../users/user.entity';
+import { AddWaybillsToManifestDto } from './dto/add-waybills-to-manifest.dto';
+import { AssignManifestTripDto } from './dto/assign-manifest-trip.dto';
+import { CloseManifestDto } from './dto/close-manifest.dto';
+import { CreateManifestDto } from './dto/create-manifest.dto';
+import { QueryManifestsDto } from './dto/query-manifests.dto';
+import { UpdateManifestDto } from './dto/update-manifest.dto';
+import { ManifestsService } from './manifests.service';
+
+@ApiTags('Manifests')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('manifests')
+export class ManifestsController {
+  constructor(private readonly manifestsService: ManifestsService) {}
+
+  @Post()
+  @RequireRoles(Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Create a draft manifest' })
+  create(@Body() dto: CreateManifestDto, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.create(dto, currentUser);
+  }
+
+  @Get()
+  @RequireRoles(Roles.WAREHOUSE, Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'List manifests' })
+  findAll(@Query() query: QueryManifestsDto, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.findAll(query, currentUser);
+  }
+
+  @Get(':id')
+  @RequireRoles(Roles.WAREHOUSE, Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Get manifest detail with waybills' })
+  findOne(@Param('id') id: string, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.findOne(id, currentUser);
+  }
+
+  @Patch(':id')
+  @RequireRoles(Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Update a draft manifest' })
+  update(@Param('id') id: string, @Body() dto: UpdateManifestDto, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.update(id, dto, currentUser);
+  }
+
+  @Post(':id/waybills')
+  @RequireRoles(Roles.DISPATCHER, Roles.PACKER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Add waybills to a draft manifest' })
+  addWaybills(@Param('id') id: string, @Body() dto: AddWaybillsToManifestDto, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.addWaybills(id, dto, currentUser);
+  }
+
+  @Delete(':id/waybills/:waybillId')
+  @RequireRoles(Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Remove a waybill from a draft manifest' })
+  removeWaybill(@Param('id') id: string, @Param('waybillId') waybillId: string, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.removeWaybill(id, waybillId, currentUser);
+  }
+
+  @Patch(':id/close')
+  @RequireRoles(Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Close a manifest and move waybills to MANIFEST_CLOSED' })
+  closeManifest(@Param('id') id: string, @Body() dto: CloseManifestDto, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.closeManifest(id, dto, currentUser);
+  }
+
+  @Patch(':id/assign-trip')
+  @RequireRoles(Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Assign a closed manifest to a trip' })
+  assignTrip(@Param('id') id: string, @Body() dto: AssignManifestTripDto, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.assignTrip(id, dto, currentUser);
+  }
+
+  @Get(':id/print')
+  @RequireRoles(Roles.WAREHOUSE, Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Get printable manifest data without hidden financial fields' })
+  getPrintableManifest(@Param('id') id: string, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.getPrintableManifest(id, currentUser);
+  }
+
+  @Delete(':id')
+  @RequireRoles(Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Soft delete a draft manifest' })
+  softDelete(@Param('id') id: string, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.softDelete(id, currentUser);
+  }
+}

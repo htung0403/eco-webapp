@@ -1,0 +1,20 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
+
+export class CreateWaybillDto {
+  @ApiProperty() @IsString() @IsNotEmpty() sender_name: string;
+  @ApiProperty() @IsString() @IsNotEmpty() sender_phone: string;
+  @ApiProperty() @IsString() @IsNotEmpty() sender_address: string;
+  @ApiProperty() @IsString() @IsNotEmpty() receiver_name: string;
+  @ApiProperty() @IsString() @IsNotEmpty() receiver_phone: string;
+  @ApiProperty() @IsString() @IsNotEmpty() receiver_address: string;
+  @ApiProperty() @IsString() @IsNotEmpty() origin_hub_id: string;
+  @ApiProperty() @IsString() @IsNotEmpty() dest_hub_id: string;
+  @ApiProperty() @IsNumber() @IsPositive() weight: number;
+  @ApiPropertyOptional({ default: 1 }) @IsOptional() @IsNumber() @Min(1) package_count?: number;
+  @ApiPropertyOptional({ default: 0 }) @IsOptional() @IsNumber() @Min(0) cod_amount?: number;
+  @ApiPropertyOptional({ default: 0 }) @IsOptional() @IsNumber() @Min(0) freight_amount?: number;
+  @ApiPropertyOptional({ default: 0 }) @IsOptional() @IsNumber() @Min(0) cc_amount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() note?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() expected_delivery_at?: string;
+}
