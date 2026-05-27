@@ -8,7 +8,7 @@ import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { sidebarMenu, extraMenuItems } from '../../data/sidebarMenu';
 import { moduleGroups } from '../../data/moduleData';
 import { clsx } from 'clsx';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../context/useTheme';
 import { apiRequest, clearAuthSession } from '../../lib/api';
 import type { AuthUserProfile } from '../../pages/login/types';
 
@@ -144,7 +144,12 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
   const hasMore = notifications.length > 5;
 
   const currentPath = location.pathname;
-  const menuItems = [...sidebarMenu, ...extraMenuItems, { path: '/profile', label: 'Hồ sơ & cài đặt cá nhân' }];
+  const menuItems = [
+    ...sidebarMenu,
+    ...extraMenuItems,
+    { path: '/profile', label: 'Hồ sơ & cài đặt cá nhân' },
+    { path: '/settings', label: 'Cài đặt hệ thống' },
+  ];
   const currentModule = moduleGroups.find((group) =>
     group.path === currentPath || group.items.some((item) => item.path === currentPath),
   );
@@ -498,7 +503,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
                 
                 <button 
                   onClick={() => {
-                    navigate('/profile');
+                    navigate('/settings');
                     setShowUserDropdown(false);
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"

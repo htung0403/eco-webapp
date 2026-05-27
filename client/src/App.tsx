@@ -40,6 +40,7 @@ const FinanceHubReconciliationPage = lazy(() => import('./pages/FinanceHubReconc
 const FinanceApproveInternalPage = lazy(() => import('./pages/FinanceApproveInternalPage'));
 const FinanceApproveVendorPage = lazy(() => import('./pages/FinanceApproveVendorPage'));
 const DashboardKpiPage = lazy(() => import('./pages/DashboardKpiPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 const ecoRoutes = [
   '/warehouse/inventory',
@@ -79,6 +80,7 @@ const ecoRoutes = [
   '/admin/vendors',
   '/print/waybill/:id',
   '/profile',
+  '/settings',
 ];
 
 function App() {
@@ -97,7 +99,7 @@ function App() {
               path={path}
               element={(
                 <Suspense fallback={null}>
-                  {path === '/admin/users' ? <AdminUsersPage /> : path === '/admin/hubs' ? <AdminHubsPage /> : path === '/admin/trucks' ? <AdminTrucksPage /> : path === '/admin/vendors' ? <AdminVendorsPage /> : path === '/warehouse/orders/new' ? <WarehouseOrderNewPage /> : path === '/warehouse/orders/:id/receive' ? <WarehouseOrderReceivePage /> : path === '/warehouse/inventory' ? <WarehouseInventoryPage /> : path === '/warehouse/incoming' ? <WarehouseIncomingPage /> : path === '/warehouse/priority' ? <WarehousePriorityPage /> : path === '/warehouse/load-planning' ? <WarehouseLoadPlanningPage /> : path === '/warehouse/manifests' ? <WarehouseManifestsPage /> : path === '/warehouse/manifests/:id' ? <WarehouseManifestDetailPage /> : path === '/delivery/routing' ? <DeliveryRoutingPage /> : path === '/delivery/handover' ? <DeliveryHandoverPage /> : path === '/delivery/en-route' ? <DeliveryEnRoutePage /> : path === '/delivery/hub-dropoff' ? <DeliveryHubDropoffPage /> : path === '/delivery/last-mile' ? <DeliveryLastMilePage /> : path === '/delivery/cod' ? <DeliveryCodPage /> : path === '/trips/list' ? <TripsPage /> : path === '/trips/new' ? <TripNewPage /> : path === '/trips/:id' ? <TripDetailPage /> : path === '/trips/:id/expenses' ? <TripExpensesPage /> : path === '/trips/:id/profit' ? <TripProfitPage /> : path === '/trucks' ? <TrucksPage /> : path === '/drivers/performance' ? <DriverPerformancePage /> : path === '/search/general' ? <SearchPage /> : path === '/search/waybills' ? <SearchWaybillsPage /> : path === '/search/trips' ? <SearchTripsPage /> : path === '/finance/cod-reconciliation' ? <FinanceCodReconciliationPage /> : path === '/finance/hub-reconciliation' ? <FinanceHubReconciliationPage /> : path === '/finance/approve/internal' ? <FinanceApproveInternalPage /> : path === '/finance/approve/vendor' ? <FinanceApproveVendorPage /> : path === '/dashboard/kpi' ? <DashboardKpiPage /> : <PlaceholderPage /> }
+                  {path === '/admin/users' ? <AdminUsersPage /> : path === '/admin/hubs' ? <AdminHubsPage /> : path === '/admin/trucks' ? <AdminTrucksPage /> : path === '/admin/vendors' ? <AdminVendorsPage /> : path === '/warehouse/orders/new' ? <WarehouseOrderNewPage /> : path === '/warehouse/orders/:id/receive' ? <WarehouseOrderReceivePage /> : path === '/warehouse/inventory' ? <WarehouseInventoryPage /> : path === '/warehouse/incoming' ? <WarehouseIncomingPage /> : path === '/warehouse/priority' ? <WarehousePriorityPage /> : path === '/warehouse/load-planning' ? <WarehouseLoadPlanningPage /> : path === '/warehouse/manifests' ? <WarehouseManifestsPage /> : path === '/warehouse/manifests/:id' ? <WarehouseManifestDetailPage /> : path === '/delivery/routing' ? <DeliveryRoutingPage /> : path === '/delivery/handover' ? <DeliveryHandoverPage /> : path === '/delivery/en-route' ? <DeliveryEnRoutePage /> : path === '/delivery/hub-dropoff' ? <DeliveryHubDropoffPage /> : path === '/delivery/last-mile' ? <DeliveryLastMilePage /> : path === '/delivery/cod' ? <DeliveryCodPage /> : path === '/trips/list' ? <TripsPage /> : path === '/trips/new' ? <TripNewPage /> : path === '/trips/:id' ? <TripDetailPage /> : path === '/trips/:id/expenses' ? <TripExpensesPage /> : path === '/trips/:id/profit' ? <TripProfitPage /> : path === '/trucks' ? <TrucksPage /> : path === '/drivers/performance' ? <DriverPerformancePage /> : path === '/search/general' ? <SearchPage /> : path === '/search/waybills' ? <SearchWaybillsPage /> : path === '/search/trips' ? <SearchTripsPage /> : path === '/finance/cod-reconciliation' ? <FinanceCodReconciliationPage /> : path === '/finance/hub-reconciliation' ? <FinanceHubReconciliationPage /> : path === '/finance/approve/internal' ? <FinanceApproveInternalPage /> : path === '/finance/approve/vendor' ? <FinanceApproveVendorPage /> : path === '/dashboard/kpi' ? <DashboardKpiPage /> : path === '/settings' ? <SettingsPage /> : <PlaceholderPage /> }
                 </Suspense>
               )}
             />
