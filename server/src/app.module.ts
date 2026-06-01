@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { FinanceModule } from './finance/finance.module';
+import { CustomersModule } from './customers/customers.module';
 import { HubsModule } from './hubs/hubs.module';
 import { ManifestsModule } from './manifests/manifests.module';
 import { ReconciliationsModule } from './reconciliations/reconciliations.module';
@@ -48,6 +49,7 @@ import { WaybillsModule } from './waybills/waybills.module';
       },
     }),
     HubsModule,
+    CustomersModule,
     UsersModule,
     WaybillsModule,
     ManifestsModule,

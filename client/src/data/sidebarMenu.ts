@@ -6,6 +6,7 @@ import {
   PackageSearch,
   Search,
   Truck,
+  Users,
   Warehouse,
 } from 'lucide-react';
 import React from 'react';
@@ -26,11 +27,14 @@ export const sidebarMenu: SidebarItem[] = [
   { id: 'trips', icon: Truck, label: 'Quản lý xe', path: '/trips', requiredRoleMask: 8 },
   { id: 'search', icon: Search, label: 'Tìm kiếm', path: '/search' },
   { id: 'finance', icon: Calculator, label: 'Tài chính', path: '/finance', requiredRoleMask: 16 },
+  { id: 'hr', icon: Users, label: 'Nhân sự', path: '/hr', requiredRoleMask: 32 | 64 },
   { id: 'dashboard', icon: BarChart3, label: 'Dashboard BGĐ', path: '/dashboard', requiredRoleMask: 32 | 64 },
   { id: 'admin', icon: Building2, label: 'Quản trị', path: '/admin', requiredRoleMask: 64 },
 ];
 
 export const getVisibleMenu = (roleMask: number): SidebarItem[] =>
-  sidebarMenu.filter((item) => !item.requiredRoleMask || (roleMask & item.requiredRoleMask) !== 0);
+  sidebarMenu.filter(
+    (item) => !item.requiredRoleMask || (Number(roleMask) & item.requiredRoleMask) !== 0,
+  );
 
 export const extraMenuItems: SidebarItem[] = [];

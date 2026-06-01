@@ -30,6 +30,9 @@ export interface WaybillRoutingItem {
   dest_hub?: HubSummary | null;
   delivery_route?: string | null;
   route_code?: string | null;
+  package_count?: number | null;
+  cod_amount?: number | string | null;
+  note?: string | null;
 }
 
 export type WaybillRoutingDetail = WaybillRoutingItem;

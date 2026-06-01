@@ -22,6 +22,21 @@ export class TruckEntity {
   @Column({ type: 'varchar' })
   status: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  ten_lai_xe: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  nha_xe: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  bks: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  loai_xe: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  khu_vuc: string | null;
+
   @ManyToOne(() => UserEntity, (user) => user.trucks, { nullable: true })
   @JoinColumn({ name: 'driver_id' })
   driver: UserEntity | null;

@@ -7,6 +7,7 @@ import {
   Calculator,
   ClipboardCheck,
   ClipboardList,
+  Clock,
   CreditCard,
   FileSearch,
   FileText,
@@ -67,6 +68,7 @@ export const moduleGroups: ModuleGroup[] = [
     requiredRoleMask: WAREHOUSE_ROLES,
     items: [
       { icon: Warehouse, title: 'Danh sách đơn tồn kho', description: 'Theo dõi vận đơn đang lưu tại bưu cục.', colorScheme: 'blue', path: '/warehouse/inventory', requiredRoleMask: WAREHOUSE_ROLES, isHidden: true },
+      { icon: Users, title: 'Danh sách Khách hàng', description: 'Tra cứu mã KH và thông tin người gửi từ vận đơn.', colorScheme: 'emerald', path: '/warehouse/customers', requiredRoleMask: WAREHOUSE_ROLES },
       { icon: PackagePlus, title: 'Nhập đơn mới', description: 'Tạo vận đơn và ghi nhận thông tin gửi hàng.', colorScheme: 'green', path: '/warehouse/orders/new', requiredRoleMask: WAREHOUSE_STAFF },
       { icon: PackageCheck, title: 'Tiếp nhận đơn tại kho', description: 'Scan mã và cập nhật trạng thái nhập kho.', colorScheme: 'teal', path: '/warehouse/orders/:id/receive', requiredRoleMask: WAREHOUSE_STAFF },
       { icon: AlertTriangle, title: 'Thông báo hàng đến dự kiến', description: 'Theo dõi danh sách hàng sắp về bưu cục.', colorScheme: 'orange', path: '/warehouse/incoming', requiredRoleMask: WAREHOUSE_ROLES },
@@ -113,6 +115,30 @@ export const moduleGroups: ModuleGroup[] = [
       { icon: Search, title: 'Tìm kiếm tổng hợp', description: 'Tra cứu vận đơn, chuyến xe và dữ liệu liên quan.', colorScheme: 'blue', path: '/search/general' },
       { icon: PackageSearch, title: 'Kết quả tìm kiếm — vận đơn', description: 'Xem kết quả tìm kiếm theo vận đơn.', colorScheme: 'green', path: '/search/waybills' },
       { icon: FileSearch, title: 'Kết quả tìm kiếm — chuyến xe', description: 'Xem kết quả tìm kiếm theo chuyến xe.', colorScheme: 'teal', path: '/search/trips' },
+    ],
+  },
+  {
+    id: 'hr',
+    path: '/hr',
+    section: 'Nhân sự',
+    requiredRoleMask: MANAGER_ROLES,
+    items: [
+      {
+        icon: Users,
+        title: 'Danh sách nhân sự',
+        description: 'Xem danh sách nhân viên từ hệ thống users.',
+        colorScheme: 'blue',
+        path: '/hr/staff',
+        requiredRoleMask: MANAGER_ROLES,
+      },
+      {
+        icon: Clock,
+        title: 'Chấm công',
+        description: 'Ghi nhận giờ vào, giờ ra theo ngày làm việc.',
+        colorScheme: 'teal',
+        path: '/hr/attendance',
+        requiredRoleMask: MANAGER_ROLES,
+      },
     ],
   },
   {

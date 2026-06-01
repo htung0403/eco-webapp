@@ -4,19 +4,9 @@ export interface DriverSummary {
   id: string | number;
   username?: string | null;
   name?: string | null;
+  full_name?: string | null;
   phone?: string | null;
   role_mask?: number | null;
-}
-
-export interface HubSummary {
-  id: string | number;
-  code?: string | null;
-  name?: string | null;
-}
-
-export interface TripSummary {
-  id: string | number;
-  status?: string | null;
 }
 
 export interface Truck {
@@ -27,14 +17,11 @@ export interface Truck {
   driver?: DriverSummary | null;
   fuel_consumption_limit?: number | null;
   status: TruckStatus;
-  truck_type?: string | null;
-  ownership_type?: string | null;
-  hub_id?: string | number | null;
-  hub?: HubSummary | null;
-  registration_expiry?: string | null;
-  maintenance_due_at?: string | null;
-  maintenance_locked?: boolean | null;
-  trips?: TripSummary[] | null;
+  ten_lai_xe?: string | null;
+  nha_xe?: string | null;
+  bks?: string | null;
+  loai_xe?: string | null;
+  khu_vuc?: string | null;
 }
 
 export interface TruckListResponse {
@@ -48,20 +35,31 @@ export interface TruckListResponse {
 export interface TruckFilters {
   keyword: string;
   status: string[];
-  truck_type: string[];
-  hub_id: string[];
-  assigned_driver_id: string[];
-  maintenance_state: string[];
   page: number;
   limit: number;
 }
 
 export interface TruckFormState {
   license_plate: string;
+  bks: string;
+  ten_lai_xe: string;
+  nha_xe: string;
+  loai_xe: string;
+  khu_vuc: string;
   payload: string;
   driver_id: string;
   fuel_consumption_limit: string;
   status: string;
 }
 
-export interface FilterOption { value: string; label: string; count?: number }
+export interface FilterOption {
+  value: string;
+  label: string;
+  count?: number;
+}
+
+export interface TruckKanbanColumn {
+  id: string;
+  label: string;
+  trucks: Truck[];
+}

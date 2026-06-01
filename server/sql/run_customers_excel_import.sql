@@ -1,0 +1,6 @@
+-- Supabase SQL Editor: chạy LẦN LƯỢT 3 file sau (copy nội dung từng file)
+-- 1. add_customers_excel_columns.sql
+-- 2. seed_customers_from_excel.sql
+-- 3. verify_customers_table.sql
+--
+-- Nếu chưa có bảng customers: chạy create_customers_table_and_view.sql trước bước 1.

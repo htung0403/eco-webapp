@@ -35,6 +35,11 @@ export class TrucksService {
       driver_id: dto.driver_id ?? null,
       fuel_consumption_limit: dto.fuel_consumption_limit ?? 0,
       status: dto.status ?? TruckStatus.AVAILABLE,
+      ten_lai_xe: dto.ten_lai_xe?.trim() || null,
+      nha_xe: dto.nha_xe?.trim() || null,
+      bks: dto.bks?.trim().toUpperCase() || licensePlate,
+      loai_xe: dto.loai_xe?.trim() || null,
+      khu_vuc: dto.khu_vuc?.trim() || null,
     });
 
     try {
@@ -48,7 +53,9 @@ export class TrucksService {
   async findAll(query: QueryTrucksDto, _currentUser: UserEntity) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const qb = this.trucksRepository.createQueryBuilder('truck');
+    const qb = this.trucksRepository
+      .createQueryBuilder('truck')
+      .leftJoinAndSelect('truck.driver', 'driver');
     this.applyFilters(qb, query);
     const [items, total] = await qb.orderBy('truck.id', 'DESC').skip((page - 1) * limit).take(limit).getManyAndCount();
     return { items, meta: { total, page, limit, total_pages: Math.ceil(total / limit) } };
@@ -73,12 +80,19 @@ export class TrucksService {
       await this.assertUniquePlate(licensePlate, id);
       truck.license_plate = licensePlate;
     }
-    if (dto.driver_id) await this.assertDriverExists(dto.driver_id);
+    if (dto.driver_id !== undefined) {
+      if (dto.driver_id) await this.assertDriverExists(dto.driver_id);
+      truck.driver_id = dto.driver_id || null;
+    }
     Object.assign(truck, {
       payload: dto.payload ?? truck.payload,
-      driver_id: dto.driver_id ?? truck.driver_id,
       fuel_consumption_limit: dto.fuel_consumption_limit ?? truck.fuel_consumption_limit,
       status: dto.status ?? truck.status,
+      ten_lai_xe: dto.ten_lai_xe !== undefined ? dto.ten_lai_xe.trim() || null : truck.ten_lai_xe,
+      nha_xe: dto.nha_xe !== undefined ? dto.nha_xe.trim() || null : truck.nha_xe,
+      bks: dto.bks !== undefined ? dto.bks.trim().toUpperCase() || truck.license_plate : truck.bks,
+      loai_xe: dto.loai_xe !== undefined ? dto.loai_xe.trim() || null : truck.loai_xe,
+      khu_vuc: dto.khu_vuc !== undefined ? dto.khu_vuc.trim() || null : truck.khu_vuc,
     });
     return this.trucksRepository.save(truck);
   }
@@ -101,7 +115,17 @@ export class TrucksService {
   private applyFilters(qb: any, query: QueryTrucksDto) {
     if (query.keyword?.trim()) {
       const keyword = `%${query.keyword.trim()}%`;
-      qb.andWhere(new Brackets((builder) => builder.where('truck.license_plate ILIKE :keyword', { keyword })));
+      qb.andWhere(
+        new Brackets((builder) =>
+          builder
+            .where('truck.license_plate ILIKE :keyword', { keyword })
+            .orWhere('truck.bks ILIKE :keyword', { keyword })
+            .orWhere('truck.ten_lai_xe ILIKE :keyword', { keyword })
+            .orWhere('truck.nha_xe ILIKE :keyword', { keyword })
+            .orWhere('truck.loai_xe ILIKE :keyword', { keyword })
+            .orWhere('truck.khu_vuc ILIKE :keyword', { keyword }),
+        ),
+      );
     }
     const statuses = this.parseList(query.status);
     if (statuses.length) qb.andWhere('truck.status IN (:...statuses)', { statuses });

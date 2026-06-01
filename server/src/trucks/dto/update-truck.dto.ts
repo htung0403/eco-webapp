@@ -32,4 +32,29 @@ export class UpdateTruckDto {
   @IsOptional()
   @IsEnum(TruckStatus)
   status?: TruckStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ten_lai_xe?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  nha_xe?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  bks?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  loai_xe?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  khu_vuc?: string;
 }

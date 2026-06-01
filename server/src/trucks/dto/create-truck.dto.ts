@@ -31,4 +31,29 @@ export class CreateTruckDto {
   @IsOptional()
   @IsEnum(TruckStatus)
   status?: TruckStatus = TruckStatus.AVAILABLE;
+
+  @ApiPropertyOptional({ example: 'Nguyễn Văn A' })
+  @IsOptional()
+  @IsString()
+  ten_lai_xe?: string;
+
+  @ApiPropertyOptional({ example: 'Nhà xe ABC' })
+  @IsOptional()
+  @IsString()
+  nha_xe?: string;
+
+  @ApiPropertyOptional({ example: '29H-12345' })
+  @IsOptional()
+  @IsString()
+  bks?: string;
+
+  @ApiPropertyOptional({ example: 'Xe tải 5 tấn' })
+  @IsOptional()
+  @IsString()
+  loai_xe?: string;
+
+  @ApiPropertyOptional({ example: 'Hà Nội' })
+  @IsOptional()
+  @IsString()
+  khu_vuc?: string;
 }

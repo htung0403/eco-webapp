@@ -1,7 +1,8 @@
 import { createPortal } from 'react-dom';
-import { Fuel, Gauge, Hash, Tag, Truck, User, X } from 'lucide-react';
+import { Building2, Fuel, Gauge, MapPin, Tag, Truck, User, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
+import { CreatableSearchableSelect } from '../../../components/ui/CreatableSearchableSelect';
 import { SearchableSelect } from '../../../components/ui/SearchableSelect';
 import type { FilterOption, TruckFormState } from '../types';
 
@@ -16,60 +17,162 @@ interface Props {
   setFormField: <K extends keyof TruckFormState>(key: K, value: TruckFormState[K]) => void;
   statusOptions: FilterOption[];
   driverOptions: FilterOption[];
+  loaiXeOptions: string[];
+  khuVucOptions: string[];
 }
 
-const inputClass = 'w-full h-10 rounded-xl border border-border bg-white pl-10 pr-3 text-[13px] font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/10';
+const inputClass =
+  'w-full h-10 rounded-xl border border-border bg-white pl-10 pr-3 text-[13px] font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/10';
 
-export default function AddEditTruckDialog({ isOpen, isClosing, isEditMode, isSubmitting, onClose, onSubmit, formState, setFormField, statusOptions, driverOptions }: Props) {
+export default function AddEditTruckDialog({
+  isOpen,
+  isClosing,
+  isEditMode,
+  isSubmitting,
+  onClose,
+  onSubmit,
+  formState,
+  setFormField,
+  statusOptions,
+  driverOptions,
+  loaiXeOptions,
+  khuVucOptions,
+}: Props) {
   if (!isOpen && !isClosing) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex justify-end">
-      <div className={clsx('fixed inset-0 bg-black/40 backdrop-blur-md transition-all duration-350 ease-out', isClosing ? 'opacity-0' : 'animate-in fade-in duration-300')} onClick={onClose} />
-      <div className={clsx('relative w-full max-w-[680px] bg-[#f8fafc] shadow-2xl flex flex-col h-screen border-l border-border', isClosing ? 'dialog-slide-out' : 'dialog-slide-in')}>
+      <div
+        className={clsx(
+          'fixed inset-0 bg-black/40 backdrop-blur-md transition-all duration-350 ease-out',
+          isClosing ? 'opacity-0' : 'animate-in fade-in duration-300',
+        )}
+        onClick={onClose}
+      />
+      <div
+        className={clsx(
+          'relative w-full max-w-[680px] bg-[#f8fafc] shadow-2xl flex flex-col h-screen border-l border-border',
+          isClosing ? 'dialog-slide-out' : 'dialog-slide-in',
+        )}
+      >
         <div className="h-16 px-6 bg-card border-b border-border flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="text-lg font-extrabold text-foreground">{isEditMode ? 'Chỉnh sửa xe' : 'Tạo xe mới'}</h2>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-muted text-muted-foreground"><X size={18} /></button>
+          <h2 className="text-lg font-extrabold text-foreground">{isEditMode ? 'Sửa xe' : 'Thêm xe'}</h2>
+          <button type="button" onClick={onClose} className="p-2 rounded-xl hover:bg-muted text-muted-foreground">
+            <X size={18} />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
-          <div className="space-y-5">
-            <section className="flex items-start gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 text-primary"><Truck size={22} /></div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-primary">{isEditMode ? 'Chỉnh sửa xe' : 'Tạo xe mới'}</p>
-                <Field label="Biển số xe" icon={<Truck size={16} />} className="mt-2 max-w-sm"><input value={formState.license_plate} onChange={e => setFormField('license_plate', e.target.value.toUpperCase())} className={inputClass} placeholder="VD: 29H-12345" /></Field>
-              </div>
-            </section>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
+          <Section title="Thông tin xe" icon={<Truck size={16} />}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="BKS" icon={<Truck size={16} />}>
+                <input
+                  value={formState.bks}
+                  onChange={(e) => setFormField('bks', e.target.value.toUpperCase())}
+                  className={inputClass}
+                  placeholder="Biển kiểm soát"
+                />
+              </Field>
+              <Field label="Biển số hệ thống" icon={<Truck size={16} />}>
+                <input
+                  value={formState.license_plate}
+                  onChange={(e) => setFormField('license_plate', e.target.value.toUpperCase())}
+                  className={inputClass}
+                  placeholder="Đồng bộ BKS nếu trống"
+                />
+              </Field>
+              <Field label="Loại xe" icon={<Tag size={16} />}>
+                <CreatableSearchableSelect
+                  value={formState.loai_xe}
+                  onValueChange={(value) => setFormField('loai_xe', value)}
+                  options={loaiXeOptions}
+                  placeholder="Chọn hoặc nhập loại xe"
+                  createLabel={(query) => `Thêm loại xe "${query}"`}
+                  className="pl-10"
+                />
+              </Field>
+              <Field label="Khu vực" icon={<MapPin size={16} />}>
+                <CreatableSearchableSelect
+                  value={formState.khu_vuc}
+                  onValueChange={(value) => setFormField('khu_vuc', value)}
+                  options={khuVucOptions}
+                  placeholder="Chọn hoặc nhập khu vực"
+                  createLabel={(query) => `Thêm khu vực "${query}"`}
+                  className="pl-10"
+                />
+              </Field>
+            </div>
+          </Section>
 
-            <Section title="Thông tin vận hành" icon={<Gauge size={16} />}>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Tải trọng (kg)" icon={<Gauge size={16} />}><input type="number" min="1" value={formState.payload} onChange={e => setFormField('payload', e.target.value)} className={inputClass} /></Field>
-                <Field label="Định mức dầu" icon={<Fuel size={16} />}><input type="number" min="0" value={formState.fuel_consumption_limit} onChange={e => setFormField('fuel_consumption_limit', e.target.value)} className={inputClass} placeholder="L/100km" /></Field>
-              </div>
-            </Section>
+          <Section title="Nhà xe & lái xe" icon={<Building2 size={16} />}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Nhà xe" icon={<Building2 size={16} />}>
+                <input
+                  value={formState.nha_xe}
+                  onChange={(e) => setFormField('nha_xe', e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Tên lái xe" icon={<User size={16} />}>
+                <input
+                  value={formState.ten_lai_xe}
+                  onChange={(e) => setFormField('ten_lai_xe', e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <SelectField
+                label="Tài xế hệ thống (tùy chọn)"
+                value={formState.driver_id}
+                options={driverOptions}
+                onChange={(value) => setFormField('driver_id', value)}
+                icon={<User size={16} />}
+              />
+            </div>
+          </Section>
 
-            <Section title="Phân công" icon={<User size={16} />}>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <SelectField label="Tài xế" value={formState.driver_id} options={driverOptions} onChange={value => setFormField('driver_id', value)} icon={<User size={16} />} />
-                <Field label="Mã tài xế" icon={<Hash size={16} />}><input value={formState.driver_id || 'Chưa gán'} disabled className={`${inputClass} opacity-80 disabled:cursor-not-allowed`} /></Field>
-              </div>
-            </Section>
-
-            <Section title="Trạng thái hệ thống" icon={<Tag size={16} />}>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Biển số" icon={<Truck size={16} />}><input value={formState.license_plate || '—'} disabled className={`${inputClass} opacity-80 disabled:cursor-not-allowed`} /></Field>
-                <SelectField label="Trạng thái" value={formState.status} options={statusOptions.filter(option => option.value)} onChange={value => setFormField('status', value)} icon={<Tag size={16} />} />
-              </div>
-            </Section>
-          </div>
+          <Section title="Vận hành" icon={<Gauge size={16} />}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Tải trọng (kg)" icon={<Gauge size={16} />}>
+                <input
+                  type="number"
+                  min="1"
+                  value={formState.payload}
+                  onChange={(e) => setFormField('payload', e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Định mức dầu" icon={<Fuel size={16} />}>
+                <input
+                  type="number"
+                  min="0"
+                  value={formState.fuel_consumption_limit}
+                  onChange={(e) => setFormField('fuel_consumption_limit', e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <SelectField
+                label="Trạng thái"
+                value={formState.status}
+                options={statusOptions.filter((o) => o.value)}
+                onChange={(value) => setFormField('status', value)}
+                icon={<Tag size={16} />}
+              />
+            </div>
+          </Section>
         </div>
 
         <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-card p-5">
-          <button onClick={onClose} className="rounded-xl border border-border bg-white px-5 py-3 text-[13px] font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">Hủy</button>
-          <button onClick={onSubmit} disabled={isSubmitting} className="rounded-xl bg-primary px-6 py-3 text-[13px] font-bold text-white shadow-sm shadow-primary/20 transition-colors hover:bg-primary/90 disabled:opacity-60">{isSubmitting ? 'Đang lưu...' : 'Lưu xe'}</button>
+          <button type="button" onClick={onClose} className="rounded-xl border border-border bg-white px-5 py-3 text-[13px] font-bold text-muted-foreground hover:bg-muted">
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={isSubmitting}
+            className="rounded-xl bg-primary px-6 py-3 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60"
+          >
+            {isSubmitting ? 'Đang lưu...' : 'Lưu'}
+          </button>
         </div>
       </div>
     </div>,
@@ -78,14 +181,56 @@ export default function AddEditTruckDialog({ isOpen, isClosing, isEditMode, isSu
 }
 
 function Section({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
-  return <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm"><div className="flex items-center gap-2 border-b border-border bg-muted/5 px-5 py-3 text-primary"><span>{icon}</span><span className="text-[12px] font-bold uppercase tracking-wider">{title}</span></div><div className="p-5">{children}</div></section>;
+  return (
+    <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2 text-primary">
+        {icon}
+        <h3 className="text-[13px] font-extrabold text-foreground">{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
 }
 
-function Field({ label, icon, children, className }: { label: string; icon: ReactNode; children: ReactNode; className?: string }) {
-  return <div className={clsx('space-y-1.5', className)}><label className="text-[13px] font-bold text-foreground">{label}</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{icon}</span>{children}</div></div>;
+function Field({ label, icon, children }: { label: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[12px] font-bold text-muted-foreground">{label}</span>
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{icon}</span>
+        {children}
+      </div>
+    </label>
+  );
 }
 
-function SelectField({ label, value, options, onChange, icon }: { label: string; value: string; options: FilterOption[]; onChange: (value: string) => void; icon: ReactNode }) {
-  return <div className="space-y-1.5"><label className="flex items-center gap-2 text-[13px] font-bold text-foreground">{icon}{label}</label><SearchableSelect value={value} options={options} onValueChange={onChange} placeholder={`Chọn ${label.toLowerCase()}`} /></div>;
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+  icon,
+}: {
+  label: string;
+  value: string;
+  options: FilterOption[];
+  onChange: (value: string) => void;
+  icon: ReactNode;
+}) {
+  return (
+    <label className="block sm:col-span-2">
+      <span className="mb-1 block text-[12px] font-bold text-muted-foreground">{label}</span>
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground">{icon}</span>
+        <SearchableSelect
+          value={value}
+          options={options}
+          onValueChange={onChange}
+          placeholder="Chọn..."
+          searchPlaceholder="Tìm..."
+          className="h-10 pl-10"
+        />
+      </div>
+    </label>
+  );
 }
-

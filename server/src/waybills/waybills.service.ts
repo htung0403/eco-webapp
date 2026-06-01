@@ -256,6 +256,10 @@ export class WaybillsService {
     if (![waybill.origin_hub_id, waybill.dest_hub_id, waybill.current_hub_id].includes(currentUser.hub_id)) throw new ForbiddenException('User cannot access this waybill outside assigned hub');
   }
 
+  async previewNextWaybillCode(): Promise<{ waybill_code: string }> {
+    return { waybill_code: await this.generateUniqueCode() };
+  }
+
   private async generateUniqueCode(): Promise<string> {
     const today = new Date();
     const year = today.getFullYear();

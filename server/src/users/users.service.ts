@@ -65,7 +65,9 @@ export class UsersService {
     if (query.role_mask !== undefined) this.validateRoleMask(query.role_mask);
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const queryBuilder = this.usersRepository.createQueryBuilder('users');
+    const queryBuilder = this.usersRepository
+      .createQueryBuilder('users')
+      .leftJoinAndSelect('users.hub', 'hub');
 
     if (query.keyword?.trim()) {
       const keyword = `%${query.keyword.trim()}%`;

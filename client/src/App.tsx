@@ -19,6 +19,7 @@ const WarehousePriorityPage = lazy(() => import('./pages/WarehousePriorityPage')
 const WarehouseLoadPlanningPage = lazy(() => import('./pages/WarehouseLoadPlanningPage'));
 const WarehouseManifestsPage = lazy(() => import('./pages/WarehouseManifestsPage'));
 const WarehouseManifestDetailPage = lazy(() => import('./pages/WarehouseManifestDetailPage'));
+const WarehouseCustomersPage = lazy(() => import('./pages/WarehouseCustomersPage'));
 const DeliveryRoutingPage = lazy(() => import('./pages/DeliveryRoutingPage'));
 const DeliveryHandoverPage = lazy(() => import('./pages/DeliveryHandoverPage'));
 const DeliveryEnRoutePage = lazy(() => import('./pages/DeliveryEnRoutePage'));
@@ -41,9 +42,13 @@ const FinanceApproveInternalPage = lazy(() => import('./pages/FinanceApproveInte
 const FinanceApproveVendorPage = lazy(() => import('./pages/FinanceApproveVendorPage'));
 const DashboardKpiPage = lazy(() => import('./pages/DashboardKpiPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const HrStaffListPage = lazy(() => import('./pages/hr/HrStaffListPage'));
+const HrAttendancePage = lazy(() => import('./pages/hr/HrAttendancePage'));
+const PrintWaybillPage = lazy(() => import('./pages/print/PrintWaybillPage'));
 
 const ecoRoutes = [
   '/warehouse/inventory',
+  '/warehouse/customers',
   '/warehouse/orders/new',
   '/warehouse/orders/:id/receive',
   '/warehouse/incoming',
@@ -74,11 +79,12 @@ const ecoRoutes = [
   '/dashboard/kpi',
   '/dashboard/overdue',
   '/reports/revenue',
+  '/hr/staff',
+  '/hr/attendance',
   '/admin/users',
   '/admin/hubs',
   '/admin/trucks',
   '/admin/vendors',
-  '/print/waybill/:id',
   '/profile',
   '/settings',
 ];
@@ -88,6 +94,14 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/print/waybill/:id"
+          element={(
+            <Suspense fallback={null}>
+              <PrintWaybillPage />
+            </Suspense>
+          )}
+        />
         <Route element={<MainLayout />}>
           <Route path="/" element={<Dashboard />} />
           {moduleRoutes.map((path) => (
@@ -99,7 +113,7 @@ function App() {
               path={path}
               element={(
                 <Suspense fallback={null}>
-                  {path === '/admin/users' ? <AdminUsersPage /> : path === '/admin/hubs' ? <AdminHubsPage /> : path === '/admin/trucks' ? <AdminTrucksPage /> : path === '/admin/vendors' ? <AdminVendorsPage /> : path === '/warehouse/orders/new' ? <WarehouseOrderNewPage /> : path === '/warehouse/orders/:id/receive' ? <WarehouseOrderReceivePage /> : path === '/warehouse/inventory' ? <WarehouseInventoryPage /> : path === '/warehouse/incoming' ? <WarehouseIncomingPage /> : path === '/warehouse/priority' ? <WarehousePriorityPage /> : path === '/warehouse/load-planning' ? <WarehouseLoadPlanningPage /> : path === '/warehouse/manifests' ? <WarehouseManifestsPage /> : path === '/warehouse/manifests/:id' ? <WarehouseManifestDetailPage /> : path === '/delivery/routing' ? <DeliveryRoutingPage /> : path === '/delivery/handover' ? <DeliveryHandoverPage /> : path === '/delivery/en-route' ? <DeliveryEnRoutePage /> : path === '/delivery/hub-dropoff' ? <DeliveryHubDropoffPage /> : path === '/delivery/last-mile' ? <DeliveryLastMilePage /> : path === '/delivery/cod' ? <DeliveryCodPage /> : path === '/trips/list' ? <TripsPage /> : path === '/trips/new' ? <TripNewPage /> : path === '/trips/:id' ? <TripDetailPage /> : path === '/trips/:id/expenses' ? <TripExpensesPage /> : path === '/trips/:id/profit' ? <TripProfitPage /> : path === '/trucks' ? <TrucksPage /> : path === '/drivers/performance' ? <DriverPerformancePage /> : path === '/search/general' ? <SearchPage /> : path === '/search/waybills' ? <SearchWaybillsPage /> : path === '/search/trips' ? <SearchTripsPage /> : path === '/finance/cod-reconciliation' ? <FinanceCodReconciliationPage /> : path === '/finance/hub-reconciliation' ? <FinanceHubReconciliationPage /> : path === '/finance/approve/internal' ? <FinanceApproveInternalPage /> : path === '/finance/approve/vendor' ? <FinanceApproveVendorPage /> : path === '/dashboard/kpi' ? <DashboardKpiPage /> : path === '/settings' ? <SettingsPage /> : <PlaceholderPage /> }
+                  {path === '/hr/staff' ? <HrStaffListPage /> : path === '/hr/attendance' ? <HrAttendancePage /> : path === '/admin/users' ? <AdminUsersPage /> : path === '/admin/hubs' ? <AdminHubsPage /> : path === '/admin/trucks' ? <AdminTrucksPage /> : path === '/admin/vendors' ? <AdminVendorsPage /> : path === '/warehouse/orders/new' ? <WarehouseOrderNewPage /> : path === '/warehouse/orders/:id/receive' ? <WarehouseOrderReceivePage /> : path === '/warehouse/inventory' ? <WarehouseInventoryPage /> : path === '/warehouse/customers' ? <WarehouseCustomersPage /> : path === '/warehouse/incoming' ? <WarehouseIncomingPage /> : path === '/warehouse/priority' ? <WarehousePriorityPage /> : path === '/warehouse/load-planning' ? <WarehouseLoadPlanningPage /> : path === '/warehouse/manifests' ? <WarehouseManifestsPage /> : path === '/warehouse/manifests/:id' ? <WarehouseManifestDetailPage /> : path === '/delivery/routing' ? <DeliveryRoutingPage /> : path === '/delivery/handover' ? <DeliveryHandoverPage /> : path === '/delivery/en-route' ? <DeliveryEnRoutePage /> : path === '/delivery/hub-dropoff' ? <DeliveryHubDropoffPage /> : path === '/delivery/last-mile' ? <DeliveryLastMilePage /> : path === '/delivery/cod' ? <DeliveryCodPage /> : path === '/trips/list' ? <TripsPage /> : path === '/trips/new' ? <TripNewPage /> : path === '/trips/:id' ? <TripDetailPage /> : path === '/trips/:id/expenses' ? <TripExpensesPage /> : path === '/trips/:id/profit' ? <TripProfitPage /> : path === '/trucks' ? <TrucksPage /> : path === '/drivers/performance' ? <DriverPerformancePage /> : path === '/search/general' ? <SearchPage /> : path === '/search/waybills' ? <SearchWaybillsPage /> : path === '/search/trips' ? <SearchTripsPage /> : path === '/finance/cod-reconciliation' ? <FinanceCodReconciliationPage /> : path === '/finance/hub-reconciliation' ? <FinanceHubReconciliationPage /> : path === '/finance/approve/internal' ? <FinanceApproveInternalPage /> : path === '/finance/approve/vendor' ? <FinanceApproveVendorPage /> : path === '/dashboard/kpi' ? <DashboardKpiPage /> : path === '/settings' ? <SettingsPage /> : <PlaceholderPage /> }
                 </Suspense>
               )}
             />

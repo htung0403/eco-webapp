@@ -19,14 +19,27 @@ export class ApiError extends Error {
   }
 }
 
-const DEFAULT_API_URL = 'http://localhost:3000/api/v1';
-
-const normalizeApiUrl = (value: string | undefined) => {
-  const baseUrl = (value?.trim() || DEFAULT_API_URL).replace(/\/$/, '');
-  return baseUrl.endsWith('/api/v1') ? baseUrl : `${baseUrl}/api/v1`;
+const STATUS_MESSAGES: Record<number, string> = {
+  401: 'Phiên đăng nhập hết hạn hoặc chưa đăng nhập. Vui lòng đăng nhập lại.',
+  403: 'Bạn không có quyền thực hiện thao tác này.',
+  404: 'Không tìm thấy API. Kiểm tra backend NestJS đang chạy (npm run start:dev trong thư mục server).',
+  502: 'Không kết nối được backend. Chạy server trên cổng 3000 và restart Vite.',
+  503: 'Backend tạm thời không khả dụng.',
 };
 
-const API_URL = normalizeApiUrl(import.meta.env.VITE_API_URL);
+const resolveApiBaseUrl = () => {
+  const fromEnv = import.meta.env.VITE_API_URL?.trim();
+  if (fromEnv) {
+    const fixedHost = fromEnv.replace(/\/\/localhost\b/i, '//127.0.0.1');
+    const base = fixedHost.replace(/\/$/, '');
+    return base.endsWith('/api/v1') ? base : `${base}/api/v1`;
+  }
+  if (import.meta.env.DEV) return '/api/v1';
+  return 'http://127.0.0.1:3000/api/v1';
+};
+
+export const API_BASE_URL = resolveApiBaseUrl();
+
 const ACCESS_TOKEN_KEY = 'eco_access_token';
 const REFRESH_TOKEN_KEY = 'eco_refresh_token';
 const USER_PROFILE_KEY = 'eco_user_profile';
@@ -62,11 +75,29 @@ const getErrorMessage = (payload: unknown, fallback: string) => {
   if (payload && typeof payload === 'object' && 'message' in payload) {
     const message = (payload as { message: unknown }).message;
     if (Array.isArray(message)) return message.join(', ');
-    if (typeof message === 'string') return message;
+    if (typeof message === 'string' && message.trim()) return message;
   }
 
   return fallback;
 };
+
+async function readResponsePayload(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    const trimmed = text.trimStart();
+    if (trimmed.startsWith('<!') || trimmed.startsWith('<html')) {
+      return {
+        message:
+          'API trả về trang HTML (gọi nhầm frontend). Dùng proxy Vite (/api/v1) hoặc VITE_API_URL=http://127.0.0.1:3000/api/v1',
+      };
+    }
+    return { message: text.slice(0, 280) };
+  }
+}
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, headers, token, ...requestOptions } = options;
@@ -81,20 +112,35 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  let response = await fetch(`${API_URL}${path}`, buildRequest(token ?? getStoredAccessToken()));
+  const requestPath = path.startsWith('/') ? path : `/${path}`;
 
-  if (response.status === 401 && path !== '/auth/login' && path !== '/auth/refresh') {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${requestPath}`, buildRequest(token ?? getStoredAccessToken()));
+  } catch {
+    throw new ApiError(
+      0,
+      'Không kết nối được server. Kiểm tra backend (npm run start:dev trong server) và refresh trang.',
+      null,
+    );
+  }
+
+  if (response.status === 401 && requestPath !== '/auth/login' && requestPath !== '/auth/refresh') {
     const refreshedToken = await refreshAccessToken();
     if (refreshedToken) {
-      response = await fetch(`${API_URL}${path}`, buildRequest(refreshedToken));
+      try {
+        response = await fetch(`${API_BASE_URL}${requestPath}`, buildRequest(refreshedToken));
+      } catch {
+        throw new ApiError(0, 'Không kết nối được server sau khi làm mới phiên.', null);
+      }
     }
   }
 
-  const contentType = response.headers.get('content-type');
-  const payload = contentType?.includes('application/json') ? await response.json() : null;
+  const payload = await readResponsePayload(response);
 
   if (!response.ok) {
-    throw new ApiError(response.status, getErrorMessage(payload, 'Server không phản hồi đúng định dạng.'), payload);
+    const fallback = STATUS_MESSAGES[response.status] ?? 'Yêu cầu thất bại. Vui lòng thử lại.';
+    throw new ApiError(response.status, getErrorMessage(payload, fallback), payload);
   }
 
   return payload as T;
@@ -104,7 +150,7 @@ async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getStoredRefreshToken();
   if (!refreshToken) return null;
 
-  refreshPromise ??= fetch(`${API_URL}/auth/refresh`, {
+  refreshPromise ??= fetch(`${API_BASE_URL}/auth/refresh`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -113,15 +159,25 @@ async function refreshAccessToken(): Promise<string | null> {
     body: JSON.stringify({ refresh_token: refreshToken }),
   })
     .then(async (response) => {
+      const payload = await readResponsePayload(response);
       if (!response.ok) {
         clearAuthSession();
         return null;
       }
 
-      const payload = await response.json() as RefreshResponse;
+      const tokens = payload as RefreshResponse | null;
+      if (!tokens?.access_token) {
+        clearAuthSession();
+        return null;
+      }
+
       const storage = getBrowserStorage();
-      storage?.setItem(ACCESS_TOKEN_KEY, payload.access_token);
-      return payload.access_token;
+      storage?.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+      return tokens.access_token;
+    })
+    .catch(() => {
+      clearAuthSession();
+      return null;
     })
     .finally(() => {
       refreshPromise = null;

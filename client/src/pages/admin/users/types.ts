@@ -57,6 +57,7 @@ export interface UserFormState {
   name: string;
   phone: string;
   role_mask: string;
+  password: string;
 }
 
 export interface UserFieldErrors {
@@ -64,4 +65,5 @@ export interface UserFieldErrors {
   name?: string;
   phone?: string;
   role_mask?: string;
+  password?: string;
 }

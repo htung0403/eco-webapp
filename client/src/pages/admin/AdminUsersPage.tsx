@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Edit, Eye, Filter, Home, KeyRound, Loader2, Plus, Power, Search, Trash2, UserCog, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { apiRequest, ApiError } from '../../lib/api';
+import { normalizeUserList } from '../../lib/userNormalize';
 import { FilterPanel } from '../../components/ui/FilterPanel';
 import { FilterSelect } from '../../components/ui/FilterSelect';
 import { ConfirmDialog, type ConfirmDialogState } from '../../components/ui/ConfirmDialog';
 import type { AuthUserProfile } from '../login/types';
 import { HubBadgeList, RoleBadgeList, StatusBadge } from './users/UserDisplay';
-import type { HubListResponse, HubSummary, UserAccount, UserFieldErrors, UserFilters, UserFormState, UserListResponse } from './users/types';
+import type { HubListResponse, HubSummary, UserAccount, UserFieldErrors, UserFilters, UserFormState } from './users/types';
 import { ROLE_BITS } from './users/types';
 import AddEditUserDialog from './users/dialogs/AddEditUserDialog';
 import AssignUserHubDialog from './users/dialogs/AssignUserHubDialog';
@@ -16,15 +17,14 @@ import UserDetailDialog from './users/dialogs/UserDetailDialog';
 import UserStatusConfirmDialog from './users/dialogs/UserStatusConfirmDialog';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
-const emptyForm: UserFormState = { username: '', name: '', phone: '', role_mask: '1' };
+const emptyForm: UserFormState = { username: '', name: '', phone: '', role_mask: '1', password: '' };
 const validRoleMask = ROLE_BITS.reduce((sum, role) => sum + role.value, 0);
 
 const getStoredUser = (): AuthUserProfile | null => { const raw = localStorage.getItem(USER_PROFILE_KEY) || sessionStorage.getItem(USER_PROFILE_KEY); if (!raw) return null; try { return JSON.parse(raw) as AuthUserProfile; } catch { return null; } };
 const hasManagerRole = (roleMask = 0) => (roleMask & (32 | 64)) !== 0;
 const isDirector = (roleMask = 0) => (roleMask & 64) !== 0;
-const getList = (payload: UserListResponse) => payload.data || payload.items || payload.users || [];
 const getHubList = (payload: HubListResponse | HubSummary[]) => Array.isArray(payload) ? payload : payload.data || payload.items || payload.hubs || [];
-const getTotal = (payload: UserListResponse, fallback: number) => payload.total ?? payload.meta?.total ?? fallback;
+const combineRoleMask = (values: string[]) => values.reduce((sum, value) => sum | Number(value), 0);
 
 export default function AdminUsersPage() {
   const currentUser = useMemo(getStoredUser, []);
@@ -59,12 +59,13 @@ export default function AdminUsersPage() {
     try {
       const params = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit) });
       if (filters.keyword.trim()) params.set('keyword', filters.keyword.trim());
-      if (filters.role_mask.length) params.set('role_mask', filters.role_mask.join(','));
-      const payload = await apiRequest<UserListResponse>(`/users?${params.toString()}`);
-      let rows = getList(payload);
-      if (filters.status.length) rows = rows.filter(user => user.status !== undefined && filters.status.includes(String(user.status)));
-      if (filters.hub_id.length) rows = rows.filter(user => [...(user.hubs || []), ...(user.hub ? [user.hub] : [])].some(hub => filters.hub_id.includes(String(hub.id))));
-      setUsers(rows); setTotal(getTotal(payload, rows.length));
+      if (filters.role_mask.length) params.set('role_mask', String(combineRoleMask(filters.role_mask)));
+      const payload = await apiRequest<unknown>(`/users?${params.toString()}`);
+      const { users: rows, total: apiTotal } = normalizeUserList(payload);
+      let filtered = rows;
+      if (filters.status.length) filtered = filtered.filter(user => user.status !== undefined && filters.status.includes(String(user.status)));
+      if (filters.hub_id.length) filtered = filtered.filter(user => [...(user.hubs || []), ...(user.hub ? [user.hub] : [])].some(hub => filters.hub_id.includes(String(hub.id))));
+      setUsers(filtered); setTotal(filters.status.length || filters.hub_id.length ? filtered.length : apiTotal);
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Không tải được danh sách nhân sự.'); }
     finally { setLoading(false); }
   };
@@ -76,10 +77,10 @@ export default function AdminUsersPage() {
   const clearFilters = () => setFilters(prev => ({ ...prev, role_mask: [], status: [], hub_id: [], page: 1 }));
   const setFormField = <K extends keyof UserFormState>(key: K, value: UserFormState[K]) => setForm(prev => ({ ...prev, [key]: value }));
 
-  const validate = () => { const errors: UserFieldErrors = {}; const mask = Number(form.role_mask); if (!form.username.trim()) errors.username = 'Username bắt buộc.'; if (!form.name.trim()) errors.name = 'Họ tên bắt buộc.'; if (form.phone && !/^[0-9+\-\s().]{8,20}$/.test(form.phone)) errors.phone = 'Số điện thoại không hợp lệ.'; if (!Number.isInteger(mask) || mask < 1 || (mask | validRoleMask) !== validRoleMask) errors.role_mask = 'Role mask không hợp lệ.'; if (!canDelete && editingUser && ((editingUser.role_mask & 64) !== (mask & 64))) errors.role_mask = 'MANAGER không được cấp/gỡ DIRECTOR.'; setFieldErrors(errors); return !Object.keys(errors).length; };
+  const validate = () => { const errors: UserFieldErrors = {}; const mask = Number(form.role_mask); const email = form.username.trim(); if (!email) errors.username = 'Email bắt buộc.'; else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.username = 'Email không hợp lệ.'; if (!form.name.trim()) errors.name = 'Họ tên bắt buộc.'; if (form.phone && !/^[0-9+\-\s().]{8,20}$/.test(form.phone)) errors.phone = 'Số điện thoại không hợp lệ.'; if (!isEdit && (!form.password || form.password.length < 8)) errors.password = 'Mật khẩu tối thiểu 8 ký tự.'; else if (isEdit && form.password && form.password.length < 8) errors.password = 'Mật khẩu tối thiểu 8 ký tự.'; if (!Number.isInteger(mask) || mask < 1 || (mask | validRoleMask) !== validRoleMask) errors.role_mask = 'Role mask không hợp lệ.'; if (!canDelete && editingUser && ((editingUser.role_mask & 64) !== (mask & 64))) errors.role_mask = 'MANAGER không được cấp/gỡ DIRECTOR.'; setFieldErrors(errors); return !Object.keys(errors).length; };
   const openCreate = () => { setIsEdit(false); setEditingUser(null); setForm(emptyForm); setFieldErrors({}); setFormOpen(true); };
-  const openEdit = (user: UserAccount) => { setIsEdit(true); setEditingUser(user); setForm({ username: user.username || '', name: user.name || '', phone: user.phone || '', role_mask: String(user.role_mask || 1) }); setFieldErrors({}); setFormOpen(true); };
-  const submitForm = async () => { if (!validate()) return; setSubmitting(true); try { const body = { username: form.username.trim(), name: form.name.trim(), phone: form.phone.trim(), role_mask: Number(form.role_mask) }; if (isEdit && editingUser) await apiRequest(`/users/${editingUser.id}`, { method: 'PATCH', body }); else await apiRequest('/users', { method: 'POST', body }); setFormOpen(false); await loadUsers(); } finally { setSubmitting(false); } };
+  const openEdit = (user: UserAccount) => { setIsEdit(true); setEditingUser(user); setForm({ username: user.username || '', name: user.name || '', phone: user.phone || '', role_mask: String(user.role_mask || 1), password: '' }); setFieldErrors({}); setFormOpen(true); };
+  const submitForm = async () => { if (!validate()) return; setSubmitting(true); try { if (isEdit && editingUser) { await apiRequest(`/users/${editingUser.id}`, { method: 'PATCH', body: { email: form.username.trim(), full_name: form.name.trim(), phone: form.phone.trim() || undefined, ...(form.password.trim() ? { password: form.password } : {}) } }); if (Number(form.role_mask) !== editingUser.role_mask) await apiRequest(`/users/${editingUser.id}/role`, { method: 'PATCH', body: { role_mask: Number(form.role_mask) } }); } else await apiRequest('/users', { method: 'POST', body: { email: form.username.trim(), full_name: form.name.trim(), phone: form.phone.trim() || undefined, password: form.password, role_mask: Number(form.role_mask) } }); setFormOpen(false); await loadUsers(); } finally { setSubmitting(false); } };
   const submitRole = async () => { if (!roleUser) return; setSubmitting(true); try { await apiRequest(`/users/${roleUser.id}/role`, { method: 'PATCH', body: { role_mask: roleValue } }); setRoleUser(null); await loadUsers(); } finally { setSubmitting(false); } };
   const submitHub = async () => { if (!hubUser) return; setSubmitting(true); try { await apiRequest(`/users/${hubUser.id}/hub`, { method: 'PATCH', body: { hub_id: hubValue } }); setHubUser(null); await loadUsers(); } finally { setSubmitting(false); } };
   const openRole = (user: UserAccount) => { setRoleUser(user); setRoleValue(user.role_mask); };

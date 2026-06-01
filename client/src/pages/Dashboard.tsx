@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { BarChart3, Building2, Calculator, PackageSearch, Search, Truck, Warehouse } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { BarChart3, Building2, Calculator, PackageSearch, Search, Truck, Users, Warehouse } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ActionCard } from '../components/ui/ActionCard';
+import { getGreetingPeriod, getLoginDisplayName, getStoredAuthUser } from '../lib/authUser';
+import type { AuthUserProfile } from './login/types';
 
 const dashboardModules = [
   {
@@ -40,6 +42,13 @@ const dashboardModules = [
     colorScheme: 'amber' as const,
   },
   {
+    icon: Users,
+    title: 'Nhân sự',
+    description: 'Danh sách nhân viên và chấm công theo ngày.',
+    href: '/hr',
+    colorScheme: 'purple' as const,
+  },
+  {
     icon: BarChart3,
     title: 'Dashboard BGĐ',
     description: 'KPI toàn công ty, quá hạn SLA và báo cáo doanh thu.',
@@ -57,12 +66,27 @@ const dashboardModules = [
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'chuc-nang' | 'danh-dau' | 'tat-ca'>('chuc-nang');
+  const [user, setUser] = useState<AuthUserProfile | null>(() => getStoredAuthUser());
+  const loginName = getLoginDisplayName(user);
+  const greetingPeriod = getGreetingPeriod();
+
+  useEffect(() => {
+    const syncUser = () => setUser(getStoredAuthUser());
+    syncUser();
+    window.addEventListener('storage', syncUser);
+    window.addEventListener('focus', syncUser);
+    return () => {
+      window.removeEventListener('storage', syncUser);
+      window.removeEventListener('focus', syncUser);
+    };
+  }, []);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground">
-          Chào buổi tối, <span className="text-primary">Lê Minh Công</span> 👋
+          Chào {greetingPeriod},{' '}
+          <span className="text-primary">{loginName}</span> 👋
         </h1>
       </div>
 

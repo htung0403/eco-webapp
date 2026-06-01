@@ -1,0 +1,148 @@
+/* Phiếu giao nhận ECO — in A5 ngang */
+@page {
+  size: A5 landscape;
+  margin: 4mm;
+}
+
+@media print {
+  body {
+    margin: 0;
+    background: #fff !important;
+    font-family: 'Times New Roman', Times, serif;
+  }
+  .print-toolbar {
+    display: none !important;
+  }
+  .waybill-invoice-wrap {
+    padding: 0 !important;
+    background: #fff !important;
+  }
+}
+
+.waybill-invoice-wrap {
+  min-height: 100vh;
+  background: #e8eef5;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.waybill-invoice {
+  width: 210mm;
+  max-width: 100%;
+  background: #fff;
+  border: 1px solid #000;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 10pt;
+  font-weight: 600;
+  color: #000;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  box-sizing: border-box;
+}
+
+.waybill-invoice table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.waybill-invoice td,
+.waybill-invoice th {
+  border: 1px solid #000;
+  padding: 3px 5px;
+  vertical-align: top;
+  word-wrap: break-word;
+  font-weight: 600;
+}
+
+.waybill-invoice .cell-label {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.waybill-invoice .cell-value {
+  font-weight: 800;
+}
+
+.waybill-invoice .header-title {
+  font-size: 15pt;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.waybill-invoice .header-sub {
+  font-size: 12pt;
+  font-weight: 800;
+  text-align: center;
+}
+
+.waybill-invoice .header-hotline {
+  font-size: 10pt;
+  font-weight: 700;
+  text-align: center;
+}
+
+.waybill-invoice .section-title {
+  font-weight: 800;
+  font-size: 10.5pt;
+  text-align: center;
+  background: #f5f5f5;
+}
+
+.waybill-invoice .pay-banner {
+  font-weight: 800;
+  font-size: 11pt;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.waybill-invoice .total-collect {
+  font-weight: 800;
+  font-size: 12pt;
+  text-align: center;
+}
+
+.waybill-invoice .barcode-box {
+  text-align: center;
+  padding: 4px;
+}
+
+.waybill-invoice .barcode-img {
+  height: 36px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.waybill-invoice .barcode-text {
+  font-weight: 800;
+  font-size: 11pt;
+  letter-spacing: 1px;
+}
+
+.waybill-invoice th {
+  font-weight: 800;
+  text-align: center;
+}
+
+.waybill-invoice .logo-tagline {
+  font-style: italic;
+  font-size: 8pt;
+  color: #333;
+}
+
+.waybill-invoice .sign-area {
+  min-height: 28px;
+}
+
+.waybill-invoice .footer-small {
+  font-size: 7.5pt;
+  line-height: 1.2;
+}
+
+.waybill-invoice .checkbox-line {
+  font-size: 8pt;
+  margin-top: 2px;
+}

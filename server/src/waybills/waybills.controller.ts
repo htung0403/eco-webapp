@@ -57,6 +57,13 @@ export class WaybillsController {
     return this.waybillsService.getOverdue(query, currentUser);
   }
 
+  @Get('next-code')
+  @RequireRoles(Roles.WAREHOUSE, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Preview next waybill code (before save)' })
+  previewNextCode() {
+    return this.waybillsService.previewNextWaybillCode();
+  }
+
   @Get('code/:code')
   @ApiOperation({ summary: 'Find a waybill by code' })
   getByCode(@Param('code') code: string, @CurrentUser() currentUser: UserEntity) {
