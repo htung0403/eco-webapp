@@ -7,6 +7,11 @@ type RefreshResponse = {
   access_token: string;
 };
 
+type RefreshResult = {
+  token: string | null;
+  sessionCleared: boolean;
+};
+
 export class ApiError extends Error {
   status: number;
   payload: unknown;
@@ -44,7 +49,7 @@ const ACCESS_TOKEN_KEY = 'eco_access_token';
 const REFRESH_TOKEN_KEY = 'eco_refresh_token';
 const USER_PROFILE_KEY = 'eco_user_profile';
 
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<RefreshResult> | null = null;
 
 const getBrowserStorage = () => {
   if (typeof window === 'undefined') return null;
@@ -126,13 +131,15 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (response.status === 401 && requestPath !== '/auth/login' && requestPath !== '/auth/refresh') {
-    const refreshedToken = await refreshAccessToken();
-    if (refreshedToken) {
+    const refreshResult = await refreshAccessToken();
+    if (refreshResult.token) {
       try {
-        response = await fetch(`${API_BASE_URL}${requestPath}`, buildRequest(refreshedToken));
+        response = await fetch(`${API_BASE_URL}${requestPath}`, buildRequest(refreshResult.token));
       } catch {
         throw new ApiError(0, 'Không kết nối được server sau khi làm mới phiên.', null);
       }
+    } else if (!refreshResult.sessionCleared) {
+      throw new ApiError(0, 'Không kết nối được server để làm mới phiên. Vui lòng thử lại khi mạng ổn định.', null);
     }
   }
 
@@ -146,9 +153,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return payload as T;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+async function refreshAccessToken(): Promise<RefreshResult> {
   const refreshToken = getStoredRefreshToken();
-  if (!refreshToken) return null;
+  if (!refreshToken) return { token: null, sessionCleared: false };
 
   refreshPromise ??= fetch(`${API_BASE_URL}/auth/refresh`, {
     method: 'POST',
@@ -162,22 +169,21 @@ async function refreshAccessToken(): Promise<string | null> {
       const payload = await readResponsePayload(response);
       if (!response.ok) {
         clearAuthSession();
-        return null;
+        return { token: null, sessionCleared: true };
       }
 
       const tokens = payload as RefreshResponse | null;
       if (!tokens?.access_token) {
         clearAuthSession();
-        return null;
+        return { token: null, sessionCleared: true };
       }
 
       const storage = getBrowserStorage();
       storage?.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
-      return tokens.access_token;
+      return { token: tokens.access_token, sessionCleared: false };
     })
     .catch(() => {
-      clearAuthSession();
-      return null;
+      return { token: null, sessionCleared: false };
     })
     .finally(() => {
       refreshPromise = null;

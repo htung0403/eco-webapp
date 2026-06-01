@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { businessTableEntities } from './business-tables/business-table.entities';
 import { getDatabaseUrl } from './database-url';
 import { ExpenseEntity } from './expenses/expense.entity';
 import { HubEntity } from './hubs/hub.entity';
@@ -28,6 +29,7 @@ export default new DataSource({
     TripEntity,
     ExpenseEntity,
     ReconciliationEntity,
+    ...businessTableEntities,
   ],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,

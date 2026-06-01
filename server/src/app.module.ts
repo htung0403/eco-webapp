@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { getDatabaseUrl, getDatabaseUrlHelp, isSupabaseDirectDatabaseUrl } from './database-url';
 import { AuthModule } from './auth/auth.module';
+import { BusinessTablesModule } from './business-tables/business-tables.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { FinanceModule } from './finance/finance.module';
@@ -62,6 +63,7 @@ import { WaybillsModule } from './waybills/waybills.module';
     DashboardModule,
     SearchModule,
     FinanceModule,
+    BusinessTablesModule,
   ],
 })
 export class AppModule {}

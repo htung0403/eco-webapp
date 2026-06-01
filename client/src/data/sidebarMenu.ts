@@ -6,6 +6,7 @@ import {
   PackageSearch,
   Search,
   Truck,
+  TruckIcon,
   Users,
   Warehouse,
 } from 'lucide-react';
@@ -25,6 +26,9 @@ export const sidebarMenu: SidebarItem[] = [
   { id: 'warehouse', icon: Warehouse, label: 'Quản lý kho', path: '/warehouse', requiredRoleMask: 1 | 2 },
   { id: 'delivery', icon: PackageSearch, label: 'Quản lý giao hàng', path: '/delivery', requiredRoleMask: 4 | 8 },
   { id: 'trips', icon: Truck, label: 'Quản lý xe', path: '/trips', requiredRoleMask: 8 },
+  { id: 'fleet', icon: TruckIcon, label: 'Danh mục xe', path: '/fleet', requiredRoleMask: 8 | 32 | 64 },
+  { id: 'transport', icon: PackageSearch, label: 'Vận tải mở rộng', path: '/transport', requiredRoleMask: 8 | 32 | 64 },
+  { id: 'customers', icon: Users, label: 'Khách hàng', path: '/customers', requiredRoleMask: 1 | 2 | 16 | 32 | 64 },
   { id: 'search', icon: Search, label: 'Tìm kiếm', path: '/search' },
   { id: 'finance', icon: Calculator, label: 'Tài chính', path: '/finance', requiredRoleMask: 16 },
   { id: 'hr', icon: Users, label: 'Nhân sự', path: '/hr', requiredRoleMask: 32 | 64 },
