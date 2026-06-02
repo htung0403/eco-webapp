@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import AuthSessionGuard from './components/AuthSessionGuard';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
@@ -25,6 +26,7 @@ const DeliveryHandoverPage = lazy(() => import('./pages/DeliveryHandoverPage'));
 const DeliveryEnRoutePage = lazy(() => import('./pages/DeliveryEnRoutePage'));
 const DeliveryHubDropoffPage = lazy(() => import('./pages/DeliveryHubDropoffPage'));
 const DeliveryLastMilePage = lazy(() => import('./pages/DeliveryLastMilePage'));
+const NhiemVuGiaoHangPage = lazy(() => import('./pages/NhiemVuGiaoHangPage'));
 const DeliveryCodPage = lazy(() => import('./pages/DeliveryCodPage'));
 const TripsPage = lazy(() => import('./pages/TripsPage'));
 const TripNewPage = lazy(() => import('./pages/TripNewPage'));
@@ -45,6 +47,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const HrStaffListPage = lazy(() => import('./pages/hr/HrStaffListPage'));
 const HrAttendancePage = lazy(() => import('./pages/hr/HrAttendancePage'));
 const PrintWaybillPage = lazy(() => import('./pages/print/PrintWaybillPage'));
+const PrintInventoryStockPage = lazy(() => import('./pages/print/PrintInventoryStockPage'));
 
 const ecoRoutes = [
   '/warehouse/inventory',
@@ -62,11 +65,13 @@ const ecoRoutes = [
   '/delivery/hub-dropoff',
   '/delivery/last-mile',
   '/delivery/cod',
+  '/nhiem-vu-giao-hang',
   '/trips/list',
   '/trips/new',
   '/trips/:id',
   '/trips/:id/expenses',
   '/trips/:id/profit',
+  '/trips/trunk-vehicles',
   '/trucks',
   '/drivers/performance',
   '/search/general',
@@ -102,7 +107,21 @@ function App() {
             </Suspense>
           )}
         />
-        <Route element={<MainLayout />}>
+        <Route
+          path="/print/inventory-stock"
+          element={(
+            <Suspense fallback={null}>
+              <PrintInventoryStockPage />
+            </Suspense>
+          )}
+        />
+        <Route
+          element={(
+            <AuthSessionGuard>
+              <MainLayout />
+            </AuthSessionGuard>
+          )}
+        >
           <Route path="/" element={<Dashboard />} />
           {moduleRoutes.map((path) => (
             <Route key={path} path={path} element={<ModulePage />} />
@@ -113,12 +132,12 @@ function App() {
               path={path}
               element={(
                 <Suspense fallback={null}>
-                  {path === '/hr/staff' ? <HrStaffListPage /> : path === '/hr/attendance' ? <HrAttendancePage /> : path === '/admin/users' ? <AdminUsersPage /> : path === '/admin/hubs' ? <AdminHubsPage /> : path === '/admin/trucks' ? <AdminTrucksPage /> : path === '/admin/vendors' ? <AdminVendorsPage /> : path === '/warehouse/orders/new' ? <WarehouseOrderNewPage /> : path === '/warehouse/orders/:id/receive' ? <WarehouseOrderReceivePage /> : path === '/warehouse/inventory' ? <WarehouseInventoryPage /> : path === '/warehouse/customers' ? <WarehouseCustomersPage /> : path === '/warehouse/incoming' ? <WarehouseIncomingPage /> : path === '/warehouse/priority' ? <WarehousePriorityPage /> : path === '/warehouse/load-planning' ? <WarehouseLoadPlanningPage /> : path === '/warehouse/manifests' ? <WarehouseManifestsPage /> : path === '/warehouse/manifests/:id' ? <WarehouseManifestDetailPage /> : path === '/delivery/routing' ? <DeliveryRoutingPage /> : path === '/delivery/handover' ? <DeliveryHandoverPage /> : path === '/delivery/en-route' ? <DeliveryEnRoutePage /> : path === '/delivery/hub-dropoff' ? <DeliveryHubDropoffPage /> : path === '/delivery/last-mile' ? <DeliveryLastMilePage /> : path === '/delivery/cod' ? <DeliveryCodPage /> : path === '/trips/list' ? <TripsPage /> : path === '/trips/new' ? <TripNewPage /> : path === '/trips/:id' ? <TripDetailPage /> : path === '/trips/:id/expenses' ? <TripExpensesPage /> : path === '/trips/:id/profit' ? <TripProfitPage /> : path === '/trucks' ? <TrucksPage /> : path === '/drivers/performance' ? <DriverPerformancePage /> : path === '/search/general' ? <SearchPage /> : path === '/search/waybills' ? <SearchWaybillsPage /> : path === '/search/trips' ? <SearchTripsPage /> : path === '/finance/cod-reconciliation' ? <FinanceCodReconciliationPage /> : path === '/finance/hub-reconciliation' ? <FinanceHubReconciliationPage /> : path === '/finance/approve/internal' ? <FinanceApproveInternalPage /> : path === '/finance/approve/vendor' ? <FinanceApproveVendorPage /> : path === '/dashboard/kpi' ? <DashboardKpiPage /> : path === '/settings' ? <SettingsPage /> : <PlaceholderPage /> }
+                  {path === '/hr/staff' ? <HrStaffListPage /> : path === '/hr/attendance' ? <HrAttendancePage /> : path === '/admin/users' ? <AdminUsersPage /> : path === '/admin/hubs' ? <AdminHubsPage /> : path === '/admin/trucks' ? <AdminTrucksPage /> : path === '/admin/vendors' ? <AdminVendorsPage /> : path === '/warehouse/orders/new' ? <WarehouseOrderNewPage /> : path === '/warehouse/orders/:id/receive' ? <WarehouseOrderReceivePage /> : path === '/warehouse/inventory' ? <WarehouseInventoryPage /> : path === '/warehouse/customers' ? <WarehouseCustomersPage /> : path === '/warehouse/incoming' ? <WarehouseIncomingPage /> : path === '/warehouse/priority' ? <WarehousePriorityPage /> : path === '/warehouse/load-planning' ? <WarehouseLoadPlanningPage /> : path === '/warehouse/manifests' ? <WarehouseManifestsPage /> : path === '/warehouse/manifests/:id' ? <WarehouseManifestDetailPage /> : path === '/delivery/routing' ? <DeliveryRoutingPage /> : path === '/delivery/handover' ? <DeliveryHandoverPage /> : path === '/delivery/en-route' ? <DeliveryEnRoutePage /> : path === '/delivery/hub-dropoff' ? <DeliveryHubDropoffPage /> : path === '/delivery/last-mile' ? <DeliveryLastMilePage /> : path === '/nhiem-vu-giao-hang' ? <NhiemVuGiaoHangPage /> : path === '/delivery/cod' ? <DeliveryCodPage /> : path === '/trips/list' ? <TripsPage /> : path === '/trips/new' ? <TripNewPage /> : path === '/trips/:id' ? <TripDetailPage /> : path === '/trips/:id/expenses' ? <TripExpensesPage /> : path === '/trips/:id/profit' ? <TripProfitPage /> : path === '/trips/trunk-vehicles' ? <TrucksPage /> : path === '/trucks' ? <TrucksPage /> : path === '/drivers/performance' ? <DriverPerformancePage /> : path === '/search/general' ? <SearchPage /> : path === '/search/waybills' ? <SearchWaybillsPage /> : path === '/search/trips' ? <SearchTripsPage /> : path === '/finance/cod-reconciliation' ? <FinanceCodReconciliationPage /> : path === '/finance/hub-reconciliation' ? <FinanceHubReconciliationPage /> : path === '/finance/approve/internal' ? <FinanceApproveInternalPage /> : path === '/finance/approve/vendor' ? <FinanceApproveVendorPage /> : path === '/dashboard/kpi' ? <DashboardKpiPage /> : path === '/settings' ? <SettingsPage /> : <PlaceholderPage /> }
                 </Suspense>
               )}
             />
           ))}
-          <Route path="*" element={<Navigate to="/warehouse/inventory" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

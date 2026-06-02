@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, In, Repository } from 'typeorm';
 import { TripStatus } from '../common/enums';
+import { clampPaginationLimit } from '../common/pagination';
 import { Roles } from '../common/roles';
 import { TripEntity } from '../trips/trip.entity';
 import { UserEntity } from '../users/user.entity';
@@ -52,7 +53,7 @@ export class TrucksService {
 
   async findAll(query: QueryTrucksDto, _currentUser: UserEntity) {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const limit = clampPaginationLimit(query.limit, 20);
     const qb = this.trucksRepository
       .createQueryBuilder('truck')
       .leftJoinAndSelect('truck.driver', 'driver');
@@ -129,6 +130,7 @@ export class TrucksService {
     }
     const statuses = this.parseList(query.status);
     if (statuses.length) qb.andWhere('truck.status IN (:...statuses)', { statuses });
+    if (query.loai_xe?.trim()) qb.andWhere('truck.loai_xe = :loaiXe', { loaiXe: query.loai_xe.trim() });
     if (query.driver_id) qb.andWhere('truck.driver_id = :driverId', { driverId: query.driver_id });
   }
 

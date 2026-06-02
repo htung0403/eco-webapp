@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
+import { clampPaginationLimit } from '../common/pagination';
 import { Roles } from '../common/roles';
 import { UserEntity } from '../users/user.entity';
 import { QueryVendorsDto } from './dto/query-vendors.dto';
@@ -24,7 +25,7 @@ export class VendorsService {
 
   async findAll(query: QueryVendorsDto) {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const limit = clampPaginationLimit(query.limit, 20);
     const qb = this.vendorsRepository.createQueryBuilder('vendor');
     this.applyFilters(qb, query);
     const [items, total] = await qb.orderBy('vendor.id', 'DESC').skip((page - 1) * limit).take(limit).getManyAndCount();

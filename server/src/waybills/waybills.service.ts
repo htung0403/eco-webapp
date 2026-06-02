@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, IsNull, Like, Repository } from 'typeorm';
 import { HubEntity } from '../hubs/hub.entity';
 import { PaymentType } from '../common/enums';
+import { clampPaginationLimit } from '../common/pagination';
 import { Roles, hasRole, isManager } from '../common/roles';
 import { UserEntity } from '../users/user.entity';
 import { WaybillEntity } from './waybill.entity';
@@ -91,7 +92,7 @@ export class WaybillsService {
 
   async findAll(query: QueryWaybillsDto, currentUser: UserEntity) {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const limit = clampPaginationLimit(query.limit, 20);
     const qb = this.waybillsRepository.createQueryBuilder('waybill').where('waybill.deleted_at IS NULL').leftJoinAndSelect('waybill.origin_hub', 'origin_hub').leftJoinAndSelect('waybill.dest_hub', 'dest_hub');
     this.applyFilters(qb, query);
     this.applyHubScope(qb, currentUser);

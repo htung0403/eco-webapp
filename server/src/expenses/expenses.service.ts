@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { TripStatus } from '../common/enums';
+import { clampPaginationLimit } from '../common/pagination';
 import { Roles, hasRole, isManager } from '../common/roles';
 import { TripEntity } from '../trips/trip.entity';
 import { UserEntity } from '../users/user.entity';
@@ -32,7 +33,7 @@ export class ExpensesService {
 
   async findAll(query: QueryExpensesDto, currentUser: UserEntity) {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 10;
+    const limit = clampPaginationLimit(query.limit, 10);
     const qb = this.expensesRepository.createQueryBuilder('expense')
       .leftJoinAndSelect('expense.trip', 'trip')
       .orderBy('expense.id', 'DESC')

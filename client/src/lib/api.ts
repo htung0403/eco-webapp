@@ -46,11 +46,23 @@ const USER_PROFILE_KEY = 'eco_user_profile';
 
 let refreshPromise: Promise<string | null> | null = null;
 
-const getBrowserStorage = () => {
-  if (typeof window === 'undefined') return null;
-  const hasLocalSession = Boolean(localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(REFRESH_TOKEN_KEY));
-  return hasLocalSession ? localStorage : sessionStorage;
+const dispatchAuthCleared = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('eco-auth-cleared'));
+  }
 };
+
+/** Storage đang giữ refresh token (ưu tiên), tránh ghi nhầm local/session. */
+const getAuthStorage = (): Storage | null => {
+  if (typeof window === 'undefined') return null;
+  if (sessionStorage.getItem(REFRESH_TOKEN_KEY)) return sessionStorage;
+  if (localStorage.getItem(REFRESH_TOKEN_KEY)) return localStorage;
+  if (sessionStorage.getItem(ACCESS_TOKEN_KEY)) return sessionStorage;
+  if (localStorage.getItem(ACCESS_TOKEN_KEY)) return localStorage;
+  return null;
+};
+
+export const hasAuthSession = () => Boolean(getStoredAccessToken() || getStoredRefreshToken());
 
 const getStoredAccessToken = () => {
   if (typeof window === 'undefined') return null;
@@ -69,6 +81,7 @@ export const clearAuthSession = () => {
     storage.removeItem(REFRESH_TOKEN_KEY);
     storage.removeItem(USER_PROFILE_KEY);
   });
+  dispatchAuthCleared();
 };
 
 const getErrorMessage = (payload: unknown, fallback: string) => {
@@ -146,42 +159,47 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return payload as T;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+/** Làm mới access token (dùng khi focus tab / interval). Không xóa phiên khi server tạm ngắt. */
+export async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getStoredRefreshToken();
   if (!refreshToken) return null;
 
-  refreshPromise ??= fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  })
-    .then(async (response) => {
-      const payload = await readResponsePayload(response);
-      if (!response.ok) {
-        clearAuthSession();
-        return null;
-      }
-
-      const tokens = payload as RefreshResponse | null;
-      if (!tokens?.access_token) {
-        clearAuthSession();
-        return null;
-      }
-
-      const storage = getBrowserStorage();
-      storage?.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
-      return tokens.access_token;
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
     })
-    .catch(() => {
-      clearAuthSession();
-      return null;
-    })
-    .finally(() => {
-      refreshPromise = null;
-    });
+      .then(async (response) => {
+        const payload = await readResponsePayload(response);
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            clearAuthSession();
+          }
+          return null;
+        }
+
+        const tokens = payload as RefreshResponse | null;
+        if (!tokens?.access_token) {
+          clearAuthSession();
+          return null;
+        }
+
+        const storage = getAuthStorage();
+        storage?.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+        return tokens.access_token;
+      })
+      .catch(() => {
+        // Mạng/server restart: giữ refresh token, không đá user
+        return null;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
 
   return refreshPromise;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, Filter, Flag, Loader2, Package, RefreshCcw, Route, Search, ShieldAlert, Tag, SlidersHorizontal, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, Filter, Flag, Loader2, Package, Printer, RefreshCcw, Route, Search, ShieldAlert, Tag, SlidersHorizontal, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ApiError, apiRequest } from '../lib/api';
 import { DayPicker } from '../components/ui/DayPicker';
@@ -9,6 +9,7 @@ import type { AuthUserProfile } from './login/types';
 import AssignPriorityDialog from './warehouse/inventory/dialogs/AssignPriorityDialog';
 import AssignRouteDialog from './warehouse/inventory/dialogs/AssignRouteDialog';
 import WaybillInventoryDetailDialog from './warehouse/inventory/dialogs/WaybillInventoryDetailDialog';
+import { mapWaybillsToPrintRows, saveInventoryPrintPayload, summarizeFilters } from './print/inventoryPrintUtils';
 import type { BadgeConfig, FilterOption, HubSummary, InventoryFilters, InventoryListResponse, PriorityFormState, RouteFormState, WaybillInventoryDetail, WaybillInventoryItem } from './warehouse/inventory/types';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
@@ -173,6 +174,22 @@ export default function WarehouseInventoryPage() {
     }
   }
 
+  function handlePrintStockList() {
+    setActionError('');
+    if (!waybills.length) {
+      setActionError('Không có đơn tồn kho trên danh sách để in.');
+      return;
+    }
+    const payload = mapWaybillsToPrintRows(waybills, canViewPage);
+    const pageNote =
+      total > waybills.length
+        ? ` · Trang ${filters.page}: in ${waybills.length}/${total} đơn đang hiển thị`
+        : ` · ${waybills.length} đơn`;
+    payload.filterSummary = summarizeFilters(filters) + pageNote;
+    saveInventoryPrintPayload(payload);
+    window.open('/print/inventory-stock', '_blank');
+  }
+
   async function submitRoute() {
     if (!selectedWaybill) return;
     setIsSubmitting(true);
@@ -205,6 +222,16 @@ export default function WarehouseInventoryPage() {
             <button title="Mở bộ lọc" onClick={openFilterSheet} className="relative h-10 w-10 rounded-lg border border-primary/30 bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center md:hidden"><Filter size={16} />{activeFilterCount > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-white">{activeFilterCount}</span>}</button>
             {activeFilterCount > 0 && <div className="order-last basis-full md:order-none md:basis-auto"><button onClick={clearFilters} className="h-9 rounded-lg border border-red-200 bg-red-50 px-3 text-[13px] font-bold text-red-500 transition-colors hover:bg-red-100 md:h-10">× Xóa {activeFilterCount} bộ lọc</button></div>}
             <div className="hidden flex-1 md:block" />
+            <button
+              type="button"
+              title="In danh sách tồn"
+              disabled={isLoading || waybills.length === 0}
+              onClick={handlePrintStockList}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-600 px-3 text-[13px] font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <Printer size={16} />
+              <span className="hidden sm:inline">In danh sách tồn</span>
+            </button>
             <button title="Làm mới" onClick={() => void loadInventory()} className="hidden h-10 w-10 rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted md:flex items-center justify-center"><RefreshCcw size={16} /></button>
           </div>
 
@@ -213,11 +240,11 @@ export default function WarehouseInventoryPage() {
             <FilterSelect multiple icon={Building2} placeholder="Bưu cục" searchPlaceholder="Tìm bưu cục..." options={hubOptions} value={filters.hubIds} onValueChange={value => setFilterArray('hubIds', value)} className="h-9 min-w-[170px]" />
             <FilterSelect multiple icon={CreditCard} placeholder="Loại thanh toán" searchPlaceholder="Tìm thanh toán..." options={paymentOptions} value={filters.paymentTypes} onValueChange={value => setFilterArray('paymentTypes', value)} className="h-9 min-w-[170px]" />
             <FilterSelect multiple icon={Flag} placeholder="Mức ưu tiên" searchPlaceholder="Tìm ưu tiên..." options={priorityOptions} value={filters.priorities} onValueChange={value => setFilterArray('priorities', value)} className="h-9 min-w-[160px]" />
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-2 py-1 text-[13px] font-medium text-muted-foreground">
+            <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-2 py-1 text-[13px] font-medium text-muted-foreground">
               <CalendarDays size={14} className="shrink-0" />
-              <DayPicker value={filters.receivedFrom} onChange={value => updateFilters({ receivedFrom: value })} placeholder="Từ ngày" className="h-7 w-[118px] border-0 bg-transparent pl-0 pr-6 text-[12px] focus:ring-0" />
-              <span>—</span>
-              <DayPicker value={filters.receivedTo} onChange={value => updateFilters({ receivedTo: value })} placeholder="Đến ngày" className="h-7 w-[118px] border-0 bg-transparent pl-0 pr-6 text-[12px] focus:ring-0" />
+              <DayPicker value={filters.receivedFrom} onChange={value => updateFilters({ receivedFrom: value })} placeholder="Từ ngày" className="h-7 min-w-[8.25rem] w-[8.25rem] shrink-0 border-0 bg-transparent pl-0 pr-6 text-[12px] focus:ring-0" />
+              <span className="shrink-0">—</span>
+              <DayPicker value={filters.receivedTo} onChange={value => updateFilters({ receivedTo: value })} placeholder="Đến ngày" className="h-7 min-w-[8.5rem] w-[8.5rem] shrink-0 border-0 bg-transparent pl-0 pr-6 text-[12px] focus:ring-0" />
             </div>
           </div>
         </div>
