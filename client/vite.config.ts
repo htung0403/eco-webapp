@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => {
                 end?: (body: string) => void
                 headersSent?: boolean
               }
-              if (response.headersSent || !response.writeHead) return
+              if (response.headersSent || !response.writeHead || !response.end) return
               response.writeHead(502, { 'Content-Type': 'application/json' })
               response.end(
                 JSON.stringify({

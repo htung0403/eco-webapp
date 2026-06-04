@@ -186,7 +186,7 @@ export const moduleGroups: ModuleGroup[] = [
       { icon: Banknote, title: 'Đối soát COD với khách hàng', description: 'Đối chiếu COD theo khách hàng.', colorScheme: 'green', path: '/finance/cod-reconciliation', requiredRoleMask: ACCOUNTANT },
       { icon: ClipboardCheck, title: 'Phê duyệt chi phí xe nội bộ', description: 'Duyệt chi phí phát sinh cho xe công ty.', colorScheme: 'blue', path: '/finance/approve/internal', requiredRoleMask: ACCOUNTANT },
       { icon: CreditCard, title: 'Phê duyệt chi phí NCC đường trục', description: 'Duyệt chi phí nhà cung cấp vận tải.', colorScheme: 'purple', path: '/finance/approve/vendor', requiredRoleMask: ACCOUNTANT },
-      { icon: Building2, title: 'Công nợ & Thanh toán NCC', description: 'Bảng kê chuyến, phiếu chi và sổ cái dư nợ nhà xe.', colorScheme: 'rose', path: '/finance/vendor-debt', requiredRoleMask: ACCOUNTANT },
+      { icon: Building2, title: 'Công nợ & Thanh toán NCC', description: 'Bảng kê chuyến, phiếu chi và sổ cái dư nợ nhà xe.', colorScheme: 'pink', path: '/finance/vendor-debt', requiredRoleMask: ACCOUNTANT },
       { icon: Calculator, title: 'Đối soát tiền mặt bưu cục', description: 'Theo dõi COD, CC và nộp tiền bưu cục.', colorScheme: 'amber', path: '/finance/hub-reconciliation', requiredRoleMask: ACCOUNTANT },
       { icon: Banknote, title: 'Thu chi CT', description: 'Quản lý phiếu thu chi chi tiết theo chi phí xe.', colorScheme: 'teal', path: '/finance/cash-transaction-details', requiredRoleMask: ACCOUNTANT | MANAGER_ROLES },
       { icon: ClipboardList, title: 'Nhật ký thu chi', description: 'Ghi nhận thu nhập và chi phí theo nguồn/phân loại.', colorScheme: 'slate', path: '/finance/cash-journal', requiredRoleMask: ACCOUNTANT | MANAGER_ROLES },

@@ -49,8 +49,6 @@ const formatNumber = (value?: number | string | null, suffix = '') => value == n
 const normalizeExpenseList = (response: TripExpenseListResponse | TripExpense[]) => Array.isArray(response) ? response : response.expenses || response.data || response.items || [];
 const normalizeExpenseTotal = (response: TripExpenseListResponse | TripExpense[], fallback: number) => Array.isArray(response) ? fallback : response.total ?? response.meta?.total ?? fallback;
 const normalizeApproval = (payload: unknown, type: TripCostApprovalType): TripApprovalStatus | null => Array.isArray(payload) ? (payload[0] as TripApprovalStatus | undefined) || null : payload && typeof payload === 'object' ? { type, ...(payload as Record<string, unknown>) } : null;
-const isRenderable = (value: unknown) => ['string', 'number', 'boolean'].includes(typeof value) || value == null;
-
 export default function TripExpensesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -59,7 +57,7 @@ export default function TripExpensesPage() {
 
   const [trip, setTrip] = useState<Trip | null>(null);
   const [expenses, setExpenses] = useState<TripExpense[]>([]);
-  const [total, setTotal] = useState(0);
+  const [, setTotal] = useState(0);
   const [internalApproval, setInternalApproval] = useState<TripApprovalStatus | null>(null);
   const [vendorApproval, setVendorApproval] = useState<TripApprovalStatus | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -104,7 +102,6 @@ export default function TripExpensesPage() {
 
   const activeFilterCount = filters.approval_status.length + filters.trip_type.length + filters.date_range.length;
   const isFinal = ['COMPLETED', 'CANCELLED'].includes(String(trip?.status || ''));
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / filters.limit));
   const tripCostRow = trip ? [] : [];
   const rows = expenses.length ? expenses : tripCostRow;
   const filteredRows = rows.filter(expense => {
@@ -112,6 +109,7 @@ export default function TripExpensesPage() {
     if (!keyword) return true;
     return [expense.category, expense.description, expense.amount].some(value => String(value ?? '').toLowerCase().includes(keyword));
   });
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / filters.limit));
   const pageRows = filteredRows.slice((filters.page - 1) * filters.limit, filters.page * filters.limit);
   const filterPanelGroups = [
     { id: 'approval_status', title: 'Trạng thái phê duyệt', options: approvalOptions, value: filters.approval_status, onChange: (value: string[]) => updateFilter('approval_status', value) },

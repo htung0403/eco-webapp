@@ -439,7 +439,7 @@ export default function AdminRoutesPage() {
         onChange={(patch) => setFormState((prev) => ({ ...prev, ...patch }))}
       />
 
-      <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} />
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

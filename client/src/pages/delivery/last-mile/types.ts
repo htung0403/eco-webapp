@@ -56,6 +56,7 @@ export interface LastMileWaybill {
   dest_hub?: HubSummary | null;
   last_mile_driver?: UserSummary | null;
   driver?: UserSummary | null;
+  delivery_photo_url?: string | null;
   trip_id?: string | number | null;
   trip?: TripSummary | null;
 }

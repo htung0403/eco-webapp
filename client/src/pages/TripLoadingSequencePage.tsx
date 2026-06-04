@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowUpDown, Loader2, Save, Truck as TruckIcon } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, Loader2, Save, Truck as TruckIcon } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { clsx } from 'clsx';
 import { ApiError, apiRequest } from '../lib/api';
-import type { LoadingSequenceItem, LoadingSequenceResponse } from './trips/types';
-
-const formatDate = (value?: string | null) =>
-  value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
+import type { LoadingSequenceResponse } from './trips/types';
 
 const parsePhone = (info?: string | null) => {
   if (!info) return '—';

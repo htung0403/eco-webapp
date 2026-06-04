@@ -53,7 +53,6 @@ const hasAnyRole = (roleMask: number, roles: number[]) => roles.some(role => (ro
 const normalizeId = (value?: string | number | null) => value == null ? '' : String(value);
 const normalizeList = <T,>(response: ListResponse<T> | T[], key: 'hubs') => Array.isArray(response) ? response : response[key] || response.data || response.items || [];
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
-const formatMoney = (value?: number | string | null) => value == null || value === '' ? '—' : `${new Intl.NumberFormat('vi-VN').format(Number(value))} đ`;
 const formatNumber = (value?: number | string | null, suffix = '') => value == null || value === '' ? '—' : `${new Intl.NumberFormat('vi-VN').format(Number(value))}${suffix}`;
 const tripStatusLabel = (status?: string | null) => tripStatusOptions.find(option => option.value === status)?.label || status || '—';
 
