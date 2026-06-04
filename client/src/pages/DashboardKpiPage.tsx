@@ -188,7 +188,7 @@ export default function DashboardKpiPage() {
       </div>
     </div>
 
-    {error ? <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được dashboard" description={error} /> : isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải Dashboard KPI" description="Hệ thống đang gọi API thật từ VITE_API_URL." /> : (
+    {error ? <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được dashboard" description={error} /> : isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải Dashboard KPI" description="Đang tổng hợp số liệu vận hành mới nhất." /> : (
       <div className="flex-1 min-h-0 overflow-auto custom-scrollbar space-y-4 pb-4">
         {kpiCards.length === 0 ? <StateBlock icon={<BarChart3 size={24} />} title="Chưa có KPI để hiển thị" description="API chưa trả về các trường KPI trong khoảng lọc hiện tại." /> : <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"><>{kpiCards.map(({ key, ...card }) => <KpiCard key={key} {...card} trend={kpi?.trends?.[key]} />)}</></div>}
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

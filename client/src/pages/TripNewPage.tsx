@@ -39,6 +39,7 @@ const normalizeId = (value: string | number | null | undefined) => (value == nul
 const normalizeList = <T,>(response: ListResponse<T> | T[], key: 'trucks' | 'manifests' | 'hubs'): T[] =>
   Array.isArray(response) ? response : response[key] ?? response.data ?? response.items ?? [];
 const hasPermission = (roleMask: number) => (roleMask & (DISPATCHER | MANAGER | DIRECTOR)) !== 0;
+const isNumericId = (value: string) => /^\d+$/.test(value);
 const toApiId = (value: string) => (/^\d+$/.test(value) ? Number(value) : value);
 const toApiDateTime = (value: string) => (value ? new Date(value).toISOString() : '');
 const formatNumber = (value?: number | string | null, suffix = '') =>
@@ -239,7 +240,6 @@ export default function TripNewPage() {
   const validate = () => {
     const nextErrors: TripCreateFieldErrors = {};
     if (!form.truck_id) nextErrors.truck_id = 'Bắt buộc chọn biển kiểm soát.';
-    if (!form.manifest_id) nextErrors.manifest_id = 'Bắt buộc chọn bảng kê.';
     if (!form.start_hub_id) nextErrors.start_hub_id = 'Bắt buộc chọn bưu cục đi.';
     if (!form.end_hub_id) nextErrors.end_hub_id = 'Bắt buộc chọn bưu cục đến.';
     if (!form.departure_time) nextErrors.departure_time = 'Bắt buộc nhập giờ khởi hành.';
@@ -253,12 +253,11 @@ export default function TripNewPage() {
 
   const buildPayload = (): TripCreatePayload => ({
     truck_id: toApiId(form.truck_id),
-    manifest_id: toApiId(form.manifest_id),
+    ...(isNumericId(form.manifest_id) ? { manifest_id: Number(form.manifest_id) } : {}),
     start_hub_id: toApiId(form.start_hub_id),
     end_hub_id: toApiId(form.end_hub_id),
     departure_time: toApiDateTime(form.departure_time),
     ...(form.arrival_time ? { arrival_time: toApiDateTime(form.arrival_time) } : {}),
-    ...(form.trip_cost ? { trip_cost: Number(form.trip_cost) } : {}),
   });
 
   const createTrip = async () => {
@@ -390,13 +389,13 @@ export default function TripNewPage() {
             </label>
             <label className="block">
               <span className="text-[13px] font-bold text-foreground">
-                Bảng kê <span className="text-red-500">*</span>
+                Bảng kê
               </span>
               <SearchableSelect
                 options={manifestOptions}
                 value={form.manifest_id}
                 onValueChange={handleManifestChange}
-                placeholder="Chọn bảng kê đã đóng (CLOSED)"
+                placeholder="Chọn bảng kê đã đóng (CLOSED) nếu có"
                 className={clsx('mt-1.5 h-10 rounded-lg', errors.manifest_id && 'border-red-300')}
               />
               <FieldError message={errors.manifest_id} />

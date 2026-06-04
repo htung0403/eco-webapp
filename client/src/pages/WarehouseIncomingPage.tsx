@@ -107,7 +107,7 @@ export default function WarehouseIncomingPage() {
           </div>
         </div>
 
-        {isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải chuyến xe sắp đến" description="Hệ thống đang gọi API /trips theo bưu cục hiện tại." /> : trips.length === 0 ? <StateBlock icon={<TruckIcon size={24} />} title="Không có chuyến xe nào đang trên đường đến" description="Danh sách sẽ tự cập nhật mỗi 30 giây khi có chuyến IN_TRANSIT mới." /> : (
+        {isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải chuyến xe sắp đến" description="Đang kiểm tra các chuyến xe theo bưu cục hiện tại." /> : trips.length === 0 ? <StateBlock icon={<TruckIcon size={24} />} title="Không có chuyến xe nào đang trên đường đến" description="Danh sách sẽ tự cập nhật mỗi 30 giây khi có chuyến IN_TRANSIT mới." /> : (
           <div className="flex-1 min-h-0 overflow-auto custom-scrollbar p-3 md:p-4">
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4 xl:grid-cols-3">
               {trips.map(trip => <IncomingTripCard key={trip.id} trip={trip} />)}

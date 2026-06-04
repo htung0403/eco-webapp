@@ -29,12 +29,12 @@ type FilterKey = typeof filterKeys[number];
 type Capability = 'create' | 'update' | 'status' | 'routes' | 'pricing' | 'delete';
 
 const capabilityMessages: Record<Capability, string> = {
-  create: 'Backend chưa hỗ trợ POST /vendors.',
-  update: 'Backend chưa hỗ trợ PATCH /vendors/:id.',
-  status: 'Backend chưa hỗ trợ PATCH /vendors/:id/status.',
-  routes: 'Backend chưa hỗ trợ PATCH /vendors/:id/routes.',
-  pricing: 'Backend chưa hỗ trợ PATCH /vendors/:id/pricing.',
-  delete: 'Backend chưa hỗ trợ DELETE /vendors/:id.',
+  create: 'Chưa thể tạo nhà cung cấp lúc này.',
+  update: 'Chưa thể cập nhật thông tin nhà cung cấp lúc này.',
+  status: 'Chưa thể cập nhật trạng thái nhà cung cấp lúc này.',
+  routes: 'Chưa thể cập nhật tuyến phục vụ lúc này.',
+  pricing: 'Chưa thể cập nhật bảng giá tham chiếu lúc này.',
+  delete: 'Chưa thể xóa nhà cung cấp lúc này.',
 };
 
 const getStoredUser = (): AuthUserProfile | null => {
@@ -211,7 +211,7 @@ export default function AdminVendorsPage() {
         </div>
       </div>
 
-      {error ? <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được NCC" description={error} /> : isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải cấu hình NCC" description="Hệ thống đang gọi API thật từ VITE_API_URL." /> : vendors.length === 0 ? <StateBlock icon={<ServerOff size={24} />} title="Chưa có NCC" description="Không có nhà cung cấp vận tải phù hợp bộ lọc hiện tại." /> : <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
+      {error ? <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được NCC" description={error} /> : isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải cấu hình NCC" description="Đang cập nhật danh sách nhà cung cấp mới nhất." /> : vendors.length === 0 ? <StateBlock icon={<ServerOff size={24} />} title="Chưa có NCC" description="Không có nhà cung cấp vận tải phù hợp bộ lọc hiện tại." /> : <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
         <table className="hidden md:table w-full min-w-[1280px] text-left border-collapse">
           <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur"><tr>{columns.map(column => <th key={column} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border">{labelize(column)}</th>)}<th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border w-[220px]">Thao tác</th></tr></thead>
           <tbody className="divide-y divide-border">{vendors.map(vendor => <tr key={normalizeId(vendor.id) || JSON.stringify(vendor)} className="hover:bg-muted/40">{columns.map(column => <td key={column} className="px-4 py-3 text-[13px] font-medium text-foreground">{renderCell(vendor, column)}</td>)}<td className="px-4 py-3"><Actions vendor={vendor} canManage={canManage} canDelete={canDelete} unsupported={unsupportedCapabilities} onDetail={openDetail} onEdit={openEdit} onRoutes={item => openJsonConfig(item, 'routes')} onPricing={item => openJsonConfig(item, 'pricing')} onStatus={openStatus} onDelete={confirmDelete} /></td></tr>)}</tbody>

@@ -36,6 +36,19 @@ const waybillHeaders: Array<{ id: WaybillColumnId; label: string; className?: st
   { id: 'actions', label: 'Thao tác', className: 'w-[96px] min-w-[96px]' },
 ];
 
+const getAvailableTripActions = (status?: string | null): TripAction[] => {
+  switch (String(status || '')) {
+    case 'PLANNED':
+      return ['start', 'cancel'];
+    case 'IN_TRANSIT':
+      return ['arrive', 'cancel'];
+    case 'ARRIVED':
+      return ['complete', 'cancel'];
+    default:
+      return [];
+  }
+};
+
 const tripStatusOptions: FilterOption[] = [
   { value: 'PLANNED', label: 'Đang lập kế hoạch' },
   { value: 'IN_TRANSIT', label: 'Đang chạy' },
@@ -184,8 +197,8 @@ function TripInfo({ trip, manifest, truck, hubs, canOperateTrip, isFinal, openAc
       <Info label="Chốt cân/khối" value={`${formatNumber(trip.actual_total_weight, ' kg')} / ${formatNumber(trip.actual_total_volume, ' m³')}`} />
       <Info label="Trạng thái" value={<TripStatusBadge status={trip.status} />} />
       <div className="flex flex-wrap items-center gap-1 md:col-span-4">
-        {(['start', 'arrive', 'complete', 'cancel'] as TripAction[]).map(action => (
-          <button key={action} type="button" disabled={!canOperateTrip || isFinal} onClick={() => openAction(action)} className={clsx('h-8 rounded-lg border px-2 text-[11px] font-bold disabled:opacity-40', action === 'cancel' ? 'border-red-200 bg-red-50 text-red-600' : 'border-primary/20 bg-blue-50 text-primary')}>
+        {getAvailableTripActions(trip.status).map(action => (
+          <button key={action} type="button" disabled={!canOperateTrip} onClick={() => openAction(action)} className={clsx('h-8 rounded-lg border px-2 text-[11px] font-bold disabled:opacity-40', action === 'cancel' ? 'border-red-200 bg-red-50 text-red-600' : 'border-primary/20 bg-blue-50 text-primary')}>
             {action === 'start' ? 'Khởi hành' : action === 'arrive' ? 'Đến hub' : action === 'complete' ? 'Hoàn tất' : 'Hủy'}
           </button>
         ))}

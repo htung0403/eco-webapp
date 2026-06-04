@@ -147,7 +147,7 @@ export default function TripsPage() {
       setTrips(current => current.map(trip => trip.id === actionTrip.id ? { ...trip, ...updated } : trip));
       closeAction();
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Backend chưa hỗ trợ thao tác này.');
+      setActionError(err instanceof ApiError ? err.message : 'Chưa thể cập nhật trạng thái chuyến lúc này.');
     } finally {
       setIsSubmitting(false);
     }
@@ -207,7 +207,7 @@ export default function TripsPage() {
           </div>
         </div>
 
-        {isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải danh sách chuyến xe" description="Hệ thống đang gọi API /trips." /> : error ? <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được dữ liệu" description={error} /> : trips.length === 0 ? <StateBlock icon={<TruckIcon size={24} />} title="Chưa có chuyến xe phù hợp" description="Thử đổi bộ lọc hoặc kiểm tra phạm vi hub của tài khoản." /> : (
+        {isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải danh sách chuyến xe" description="Đang cập nhật dữ liệu chuyến xe mới nhất." /> : error ? <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được dữ liệu" description={error} /> : trips.length === 0 ? <StateBlock icon={<TruckIcon size={24} />} title="Chưa có chuyến xe phù hợp" description="Thử đổi bộ lọc hoặc kiểm tra phạm vi hub của tài khoản." /> : (
           <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
             <table className="hidden md:table w-full min-w-[1280px] text-left border-collapse">
               <thead className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-600"><tr>{headers.map(header => <th key={header.id} className={clsx('px-4 py-2.5 font-bold border-r border-border last:border-r-0', header.className)}>{header.label}</th>)}</tr></thead>
@@ -277,7 +277,7 @@ function TripMobileCard(props: { trip: Trip; openDetail: (trip: Trip) => void; o
 
 function Actions({ trip, openDetail, openAction, canDispatch, canArrive }: { trip: Trip; openDetail: (trip: Trip) => void; openAction: (trip: Trip, action: TripAction) => void; canDispatch: boolean; canArrive: boolean; canCost: boolean }) {
   const status = String(trip.status || '');
-  return <div className="flex flex-wrap items-center gap-1" onClick={event => event.stopPropagation()}><IconButton title="Xem chi tiết" onClick={() => void openDetail(trip)} icon={<Eye size={15} />} />{canDispatch && status === 'PLANNED' && <IconButton title="Bắt đầu" onClick={() => openAction(trip, 'start')} icon={<Play size={15} />} />}{canArrive && status === 'IN_TRANSIT' && <IconButton title="Xác nhận đến" onClick={() => openAction(trip, 'arrive')} icon={<MapPin size={15} />} />}{canDispatch && ['ARRIVED', 'IN_TRANSIT'].includes(status) && <IconButton title="Hoàn tất" onClick={() => openAction(trip, 'complete')} icon={<SquareCheckBig size={15} />} />}{canDispatch && !['COMPLETED', 'CANCELLED'].includes(status) && <IconButton title="Hủy" onClick={() => openAction(trip, 'cancel')} icon={<X size={15} />} danger />}</div>;
+  return <div className="flex flex-wrap items-center gap-1" onClick={event => event.stopPropagation()}><IconButton title="Xem chi tiết" onClick={() => void openDetail(trip)} icon={<Eye size={15} />} />{canDispatch && status === 'PLANNED' && <IconButton title="Bắt đầu" onClick={() => openAction(trip, 'start')} icon={<Play size={15} />} />}{canArrive && status === 'IN_TRANSIT' && <IconButton title="Xác nhận đến" onClick={() => openAction(trip, 'arrive')} icon={<MapPin size={15} />} />}{canDispatch && status === 'ARRIVED' && <IconButton title="Hoàn tất" onClick={() => openAction(trip, 'complete')} icon={<SquareCheckBig size={15} />} />}{canDispatch && !['COMPLETED', 'CANCELLED'].includes(status) && <IconButton title="Hủy" onClick={() => openAction(trip, 'cancel')} icon={<X size={15} />} danger />}</div>;
 }
 
 function IconButton({ title, icon, danger, onClick }: { title: string; icon: ReactNode; danger?: boolean; onClick: () => void }) { return <button title={title} onClick={onClick} className={clsx('h-8 w-8 rounded-lg border flex items-center justify-center transition-colors', danger ? 'border-red-200 bg-red-50 text-red-500 hover:bg-red-100' : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-primary')}>{icon}</button>; }

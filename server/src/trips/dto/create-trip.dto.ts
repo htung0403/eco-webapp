@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsDate, IsInt, IsNumber, IsOptional, Min } from 'class-validator';
 
 export class CreateTripDto {
@@ -9,10 +9,11 @@ export class CreateTripDto {
   @IsInt()
   truck_id?: number | null;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @Transform(({ value }) => (value === '' || value == null ? undefined : value))
   @Type(() => Number)
-  @IsInt()
-  manifest_id: number;
+  manifest_id?: number | null;
 
   @ApiProperty()
   @Type(() => Number)

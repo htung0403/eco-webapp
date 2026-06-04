@@ -13,8 +13,8 @@ export class TripEntity {
   @Column({ type: 'bigint', nullable: true })
   truck_id: string | null;
 
-  @Column({ type: 'bigint' })
-  manifest_id: string;
+  @Column({ type: 'bigint', nullable: true })
+  manifest_id: string | null;
 
   @Column({ type: 'bigint' })
   start_hub_id: string;
@@ -65,9 +65,9 @@ export class TripEntity {
   @JoinColumn({ name: 'truck_id' })
   truck: TruckEntity | null;
 
-  @ManyToOne(() => ManifestEntity, (manifest) => manifest.trips)
+  @ManyToOne(() => ManifestEntity, (manifest) => manifest.trips, { nullable: true })
   @JoinColumn({ name: 'manifest_id' })
-  manifest: ManifestEntity;
+  manifest: ManifestEntity | null;
 
   @ManyToOne(() => HubEntity, (hub) => hub.starting_trips)
   @JoinColumn({ name: 'start_hub_id' })

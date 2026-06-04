@@ -177,7 +177,7 @@ export default function AdminHubsPage() {
   async function confirmDelete(hub: Hub) {
     const risk = countRisk(hub);
     const warning = risk > 0 ? ` Hub còn ${risk} vận đơn/chuyến xe/nhân sự active.` : '';
-    setConfirmDialog({ title: 'Xóa bưu cục', message: `Xóa bưu cục ${hub.code?.toUpperCase()}? Thao tác này chỉ dành cho DIRECTOR nếu backend hỗ trợ.${warning}`, confirmLabel: 'Xóa', danger: true, onConfirm: async () => { try { await apiRequest<void>(`/hubs/${hub.id}`, { method: 'DELETE' }); setSelectedHubIds(prev => prev.filter(id => id !== normalizeId(hub.id))); if (detailHub && normalizeId(detailHub.id) === normalizeId(hub.id)) closeDetail(); await fetchHubs(); } catch (deleteError) { setActionError(deleteError instanceof ApiError ? deleteError.message : 'Backend chưa hỗ trợ hoặc từ chối xóa hub.'); } } });
+    setConfirmDialog({ title: 'Xóa bưu cục', message: `Xóa bưu cục ${hub.code?.toUpperCase()}? Thao tác này chỉ dành cho DIRECTOR.${warning}`, confirmLabel: 'Xóa', danger: true, onConfirm: async () => { try { await apiRequest<void>(`/hubs/${hub.id}`, { method: 'DELETE' }); setSelectedHubIds(prev => prev.filter(id => id !== normalizeId(hub.id))); if (detailHub && normalizeId(detailHub.id) === normalizeId(hub.id)) closeDetail(); await fetchHubs(); } catch (deleteError) { setActionError(deleteError instanceof ApiError ? deleteError.message : 'Chưa thể xóa bưu cục lúc này.'); } } });
   }
 
   async function confirmBulkDelete() {
@@ -225,7 +225,7 @@ export default function AdminHubsPage() {
           </div>
         </div>
 
-        {isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải danh sách bưu cục" description="Hệ thống đang gọi API /hubs." /> : error ? <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được dữ liệu" description={error} /> : hubs.length === 0 ? <StateBlock icon={<Building2 size={24} />} title="Chưa có bưu cục phù hợp" description="Thử đổi bộ lọc hoặc tạo bưu cục mới nếu bạn có quyền MANAGER+." /> : (
+        {isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải danh sách bưu cục" description="Đang cập nhật dữ liệu bưu cục mới nhất." /> : error ? <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được dữ liệu" description={error} /> : hubs.length === 0 ? <StateBlock icon={<Building2 size={24} />} title="Chưa có bưu cục phù hợp" description="Thử đổi bộ lọc hoặc tạo bưu cục mới nếu bạn có quyền MANAGER+." /> : (
           <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
             {canDelete && selectedBulkDeleteCount > 0 && <div className="sticky top-0 z-10 hidden flex-wrap items-center justify-between gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2 text-[13px] font-bold text-primary md:flex"><span>Đã chọn {selectedBulkDeleteCount} bưu cục để xóa</span><div className="flex items-center gap-2"><button onClick={clearHubSelection} className="h-8 rounded-lg border border-border bg-white px-3 text-[12px] text-muted-foreground hover:bg-muted">Bỏ chọn</button><button disabled={isSubmitting} onClick={() => void confirmBulkDelete()} className="h-8 rounded-lg bg-red-600 px-3 text-[12px] text-white hover:bg-red-700 disabled:opacity-60">Xóa đã chọn</button></div></div>}
 

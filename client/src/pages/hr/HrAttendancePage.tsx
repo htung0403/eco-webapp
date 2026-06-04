@@ -215,7 +215,7 @@ export default function HrAttendancePage() {
             <StateBlock
               icon={<Loader2 className="animate-spin" size={24} />}
               title="Đang tải nhân sự"
-              description="Hệ thống đang gọi API /users."
+              description="Đang cập nhật danh sách nhân sự mới nhất."
             />
           ) : error ? (
             <StateBlock icon={<AlertTriangle size={24} />} title="Không tải được dữ liệu" description={error} />

@@ -18,6 +18,9 @@ import { TripEntity } from './trips/trip.entity';
 import { TruckEntity } from './trucks/truck.entity';
 import { UserEntity } from './users/user.entity';
 import { UserHubEntity } from './users/user-hub.entity';
+import { VendorDebtEntryEntity } from './vendors/vendor-debt-entry.entity';
+import { VendorPaymentEntity } from './vendors/vendor-payment.entity';
+import { VendorEntity } from './vendors/vendor.entity';
 import { VehicleCostEntity } from './vehicle-costs/vehicle-cost.entity';
 import { VehicleDirectoryEntity } from './vehicle-directory/vehicle-directory.entity';
 import { WaybillEntity } from './waybills/waybill.entity';
@@ -58,6 +61,9 @@ export default new DataSource({
     CustomerDirectoryEntity,
     CashJournalEntryEntity,
     WarehouseEntity,
+    VendorEntity,
+    VendorDebtEntryEntity,
+    VendorPaymentEntity,
   ],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,

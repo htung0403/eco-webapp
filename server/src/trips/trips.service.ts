@@ -43,15 +43,16 @@ export class TripsService {
 
   async create(dto: CreateTripDto, currentUser: UserEntity): Promise<TripEntity> {
     const truck = await this.validateTruck(dto.truck_id);
-    const manifest = await this.validateManifestForAssignment(String(dto.manifest_id));
+    const manifestId = this.normalizeOptionalId(dto.manifest_id, 'manifest_id');
+    const manifest = manifestId == null ? null : await this.validateManifestForAssignment(manifestId);
     await this.validateHubs(String(dto.start_hub_id), String(dto.end_hub_id), manifest);
-    await this.assertManifestNotInActiveTrip(String(dto.manifest_id));
+    if (manifestId != null) await this.assertManifestNotInActiveTrip(manifestId);
     this.validateTripTimes(dto.departure_time, dto.arrival_time, false);
 
     const tripCostAmount = this.resolveTripCost(dto);
     const trip = this.tripsRepository.create({
       truck_id: dto.truck_id == null ? null : String(dto.truck_id),
-      manifest_id: String(dto.manifest_id),
+      manifest_id: manifestId,
       start_hub_id: String(dto.start_hub_id),
       end_hub_id: String(dto.end_hub_id),
       departure_time: dto.departure_time,
@@ -71,8 +72,10 @@ export class TripsService {
         `Chi phí chuyến #${savedTrip.id}`,
       );
     }
-    manifest.status = ManifestStatus.ASSIGNED_TO_TRIP;
-    await this.manifestsRepository.save(manifest);
+    if (manifest) {
+      manifest.status = ManifestStatus.ASSIGNED_TO_TRIP;
+      await this.manifestsRepository.save(manifest);
+    }
     if (truck) {
       truck.status = TruckStatus.ASSIGNED;
       await this.trucksRepository.save(truck);
@@ -167,9 +170,8 @@ export class TripsService {
   async startTrip(id: string, currentUser: UserEntity): Promise<TripEntity> {
     const trip = await this.findOne(id, currentUser);
     if (trip.status !== TripStatus.PLANNED) throw new BadRequestException('Only PLANNED trips can start');
-    if (!trip.manifest_id) throw new BadRequestException('Trip must have a manifest before start');
-    const manifest = await this.manifestsRepository.findOne({ where: { id: trip.manifest_id } });
-    if (!manifest) throw new NotFoundException('Manifest not found');
+    const manifest = trip.manifest_id ? await this.manifestsRepository.findOne({ where: { id: trip.manifest_id } }) : null;
+    if (trip.manifest_id && !manifest) throw new NotFoundException('Manifest not found');
 
     trip.status = TripStatus.IN_TRANSIT;
     trip.departure_time = trip.departure_time ?? new Date();
@@ -181,10 +183,12 @@ export class TripsService {
         trip.driver_phone = truck.driver?.phone ?? null;
       }
     }
-    manifest.status = ManifestStatus.IN_TRANSIT;
-    await this.manifestsRepository.save(manifest);
+    if (manifest) {
+      manifest.status = ManifestStatus.IN_TRANSIT;
+      await this.manifestsRepository.save(manifest);
+    }
     await this.setTruckStatus(trip.truck_id, TruckStatus.IN_TRIP);
-    await this.moveManifestWaybills(trip.manifest_id, WaybillState.MANIFEST_CLOSED, WaybillState.IN_TRANSIT);
+    if (trip.manifest_id) await this.moveManifestWaybills(trip.manifest_id, WaybillState.MANIFEST_CLOSED, WaybillState.IN_TRANSIT);
     return this.tripsRepository.save(trip);
   }
 
@@ -193,7 +197,7 @@ export class TripsService {
     if (trip.status !== TripStatus.IN_TRANSIT) throw new BadRequestException('Only IN_TRANSIT trips can arrive');
     trip.status = TripStatus.ARRIVED;
     trip.arrival_time = dto.arrival_time ?? new Date();
-    await this.moveManifestWaybills(trip.manifest_id, WaybillState.IN_TRANSIT, WaybillState.AT_DEST_HUB);
+    if (trip.manifest_id) await this.moveManifestWaybills(trip.manifest_id, WaybillState.IN_TRANSIT, WaybillState.AT_DEST_HUB);
     return this.tripsRepository.save(trip);
   }
 
@@ -201,7 +205,7 @@ export class TripsService {
     const trip = await this.findOne(id, currentUser);
     if (trip.status !== TripStatus.ARRIVED) throw new BadRequestException('Only ARRIVED trips can be completed');
     trip.status = TripStatus.COMPLETED;
-    const manifest = await this.manifestsRepository.findOne({ where: { id: trip.manifest_id } });
+    const manifest = trip.manifest_id ? await this.manifestsRepository.findOne({ where: { id: trip.manifest_id } }) : null;
     if (manifest) {
       manifest.status = ManifestStatus.COMPLETED;
       await this.manifestsRepository.save(manifest);
@@ -259,11 +263,13 @@ export class TripsService {
     if (!LOADING_SEQUENCE_STATUSES.includes(trip.status)) {
       throw new BadRequestException('Loading sequence is available after trip departure');
     }
-    const rows = await this.manifestWaybillsRepository.find({
-      where: { manifest_id: trip.manifest_id },
-      relations: ['waybill'],
-      order: { loading_position: 'ASC' },
-    });
+    const rows = trip.manifest_id
+      ? await this.manifestWaybillsRepository.find({
+        where: { manifest_id: trip.manifest_id },
+        relations: ['waybill'],
+        order: { loading_position: 'ASC' },
+      })
+      : [];
     const items = rows
       .filter((row) => row.waybill)
       .map((row) => ({
@@ -309,6 +315,7 @@ export class TripsService {
     if (!LOADING_SEQUENCE_STATUSES.includes(trip.status)) {
       throw new BadRequestException('Loading sequence can only be updated after trip departure');
     }
+    if (!trip.manifest_id) return this.getLoadingSequence(id, currentUser);
     const rows = await this.manifestWaybillsRepository.find({ where: { manifest_id: trip.manifest_id } });
     const rowByWaybill = new Map(rows.map((row) => [row.waybill_id, row]));
     const positions = dto.items.map((item) => item.loading_position);
@@ -356,6 +363,13 @@ export class TripsService {
     return truck;
   }
 
+  private normalizeOptionalId(value: unknown, fieldName: string): string | null {
+    if (value === undefined || value === null || value === '') return null;
+    const text = String(value);
+    if (!/^\d+$/.test(text)) throw new BadRequestException(`${fieldName} must be an integer number`);
+    return text;
+  }
+
   private async validateManifestForAssignment(manifestId: string): Promise<ManifestEntity> {
     const manifest = await this.manifestsRepository.findOne({ where: { id: manifestId } });
     if (!manifest) throw new NotFoundException('Manifest not found');
@@ -363,11 +377,11 @@ export class TripsService {
     return manifest;
   }
 
-  private async validateHubs(startHubId: string, endHubId: string, manifest: ManifestEntity): Promise<void> {
+  private async validateHubs(startHubId: string, endHubId: string, manifest: ManifestEntity | null): Promise<void> {
     const hubs = await this.hubsRepository.find({ where: { id: In([startHubId, endHubId]) } });
     if (hubs.length !== new Set([startHubId, endHubId]).size) throw new NotFoundException('Hub not found');
-    if (manifest.origin_hub_id && manifest.origin_hub_id !== startHubId) throw new BadRequestException('Start hub must match manifest origin hub');
-    if (manifest.dest_hub_id && manifest.dest_hub_id !== endHubId) throw new BadRequestException('End hub must match manifest destination hub');
+    if (manifest?.origin_hub_id && manifest.origin_hub_id !== startHubId) throw new BadRequestException('Start hub must match manifest origin hub');
+    if (manifest?.dest_hub_id && manifest.dest_hub_id !== endHubId) throw new BadRequestException('End hub must match manifest destination hub');
   }
 
   private async assertManifestNotInActiveTrip(manifestId: string, excludeTripId?: string): Promise<void> {
@@ -399,7 +413,8 @@ export class TripsService {
     if (changed.length) await this.waybillsRepository.save(changed);
   }
 
-  private async getManifestWaybills(manifestId: string): Promise<WaybillEntity[]> {
+  private async getManifestWaybills(manifestId: string | null): Promise<WaybillEntity[]> {
+    if (!manifestId) return [];
     const rows = await this.manifestWaybillsRepository.find({ where: { manifest_id: manifestId }, relations: ['waybill'] });
     return rows.map((row) => row.waybill).filter(Boolean);
   }

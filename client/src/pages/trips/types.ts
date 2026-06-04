@@ -136,12 +136,12 @@ export interface TripCreateFormState {
 
 export type TripCreatePayload = {
   truck_id: number | string;
-  manifest_id: number | string;
+  manifest_id?: number | string;
   start_hub_id: number | string;
   end_hub_id: number | string;
   departure_time: string;
   arrival_time?: string;
-  trip_cost?: number;
+  other_costs?: number;
 };
 
 export type TripCreateFieldErrors = Partial<Record<keyof TripCreateFormState, string>>;

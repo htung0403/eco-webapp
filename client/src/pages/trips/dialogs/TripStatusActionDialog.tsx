@@ -8,6 +8,13 @@ const actionLabels: Record<TripAction, string> = {
   cancel: 'hủy chuyến',
 };
 
+const actionDescriptions: Record<TripAction, string> = {
+  start: 'Chuyến xe sẽ chuyển sang trạng thái đang vận chuyển và ghi nhận thời điểm khởi hành.',
+  arrive: 'Chuyến xe sẽ được ghi nhận đã đến hub đích và cập nhật thời điểm đến.',
+  complete: 'Chuyến xe sẽ được đóng hoàn tất; xe có thể quay lại trạng thái sẵn sàng nếu không còn chuyến đang chạy.',
+  cancel: 'Chuyến xe sẽ bị hủy và không tiếp tục xử lý trong luồng vận chuyển.',
+};
+
 interface Props {
   trip: Trip | null;
   action: TripAction | null;
@@ -29,7 +36,7 @@ export default function TripStatusActionDialog({ trip, action, isSubmitting, err
           </div>
           <div>
             <h2 className="text-[16px] font-extrabold text-foreground">Xác nhận {actionLabels[action]}</h2>
-            <p className="mt-1 text-[13px] text-muted-foreground">Thao tác gọi API PATCH /trips/{trip.id}/{action}.</p>
+            <p className="mt-1 text-[13px] leading-5 text-muted-foreground">{actionDescriptions[action]}</p>
           </div>
         </div>
         {error && <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-800"><AlertTriangle size={15} />{error}</div>}
