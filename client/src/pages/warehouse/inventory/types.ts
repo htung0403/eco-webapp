@@ -52,6 +52,10 @@ export interface WaybillInventoryItem {
   delivery_route?: string | null;
   note?: string | null;
   notes?: string | null;
+  ma_kh?: string | null;
+  noi_den?: string | null;
+  loaded_at?: string | null;
+  the_tich_m3?: number | string | null;
 }
 
 export interface WaybillInventoryDetail extends WaybillInventoryItem {

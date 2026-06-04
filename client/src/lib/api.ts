@@ -19,15 +19,23 @@ export class ApiError extends Error {
   }
 }
 
+const DEV_API_PORT = 3001;
+const DEV_API_ORIGIN = `http://127.0.0.1:${DEV_API_PORT}`;
+
 const STATUS_MESSAGES: Record<number, string> = {
   401: 'Phiên đăng nhập hết hạn hoặc chưa đăng nhập. Vui lòng đăng nhập lại.',
   403: 'Bạn không có quyền thực hiện thao tác này.',
-  404: 'Không tìm thấy API. Kiểm tra backend NestJS đang chạy (npm run start:dev trong thư mục server).',
-  502: 'Không kết nối được backend. Chạy server trên cổng 3000 và restart Vite.',
+  404: 'Không tìm thấy API. Kiểm tra backend NestJS đang chạy (npm run dev trong thư mục server).',
+  502: `Không kết nối được backend. Chạy server trên cổng ${DEV_API_PORT} và restart Vite.`,
   503: 'Backend tạm thời không khả dụng.',
 };
 
 const resolveApiBaseUrl = () => {
+  // Dev: mặc định proxy Vite (/api/v1 → 127.0.0.1:3001). Tránh .env trỏ nhầm frontend.
+  if (import.meta.env.DEV && import.meta.env.VITE_API_URL_DIRECT !== 'true') {
+    return '/api/v1';
+  }
+
   const fromEnv = import.meta.env.VITE_API_URL?.trim();
   if (fromEnv) {
     const fixedHost = fromEnv.replace(/\/\/localhost\b/i, '//127.0.0.1');
@@ -35,7 +43,7 @@ const resolveApiBaseUrl = () => {
     return base.endsWith('/api/v1') ? base : `${base}/api/v1`;
   }
   if (import.meta.env.DEV) return '/api/v1';
-  return 'http://127.0.0.1:3000/api/v1';
+  return `${DEV_API_ORIGIN}/api/v1`;
 };
 
 export const API_BASE_URL = resolveApiBaseUrl();
@@ -103,13 +111,30 @@ async function readResponsePayload(response: Response): Promise<unknown> {
   } catch {
     const trimmed = text.trimStart();
     if (trimmed.startsWith('<!') || trimmed.startsWith('<html')) {
-      return {
-        message:
-          'API trả về trang HTML (gọi nhầm frontend). Dùng proxy Vite (/api/v1) hoặc VITE_API_URL=http://127.0.0.1:3000/api/v1',
-      };
+      const message =
+        'API trả về HTML thay vì JSON — request không tới NestJS eco-webapp. ' +
+        `Thường do cổng 3000 bị app khác chiếm; eco-webapp dùng cổng ${DEV_API_PORT}. ` +
+        `Chạy: cd server && npm run dev, rồi restart client. Kiểm tra ${DEV_API_ORIGIN}/api/v1/health. ` +
+        `URL hiện tại: ${API_BASE_URL}`;
+      throw new ApiError(response.ok ? 502 : response.status, message, null);
     }
-    return { message: text.slice(0, 280) };
+    const plain = enrichPlainTextApiError(response.status, text);
+    return { message: plain ?? text.slice(0, 280) };
   }
+}
+
+function enrichPlainTextApiError(status: number, text: string): string | null {
+  const trimmed = text.trim();
+  if (!/^Cannot (GET|POST|PUT|PATCH|DELETE)\s/i.test(trimmed)) return null;
+  if (status === 404) {
+    return (
+      `${trimmed} — Request không tới NestJS hoặc route chưa có. ` +
+      'Kiểm tra: (1) cd server && npm run dev, log có Mapped .../vendors/active; ' +
+      `(2) mở ${DEV_API_ORIGIN}/api/v1/health phải trả JSON ok:true; ` +
+      `(3) client chạy npm run dev cổng 6060 (proxy /api → ${DEV_API_PORT}).`
+    );
+  }
+  return trimmed;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {

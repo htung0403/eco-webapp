@@ -1,7 +1,7 @@
-/* BẢNG KÊ PHÁT HÀNG ECO — in ngang */
+/* BẢNG KÊ PHÁT HÀNG ECO — A4 cho điều phối */
 @page {
-  size: A4 landscape;
-  margin: 5mm;
+  size: A4 portrait;
+  margin: 8mm;
 }
 
 @media print {

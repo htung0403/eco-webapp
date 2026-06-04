@@ -291,7 +291,7 @@ export class WaybillsService {
     return roles.some((role) => hasRole(user.role_mask, role));
   }
 
-  private packContact(name?: string, phone?: string, address?: string) {
+  private packContact(name?: string | null, phone?: string | null, address?: string | null) {
     return [name, phone, address].filter(Boolean).join(' | ');
   }
 
@@ -304,11 +304,14 @@ export class WaybillsService {
 
   private sanitize(waybill: WaybillRecord, currentUser: UserEntity): WaybillRecord {
     const result: Record<string, any> = { ...waybill, status: this.getStatus(waybill) };
+    if (!result.receiver_phone && result.receiver_info) {
+      const parts = String(result.receiver_info).split(' | ').map((p: string) => p.trim());
+      if (parts[1]) result.receiver_phone = parts[1];
+    }
     if (!isManager(currentUser.role_mask)) {
       delete result.cost_amount;
       delete result.freight_amount;
       delete result.cc_amount;
-      delete result.cod_amount;
     }
     delete result.deleted_at;
     return result as WaybillRecord;

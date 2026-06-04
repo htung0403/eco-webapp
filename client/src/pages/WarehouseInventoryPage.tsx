@@ -10,6 +10,23 @@ import AssignPriorityDialog from './warehouse/inventory/dialogs/AssignPriorityDi
 import AssignRouteDialog from './warehouse/inventory/dialogs/AssignRouteDialog';
 import WaybillInventoryDetailDialog from './warehouse/inventory/dialogs/WaybillInventoryDetailDialog';
 import { mapWaybillsToPrintRows, saveInventoryPrintPayload, summarizeFilters } from './print/inventoryPrintUtils';
+import InventoryColumnPicker from './warehouse/inventory/InventoryColumnPicker';
+import {
+  INVENTORY_COLUMNS,
+  computeGrandTotals,
+  getStorageAgeRowClass,
+  loadVisibleColumnIds,
+  resolveFreight,
+  resolveLoadedAt,
+  resolveMaKh,
+  resolveNoiDen,
+  resolveReceiverAddress,
+  resolveReceiverPhone,
+  resolveVolumeM3,
+  resolveWeightKg,
+  saveVisibleColumnIds,
+  type InventoryColumnId,
+} from './warehouse/inventory/inventoryColumns';
 import type { BadgeConfig, FilterOption, HubSummary, InventoryFilters, InventoryListResponse, PriorityFormState, RouteFormState, WaybillInventoryDetail, WaybillInventoryItem } from './warehouse/inventory/types';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
@@ -96,13 +113,25 @@ export default function WarehouseInventoryPage() {
   const [routeForm, setRouteForm] = useState<RouteFormState>({ route_code: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
 
   const user = useMemo(getStoredUser, []);
   const canViewPage = hasManagerAccess(user?.role_mask ?? 0);
   const canUpdate = canMutateInventory(user?.role_mask ?? 0);
+  const [visibleColumnIds, setVisibleColumnIds] = useState<InventoryColumnId[]>(() =>
+    loadVisibleColumnIds(canViewPage),
+  );
   const totalPages = Math.max(1, Math.ceil(total / filters.limit));
   const hubOptions = useMemo(() => hubs.map(hub => ({ value: String(hub.id), label: formatHub(hub) })), [hubs]);
   const activeFilterCount = filters.statuses.length + filters.hubIds.length + filters.paymentTypes.length + filters.priorities.length + Number(Boolean(filters.receivedFrom || filters.receivedTo));
+  const visibleColumns = useMemo(
+    () => INVENTORY_COLUMNS.filter((col) => visibleColumnIds.includes(col.id)),
+    [visibleColumnIds],
+  );
+  const grandTotals = useMemo(
+    () => computeGrandTotals(waybills, canViewPage),
+    [waybills, canViewPage],
+  );
   const clearFilters = () => setFilters(defaultFilters);
   const setFilterArray = (key: keyof Pick<InventoryFilters, 'statuses' | 'hubIds' | 'paymentTypes' | 'priorities'>, value: string[]) => updateFilters({ [key]: value } as Partial<InventoryFilters>);
 
@@ -180,7 +209,11 @@ export default function WarehouseInventoryPage() {
       setActionError('Không có đơn tồn kho trên danh sách để in.');
       return;
     }
-    const payload = mapWaybillsToPrintRows(waybills, canViewPage);
+    const payload = mapWaybillsToPrintRows(
+      waybills,
+      canViewPage,
+      visibleColumns.map((col) => col.id),
+    );
     const pageNote =
       total > waybills.length
         ? ` · Trang ${filters.page}: in ${waybills.length}/${total} đơn đang hiển thị`
@@ -224,6 +257,15 @@ export default function WarehouseInventoryPage() {
             <div className="hidden flex-1 md:block" />
             <button
               type="button"
+              title="Tùy chỉnh cột"
+              onClick={() => setIsColumnPickerOpen(true)}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-foreground hover:bg-muted"
+            >
+              <SlidersHorizontal size={16} />
+              <span className="hidden sm:inline">Cột</span>
+            </button>
+            <button
+              type="button"
               title="In danh sách tồn"
               disabled={isLoading || waybills.length === 0}
               onClick={handlePrintStockList}
@@ -253,8 +295,42 @@ export default function WarehouseInventoryPage() {
           {isLoading ? <StateCard compact icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải dữ liệu" description="Hệ thống đang lấy danh sách vận đơn tồn kho từ API." /> : waybills.length === 0 ? <StateCard compact icon={<Package size={24} />} title="Chưa có vận đơn phù hợp" description="Thử thay đổi từ khóa hoặc bộ lọc để xem thêm dữ liệu tồn kho." /> : (
             <>
               <table className="hidden md:table w-full min-w-[1280px] text-left border-collapse">
-                <thead className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-600"><tr>{['Mã vận đơn','Người gửi','Người nhận','Hub hiện tại','Hub đến','Trạng thái','TT','COD','Kiện','Kg','Ưu tiên','Ngày nhận','Thao tác'].map(header => <th key={header} className="px-4 py-2.5 font-bold border-r border-border last:border-r-0">{header}</th>)}</tr></thead>
-                <tbody>{waybills.map(waybill => <InventoryRow key={waybill.id} waybill={waybill} canUpdate={canUpdate} onDetail={openDetail} onPriority={openPriority} onRoute={openRoute} />)}</tbody>
+                <thead className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-600">
+                  <tr>
+                    {visibleColumns.map((col) => (
+                      <th key={col.id} className="px-4 py-2.5 font-bold border-r border-border last:border-r-0 whitespace-nowrap">
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {waybills.map((waybill) => (
+                    <InventoryRow
+                      key={waybill.id}
+                      waybill={waybill}
+                      columns={visibleColumns}
+                      canViewPricing={canViewPage}
+                      canUpdate={canUpdate}
+                      onDetail={openDetail}
+                      onPriority={openPriority}
+                      onRoute={openRoute}
+                    />
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-50 text-[12px] font-extrabold text-foreground">
+                  <tr>
+                    {visibleColumns.map((col, idx) => (
+                      <td key={col.id} className="border-t border-border px-4 py-2.5 border-r last:border-r-0">
+                        {idx === 0 ? 'Tổng cộng' : ''}
+                        {col.id === 'package_count' ? grandTotals.package_count : ''}
+                        {col.id === 'weight' ? `${grandTotals.weight_kg.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} kg` : ''}
+                        {col.id === 'volume' ? `${grandTotals.volume_m3.toFixed(2)} m³` : ''}
+                        {col.id === 'freight' && canViewPage ? `${grandTotals.freight.toLocaleString('vi-VN')} đ` : ''}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
               </table>
               <div className="grid gap-3 p-3 md:hidden">{waybills.map(waybill => <InventoryCard key={waybill.id} waybill={waybill} canUpdate={canUpdate} onDetail={openDetail} onPriority={openPriority} onRoute={openRoute} />)}</div>
             </>
@@ -278,26 +354,87 @@ export default function WarehouseInventoryPage() {
       <WaybillInventoryDetailDialog isOpen={isDetailOpen} isClosing={isDetailClosing} isLoading={isDetailLoading} waybill={detailWaybill} statusConfig={statusConfig} paymentConfig={paymentConfig} priorityConfig={priorityConfig} onClose={closeDetail} />
       <AssignPriorityDialog isOpen={isPriorityOpen} isClosing={isPriorityClosing} isSubmitting={isSubmitting} waybill={selectedWaybill} formState={priorityForm} priorityConfig={priorityConfig} onChange={(priority) => setPriorityForm({ priority })} onClose={closePriority} onSubmit={submitPriority} />
       <AssignRouteDialog isOpen={isRouteOpen} isClosing={isRouteClosing} isSubmitting={isSubmitting} waybill={selectedWaybill} formState={routeForm} onChange={(route_code) => setRouteForm({ route_code })} onClose={closeRoute} onSubmit={submitRoute} />
+      <InventoryColumnPicker
+        isOpen={isColumnPickerOpen}
+        visibleIds={visibleColumnIds}
+        canViewPricing={canViewPage}
+        onChange={(ids) => {
+          setVisibleColumnIds(ids);
+          saveVisibleColumnIds(ids);
+        }}
+        onClose={() => setIsColumnPickerOpen(false)}
+      />
     </div>
   );
 }
 
-function InventoryRow({ waybill, canUpdate, onDetail, onPriority, onRoute }: InventoryItemProps) {
+function InventoryRow({
+  waybill,
+  columns,
+  canViewPricing,
+  canUpdate,
+  onDetail,
+  onPriority,
+  onRoute,
+}: InventoryItemProps & { columns: typeof INVENTORY_COLUMNS; canViewPricing: boolean }) {
+  const cellClass = 'px-4 py-3 border-r border-border text-[13px] max-w-[200px] truncate';
+
+  const renderCell = (colId: InventoryColumnId) => {
+    switch (colId) {
+      case 'waybill_code':
+        return <td className={`${cellClass} font-extrabold text-primary`}>{displayCode(waybill)}</td>;
+      case 'loaded_at':
+        return (
+          <td className={clsx(cellClass, getStorageAgeRowClass(waybill).includes('red') ? 'font-bold text-red-700' : getStorageAgeRowClass(waybill).includes('amber') ? 'font-bold text-amber-800' : 'text-muted-foreground')}>
+            {formatDate(resolveLoadedAt(waybill))}
+          </td>
+        );
+      case 'received_at':
+        return <td className={`${cellClass} text-muted-foreground`}>{formatDate(waybill.received_at || waybill.created_at)}</td>;
+      case 'receiver_phone':
+        return <td className={clsx(cellClass, 'font-bold text-primary')}>{resolveReceiverPhone(waybill)}</td>;
+      case 'noi_den':
+        return <td className={cellClass}>{resolveNoiDen(waybill)}</td>;
+      case 'ma_kh':
+        return <td className={cellClass}>{resolveMaKh(waybill)}</td>;
+      case 'receiver_address':
+        return <td className={cellClass}>{resolveReceiverAddress(waybill)}</td>;
+      case 'package_count':
+        return <td className={`${cellClass} font-medium`}>{displayValue(waybill.package_count || waybill.declared_package_count)}</td>;
+      case 'weight':
+        return <td className={`${cellClass} font-medium`}>{displayValue(resolveWeightKg(waybill) || null, ' kg')}</td>;
+      case 'volume':
+        return <td className={`${cellClass} font-medium`}>{resolveVolumeM3(waybill) ? `${resolveVolumeM3(waybill).toFixed(2)} m³` : '—'}</td>;
+      case 'freight':
+        return (
+          <td className={`${cellClass} font-bold`}>
+            {canViewPricing ? displayValue(resolveFreight(waybill) || null, ' đ') : '—'}
+          </td>
+        );
+      case 'sender_info':
+        return <td className={`${cellClass} font-medium`}>{waybill.sender_info || '—'}</td>;
+      case 'receiver_info':
+        return <td className={`${cellClass} font-medium`}>{waybill.receiver_info || '—'}</td>;
+      case 'current_hub':
+        return <td className={`${cellClass} text-muted-foreground`}>{formatHub(waybill.current_hub || waybill.origin_hub, waybill.current_hub_id || waybill.origin_hub_id)}</td>;
+      case 'dest_hub':
+        return <td className={`${cellClass} text-muted-foreground`}>{formatHub(waybill.dest_hub, waybill.dest_hub_id)}</td>;
+      case 'payment_type':
+        return <td className="px-4 py-3 border-r border-border"><Badge config={paymentConfig[String(waybill.payment_type || '')]} fallback={waybill.payment_type || '—'} /></td>;
+      case 'cod_amount':
+        return <td className={`${cellClass} font-bold`}>{displayValue(waybill.cod_amount, ' đ')}</td>;
+      case 'priority':
+        return <td className="px-4 py-3 border-r border-border"><Badge config={priorityConfig[normalizePriority(waybill)]} fallback={normalizePriority(waybill)} /></td>;
+      case 'actions':
+        return <td className="px-4 py-3"><Actions waybill={waybill} canUpdate={canUpdate} onDetail={onDetail} onPriority={onPriority} onRoute={onRoute} /></td>;
+      default:
+        return <td className={cellClass}>—</td>;
+    }
+  };
+
   return (
-    <tr className="border-b border-border align-top transition-colors hover:bg-muted/10">
-      <td className="px-4 py-3 border-r border-border text-[13px] font-extrabold text-primary">{displayCode(waybill)}</td>
-      <td className="px-4 py-3 border-r border-border text-[13px] font-medium text-foreground max-w-[180px] truncate">{waybill.sender_info || '—'}</td>
-      <td className="px-4 py-3 border-r border-border text-[13px] font-medium text-foreground max-w-[180px] truncate">{waybill.receiver_info || '—'}</td>
-      <td className="px-4 py-3 border-r border-border text-[13px] text-muted-foreground max-w-[180px] truncate">{formatHub(waybill.current_hub || waybill.origin_hub, waybill.current_hub_id || waybill.origin_hub_id)}</td>
-      <td className="px-4 py-3 border-r border-border text-[13px] text-muted-foreground max-w-[180px] truncate">{formatHub(waybill.dest_hub, waybill.dest_hub_id)}</td>
-      <td className="px-4 py-3 border-r border-border"><Badge config={statusConfig[normalizeStatus(waybill)]} fallback={normalizeStatus(waybill)} /></td>
-      <td className="px-4 py-3 border-r border-border"><Badge config={paymentConfig[String(waybill.payment_type || '')]} fallback={waybill.payment_type || '—'} /></td>
-      <td className="px-4 py-3 border-r border-border text-[13px] font-bold">{displayValue(waybill.cod_amount, ' đ')}</td>
-      <td className="px-4 py-3 border-r border-border text-[13px] font-medium">{displayValue(waybill.package_count || waybill.declared_package_count)}</td>
-      <td className="px-4 py-3 border-r border-border text-[13px] font-medium">{displayValue(waybill.actual_weight || waybill.weight, ' kg')}</td>
-      <td className="px-4 py-3 border-r border-border"><Badge config={priorityConfig[normalizePriority(waybill)]} fallback={normalizePriority(waybill)} /></td>
-      <td className="px-4 py-3 border-r border-border text-[13px] text-muted-foreground">{formatDate(waybill.received_at || waybill.created_at)}</td>
-      <td className="px-4 py-3"><Actions waybill={waybill} canUpdate={canUpdate} onDetail={onDetail} onPriority={onPriority} onRoute={onRoute} /></td>
+    <tr className={clsx('border-b border-border align-top transition-colors', getStorageAgeRowClass(waybill))}>
+      {columns.map((col) => renderCell(col.id))}
     </tr>
   );
 }

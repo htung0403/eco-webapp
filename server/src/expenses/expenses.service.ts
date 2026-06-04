@@ -12,7 +12,7 @@ import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { ExpenseEntity } from './expense.entity';
 
 const EXPENSE_CREATABLE_TRIP_STATUSES = [TripStatus.IN_TRANSIT, TripStatus.ARRIVED, TripStatus.COMPLETED];
-const ACCOUNTING_ROLES = [Roles.ACCOUNTANT, Roles.MANAGER, Roles.DIRECTOR];
+const EXPENSE_WRITE_ROLES = [Roles.WAREHOUSE, Roles.DISPATCHER, Roles.ACCOUNTANT, Roles.MANAGER, Roles.DIRECTOR];
 
 @Injectable()
 export class ExpensesService {
@@ -22,12 +22,20 @@ export class ExpensesService {
   ) {}
 
   async create(dto: CreateExpenseDto, currentUser: UserEntity): Promise<ExpenseEntity> {
-    this.assertAnyRole(currentUser, ACCOUNTING_ROLES);
+    this.assertAnyRole(currentUser, EXPENSE_WRITE_ROLES);
     const trip = await this.getTrip(String(dto.trip_id));
     if (!EXPENSE_CREATABLE_TRIP_STATUSES.includes(trip.status)) {
       throw new BadRequestException('Expenses can only be recorded after trip starts');
     }
-    const expense = this.expensesRepository.create({ trip_id: String(dto.trip_id) });
+    if (dto.amount !== undefined && dto.amount < 0) throw new BadRequestException('Amount must not be negative');
+    const expense = this.expensesRepository.create({
+      trip_id: String(dto.trip_id),
+      category: dto.category ?? 'OTHER',
+      amount: String(dto.amount ?? 0),
+      description: dto.description?.trim() || null,
+      hub_id: dto.hub_id != null ? String(dto.hub_id) : currentUser.hub_id,
+      created_by: currentUser.id,
+    });
     return this.expensesRepository.save(expense);
   }
 
@@ -36,7 +44,7 @@ export class ExpensesService {
     const limit = clampPaginationLimit(query.limit, 10);
     const qb = this.expensesRepository.createQueryBuilder('expense')
       .leftJoinAndSelect('expense.trip', 'trip')
-      .orderBy('expense.id', 'DESC')
+      .orderBy('expense.created_at', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
 
@@ -51,7 +59,8 @@ export class ExpensesService {
     await this.getTrip(tripId);
     const qb = this.expensesRepository.createQueryBuilder('expense')
       .leftJoinAndSelect('expense.trip', 'trip')
-      .where('expense.trip_id = :tripId', { tripId });
+      .where('expense.trip_id = :tripId', { tripId })
+      .orderBy('expense.created_at', 'DESC');
     this.applyHubScope(qb, currentUser);
     return qb.getMany();
   }
@@ -67,7 +76,7 @@ export class ExpensesService {
   }
 
   async update(id: string, dto: UpdateExpenseDto, currentUser: UserEntity): Promise<ExpenseEntity> {
-    this.assertAnyRole(currentUser, ACCOUNTING_ROLES);
+    this.assertAnyRole(currentUser, EXPENSE_WRITE_ROLES);
     const expense = await this.findOne(id, currentUser);
     if (expense.trip.status === TripStatus.COMPLETED) throw new BadRequestException('Cannot update expense for a completed trip');
     if (dto.trip_id !== undefined) {
@@ -76,6 +85,13 @@ export class ExpensesService {
       expense.trip_id = String(dto.trip_id);
       expense.trip = nextTrip;
     }
+    if (dto.category !== undefined) expense.category = dto.category;
+    if (dto.amount !== undefined) {
+      if (dto.amount < 0) throw new BadRequestException('Amount must not be negative');
+      expense.amount = String(dto.amount);
+    }
+    if (dto.description !== undefined) expense.description = dto.description?.trim() || null;
+    if (dto.hub_id !== undefined) expense.hub_id = String(dto.hub_id);
     return this.expensesRepository.save(expense);
   }
 

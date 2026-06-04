@@ -11,6 +11,7 @@ import { QueryTrucksDto } from './dto/query-trucks.dto';
 import { TruckStatus } from './dto/truck.enums';
 import { UpdateTruckStatusDto } from './dto/update-truck-status.dto';
 import { UpdateTruckDto } from './dto/update-truck.dto';
+import { VendorsService } from '../vendors/vendors.service';
 import { TruckEntity } from './truck.entity';
 
 const ACTIVE_TRIP_STATUSES = [TripStatus.PLANNED, 'LOADING', TripStatus.IN_TRANSIT, 'ARRIVED_PENDING_CONFIRM'];
@@ -22,6 +23,7 @@ export class TrucksService {
     @InjectRepository(TruckEntity) private readonly trucksRepository: Repository<TruckEntity>,
     @InjectRepository(UserEntity) private readonly usersRepository: Repository<UserEntity>,
     @InjectRepository(TripEntity) private readonly tripsRepository: Repository<TripEntity>,
+    private readonly vendorsService: VendorsService,
   ) {}
 
   async create(dto: CreateTruckDto, currentUser: UserEntity): Promise<TruckEntity> {
@@ -30,6 +32,7 @@ export class TrucksService {
     await this.assertUniquePlate(licensePlate);
     if (dto.driver_id) await this.assertDriverExists(dto.driver_id);
 
+    const vendorId = dto.vendor_id?.trim() || (await this.vendorsService.resolveDefaultVendorId());
     const truck = this.trucksRepository.create({
       license_plate: licensePlate,
       payload: dto.payload,
@@ -41,6 +44,7 @@ export class TrucksService {
       bks: dto.bks?.trim().toUpperCase() || licensePlate,
       loai_xe: dto.loai_xe?.trim() || null,
       khu_vuc: dto.khu_vuc?.trim() || null,
+      vendor_id: vendorId,
     });
 
     try {
@@ -56,7 +60,8 @@ export class TrucksService {
     const limit = clampPaginationLimit(query.limit, 20);
     const qb = this.trucksRepository
       .createQueryBuilder('truck')
-      .leftJoinAndSelect('truck.driver', 'driver');
+      .leftJoinAndSelect('truck.driver', 'driver')
+      .leftJoinAndSelect('truck.vendor', 'vendor');
     this.applyFilters(qb, query);
     const [items, total] = await qb.orderBy('truck.id', 'DESC').skip((page - 1) * limit).take(limit).getManyAndCount();
     return { items, meta: { total, page, limit, total_pages: Math.ceil(total / limit) } };
@@ -68,7 +73,7 @@ export class TrucksService {
   }
 
   async findOne(id: string, _currentUser: UserEntity): Promise<TruckEntity> {
-    const truck = await this.trucksRepository.findOne({ where: { id } as any, relations: ['driver', 'trips'] });
+    const truck = await this.trucksRepository.findOne({ where: { id } as any, relations: ['driver', 'trips', 'vendor'] });
     if (!truck) throw new NotFoundException('Truck not found');
     return truck;
   }
@@ -94,6 +99,7 @@ export class TrucksService {
       bks: dto.bks !== undefined ? dto.bks.trim().toUpperCase() || truck.license_plate : truck.bks,
       loai_xe: dto.loai_xe !== undefined ? dto.loai_xe.trim() || null : truck.loai_xe,
       khu_vuc: dto.khu_vuc !== undefined ? dto.khu_vuc.trim() || null : truck.khu_vuc,
+      vendor_id: dto.vendor_id !== undefined ? dto.vendor_id?.trim() || null : truck.vendor_id,
     });
     return this.trucksRepository.save(truck);
   }

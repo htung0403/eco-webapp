@@ -56,7 +56,7 @@ export default function PrintInventoryStockPage() {
           className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-bold text-white"
         >
           <Printer size={16} />
-          In bảng kê (A4 ngang)
+          In bảng kê (A4)
         </button>
       </div>
       <InventoryStockListTemplate data={data} />
