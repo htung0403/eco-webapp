@@ -47,7 +47,9 @@ export class TripsService {
     const manifest = manifestId == null ? null : await this.validateManifestForAssignment(manifestId);
     await this.validateHubs(String(dto.start_hub_id), String(dto.end_hub_id), manifest);
     if (manifestId != null) await this.assertManifestNotInActiveTrip(manifestId);
-    this.validateTripTimes(dto.departure_time, dto.arrival_time, false);
+    const departureTime = this.normalizeDate(dto.departure_time, 'departure_time');
+    const arrivalTime = this.normalizeOptionalDate(dto.arrival_time, 'arrival_time');
+    this.validateTripTimes(departureTime, arrivalTime, false);
 
     const tripCostAmount = this.resolveTripCost(dto);
     const trip = this.tripsRepository.create({
@@ -55,9 +57,9 @@ export class TripsService {
       manifest_id: manifestId,
       start_hub_id: String(dto.start_hub_id),
       end_hub_id: String(dto.end_hub_id),
-      departure_time: dto.departure_time,
-      arrival_time: dto.arrival_time ?? null,
-      expected_arrival_time: dto.arrival_time ?? null,
+      departure_time: departureTime,
+      arrival_time: arrivalTime,
+      expected_arrival_time: arrivalTime,
       status: TripStatus.PLANNED,
       trip_cost: tripCostAmount > 0 ? String(tripCostAmount) : null,
       other_costs: tripCostAmount > 0 ? String(tripCostAmount) : null,
@@ -146,11 +148,13 @@ export class TripsService {
         await this.trucksRepository.save(truck);
       }
     }
-    if (dto.departure_time || dto.arrival_time) this.validateTripTimes(dto.departure_time ?? trip.departure_time, dto.arrival_time ?? trip.arrival_time ?? undefined, false);
-    if (dto.departure_time) trip.departure_time = dto.departure_time;
+    const departureTime = dto.departure_time !== undefined ? this.normalizeDate(dto.departure_time, 'departure_time') : trip.departure_time;
+    const arrivalTime = dto.arrival_time !== undefined ? this.normalizeOptionalDate(dto.arrival_time, 'arrival_time') : trip.arrival_time;
+    if (dto.departure_time !== undefined || dto.arrival_time !== undefined) this.validateTripTimes(departureTime, arrivalTime, false);
+    if (dto.departure_time !== undefined) trip.departure_time = departureTime;
     if (dto.arrival_time !== undefined) {
-      trip.arrival_time = dto.arrival_time;
-      trip.expected_arrival_time = dto.arrival_time;
+      trip.arrival_time = arrivalTime;
+      trip.expected_arrival_time = arrivalTime;
     }
     return this.tripsRepository.save(trip);
   }
@@ -368,6 +372,17 @@ export class TripsService {
     const text = String(value);
     if (!/^\d+$/.test(text)) throw new BadRequestException(`${fieldName} must be an integer number`);
     return text;
+  }
+
+  private normalizeDate(value: unknown, fieldName: string): Date {
+    const date = value instanceof Date ? value : new Date(String(value));
+    if (Number.isNaN(date.getTime())) throw new BadRequestException(`${fieldName} must be a valid date-time`);
+    return date;
+  }
+
+  private normalizeOptionalDate(value: unknown, fieldName: string): Date | null {
+    if (value === undefined || value === null || value === '') return null;
+    return this.normalizeDate(value, fieldName);
   }
 
   private async validateManifestForAssignment(manifestId: string): Promise<ManifestEntity> {
