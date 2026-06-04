@@ -4,8 +4,6 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
-import { Request, Response } from 'express';
-
 function registerHealthRoute(app: NestExpressApplication) {
   const payload = () => ({
     ok: true,
@@ -14,7 +12,7 @@ function registerHealthRoute(app: NestExpressApplication) {
     timestamp: new Date().toISOString(),
   });
   const express = app.getHttpAdapter().getInstance();
-  express.get('/api/v1/health', (_req: Request, res: Response) => {
+  express.get('/api/v1/health', (_req: unknown, res: { status: (code: number) => { json: (body: unknown) => void } }) => {
     res.status(200).json(payload());
   });
 }
