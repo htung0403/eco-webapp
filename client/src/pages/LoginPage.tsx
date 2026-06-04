@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { AlertCircle, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Truck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ApiError, apiRequest } from '../lib/api';
 import type { LoginFieldErrors, LoginFormState, LoginResponse } from './login/types';
@@ -34,6 +34,12 @@ const clearOtherStorage = (rememberMe: boolean) => {
   storage.removeItem(USER_PROFILE_KEY);
 };
 
+const getSafeRedirectPath = (search: string) => {
+  const redirect = new URLSearchParams(search).get('redirect');
+  if (!redirect?.startsWith('/') || redirect.startsWith('//') || redirect.startsWith('/login')) return null;
+  return redirect;
+};
+
 const mapLoginError = (error: unknown) => {
   if (error instanceof TypeError) {
     return 'Server không phản hồi. Vui lòng kiểm tra kết nối hoặc thử lại sau.';
@@ -51,6 +57,7 @@ const mapLoginError = (error: unknown) => {
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formState, setFormState] = useState<LoginFormState>(initialFormState);
   const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
   const [submitError, setSubmitError] = useState('');
@@ -98,7 +105,7 @@ const LoginPage: React.FC = () => {
       storage.setItem(REFRESH_TOKEN_KEY, response.refresh_token);
       storage.setItem(USER_PROFILE_KEY, JSON.stringify(response.user));
 
-      navigate(getRoleRedirectPath(response.user.role_mask), { replace: true });
+      navigate(getSafeRedirectPath(location.search) ?? getRoleRedirectPath(response.user.role_mask), { replace: true });
     } catch (error) {
       setSubmitError(mapLoginError(error));
     } finally {

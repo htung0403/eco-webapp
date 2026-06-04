@@ -1,10 +1,11 @@
 import { Loader2, Plus, Search, X } from "lucide-react";
-import type { AddWaybillsFormState, ManifestWaybill } from "../types";
+import type { AddWaybillsFormState, LoadPlanningManifest, ManifestWaybill } from "../types";
 interface Props {
   isOpen: boolean;
   isClosing: boolean;
   isLoading: boolean;
   isSubmitting: boolean;
+  manifest: LoadPlanningManifest | null;
   waybills: ManifestWaybill[];
   total: number;
   formState: AddWaybillsFormState;
@@ -21,6 +22,7 @@ export default function AddWaybillsToManifestDialog({
   isClosing,
   isLoading,
   isSubmitting,
+  manifest,
   waybills,
   total,
   formState,
@@ -61,6 +63,12 @@ export default function AddWaybillsToManifestDialog({
           </button>
         </div>
         <div className="border-b border-border p-3">
+          <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-semibold leading-5 text-blue-700">
+            Chỉ hiển thị vận đơn đã tiếp nhận kho: trạng thái IN_WAREHOUSE,
+            hub hiện tại {display(manifest?.origin_hub?.code || manifest?.origin_hub?.name || manifest?.origin_hub_id)},
+            hub đến {display(manifest?.dest_hub?.code || manifest?.dest_hub?.name || manifest?.dest_hub_id)},
+            và chưa bị khóa bởi chuyến/bảng kê khác.
+          </div>
           <div className="relative">
             <Search
               size={16}
@@ -190,8 +198,9 @@ export default function AddWaybillsToManifestDialog({
                     </p>
                     <p className="mt-2 text-[12px] font-medium leading-5 text-muted-foreground">
                       Vận đơn mới tạo đang ở trạng thái RECEIVED/Đã tạo đơn. Hãy
-                      vào trang Tiếp nhận đơn tại kho để scan + upload ảnh, sau
-                      đó vận đơn mới được thêm vào bảng kê.
+                      vào trang Tiếp nhận đơn tại kho để scan + upload ảnh cho
+                      đúng tuyến {display(manifest?.origin_hub?.code || manifest?.origin_hub_id)} → {display(manifest?.dest_hub?.code || manifest?.dest_hub_id)},
+                      sau đó vận đơn mới xuất hiện để thêm vào bảng kê.
                     </p>
                   </div>
                 </div>

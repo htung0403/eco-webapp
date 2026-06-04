@@ -51,6 +51,16 @@ const USER_PROFILE_KEY = 'eco_user_profile';
 
 let refreshPromise: Promise<RefreshResult> | null = null;
 
+const redirectToLogin = () => {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname === '/login') return;
+
+  const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const loginUrl = new URL('/login', window.location.origin);
+  loginUrl.searchParams.set('redirect', returnTo);
+  window.location.replace(`${loginUrl.pathname}${loginUrl.search}`);
+};
+
 const getBrowserStorage = () => {
   if (typeof window === 'undefined') return null;
   const hasLocalSession = Boolean(localStorage.getItem(ACCESS_TOKEN_KEY) || localStorage.getItem(REFRESH_TOKEN_KEY));
@@ -141,6 +151,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     } else if (!refreshResult.sessionCleared) {
       throw new ApiError(0, 'Không kết nối được server để làm mới phiên. Vui lòng thử lại khi mạng ổn định.', null);
     }
+  }
+
+  if (response.status === 401 && requestPath !== '/auth/login' && requestPath !== '/auth/refresh') {
+    clearAuthSession();
+    redirectToLogin();
   }
 
   const payload = await readResponsePayload(response);
