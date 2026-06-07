@@ -549,7 +549,10 @@ export class WaybillsService {
   }
 
   async getLoadPlanningBoard(query: QueryLoadPlanningBoardDto, currentUser: UserEntity) {
-    const loadStatuses = [WaybillStatus.RECEIVED, WaybillStatus.IN_WAREHOUSE];
+    const splitLoadStatuses = this.parseList(query.load_status);
+    const waybillLoadStatuses = splitLoadStatuses.includes(WaybillSplitLoadStatus.IN_TRANSIT)
+      ? [WaybillStatus.RECEIVED, WaybillStatus.IN_WAREHOUSE, WaybillStatus.IN_TRANSIT]
+      : [WaybillStatus.RECEIVED, WaybillStatus.IN_WAREHOUSE];
     const qb = this.splitsRepository.createQueryBuilder('split')
       .innerJoinAndSelect('split.waybill', 'waybill')
       .leftJoinAndSelect('split.truck', 'truck')
@@ -559,7 +562,7 @@ export class WaybillsService {
       .leftJoinAndSelect('waybill.dest_hub', 'dest_hub')
       .leftJoinAndSelect('waybill.origin_hub', 'origin_hub')
       .where('waybill.deleted_at IS NULL')
-      .andWhere('waybill.current_state IN (:...loadStatuses)', { loadStatuses })
+      .andWhere('waybill.current_state IN (:...waybillLoadStatuses)', { waybillLoadStatuses })
       .andWhere('split.truck_id IS NOT NULL');
 
     this.applyFilters(qb, {
@@ -571,6 +574,15 @@ export class WaybillsService {
 
     const truckIds = this.parseList(query.truck_id);
     if (truckIds.length) qb.andWhere('split.truck_id IN (:...truckIds)', { truckIds });
+
+    if (splitLoadStatuses.length) qb.andWhere('split.load_status IN (:...splitLoadStatuses)', { splitLoadStatuses });
+
+    if (query.date_from) {
+      qb.andWhere('COALESCE(waybill.loaded_at, waybill.received_at, waybill.created_at) >= :dateFrom', { dateFrom: query.date_from });
+    }
+    if (query.date_to) {
+      qb.andWhere(`COALESCE(waybill.loaded_at, waybill.received_at, waybill.created_at) < (:dateTo::date + interval '1 day')`, { dateTo: query.date_to });
+    }
 
     if (query.ten_cty?.trim()) {
       const tenCty = query.ten_cty.trim();
