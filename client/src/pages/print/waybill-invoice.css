@@ -1,4 +1,4 @@
-/* Phiếu giao nhận ECO — in A5 ngang */
+/* Phiếu giao nhận ECO — mẫu A5 ngang */
 @page {
   size: A5 landscape;
   margin: 4mm;
@@ -8,14 +8,22 @@
   body {
     margin: 0;
     background: #fff !important;
-    font-family: 'Times New Roman', Times, serif;
+    font-family: Arial, Helvetica, sans-serif;
   }
+
   .print-toolbar {
     display: none !important;
   }
+
   .waybill-invoice-wrap {
+    min-height: auto !important;
     padding: 0 !important;
     background: #fff !important;
+  }
+
+  .waybill-invoice {
+    border: 0 !important;
+    box-shadow: none !important;
   }
 }
 
@@ -30,135 +38,351 @@
 
 .waybill-invoice {
   width: 210mm;
+  min-height: 142mm;
   max-width: 100%;
   background: #fff;
-  border: 1px solid #000;
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 10pt;
-  font-weight: 600;
-  color: #000;
+  color: #1d2836;
+  border: 1px solid #111827;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 12%);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 8.2pt;
+  line-height: 1.15;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
   box-sizing: border-box;
 }
 
-.waybill-invoice table {
+.bill-header {
+  display: grid;
+  grid-template-columns: 30mm 1fr 72mm;
+  align-items: center;
+  min-height: 23mm;
+  border-bottom: 1px solid #111827;
+}
+
+.bill-brand {
+  padding: 2mm 3mm;
+  text-align: center;
+}
+
+.bill-logo {
+  display: block;
+  width: 24mm;
+  height: 18mm;
+  object-fit: contain;
+}
+
+.bill-title-block {
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.bill-title-block h1 {
+  margin: 0;
+  font-size: 12.8pt;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.bill-title-block p {
+  margin: 1mm 0 0;
+  font-size: 10.2pt;
+  font-weight: 900;
+}
+
+.bill-title-block b {
+  display: block;
+  margin-top: 1.5mm;
+  font-size: 8.5pt;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.bill-barcode {
+  height: 100%;
+  padding: 2mm 6mm 1.5mm 2mm;
+  text-align: center;
+  border-left: 1px solid transparent;
+}
+
+.bill-barcode img {
+  display: block;
+  width: 58mm;
+  height: 12mm;
+  margin-left: auto;
+  object-fit: contain;
+}
+
+.bill-barcode strong {
+  display: block;
+  margin-top: 1mm;
+  font-size: 10pt;
+  letter-spacing: 0.4px;
+}
+
+.bill-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid #111827;
+}
+
+.bill-panel {
+  min-height: 88mm;
+}
+
+.bill-panel + .bill-panel {
+  border-left: 1px solid #111827;
+}
+
+.bill-line,
+.bill-pair-line,
+.goods-title {
+  min-height: 6mm;
+  border-bottom: 1px solid #111827;
+}
+
+.bill-line {
+  display: flex;
+  gap: 1.5mm;
+  align-items: flex-start;
+  padding: 1.1mm 1.6mm;
+}
+
+.bill-pair-line,
+.bill-two-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.bill-pair-line .bill-line,
+.bill-two-cols .bill-line {
+  border-bottom: 1px solid #111827;
+}
+
+.bill-pair-line .bill-line + .bill-line,
+.bill-two-cols .bill-line + .bill-line {
+  border-left: 1px solid #111827;
+}
+
+.bill-label {
+  flex: 0 0 auto;
+  color: #425166;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bill-value {
+  min-width: 0;
+  color: #111827;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.bill-value-strong {
+  font-weight: 900;
+}
+
+.goods-title {
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+  padding: 1.1mm 1.6mm;
+}
+
+.goods-title span,
+.goods-note-row span,
+.sender-sign span,
+.receiver-sign span {
+  color: #425166;
+  font-weight: 700;
+}
+
+.goods-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.waybill-invoice td,
-.waybill-invoice th {
-  border: 1px solid #000;
-  padding: 3px 5px;
-  vertical-align: top;
-  word-wrap: break-word;
-  font-weight: 600;
-}
-
-.waybill-invoice .cell-label {
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.waybill-invoice .cell-value {
+.goods-table th,
+.goods-table td {
+  height: 7mm;
+  border-right: 1px solid #111827;
+  border-bottom: 1px solid #111827;
+  text-align: center;
   font-weight: 800;
 }
 
-.waybill-invoice .header-title {
-  font-size: 15pt;
-  font-weight: 800;
-  text-align: center;
-  letter-spacing: 0.5px;
+.goods-table th:last-child,
+.goods-table td:last-child {
+  border-right: 0;
 }
 
-.waybill-invoice .header-sub {
-  font-size: 12pt;
-  font-weight: 800;
-  text-align: center;
+.goods-note-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 37mm;
 }
 
-.waybill-invoice .header-hotline {
-  font-size: 10pt;
-  font-weight: 700;
-  text-align: center;
+.note-box,
+.content-box {
+  position: relative;
+  padding: 1.5mm;
 }
 
-.waybill-invoice .section-title {
-  font-weight: 800;
-  font-size: 10.5pt;
-  text-align: center;
-  background: #f5f5f5;
+.content-box {
+  border-left: 1px solid #111827;
 }
 
-.waybill-invoice .pay-banner {
-  font-weight: 800;
-  font-size: 11pt;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.waybill-invoice .total-collect {
-  font-weight: 800;
-  font-size: 12pt;
-  text-align: center;
-}
-
-.waybill-invoice .barcode-box {
-  text-align: center;
-  padding: 4px;
-}
-
-.waybill-invoice .barcode-img {
-  height: 36px;
-  max-width: 100%;
-  object-fit: contain;
-}
-
-.waybill-invoice .barcode-text {
-  font-weight: 800;
-  font-size: 11pt;
-  letter-spacing: 1px;
-}
-
-.waybill-invoice th {
-  font-weight: 800;
-  text-align: center;
-}
-
-.waybill-invoice .logo-box {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  min-height: 52px;
-}
-
-.waybill-invoice .logo-img {
+.content-box strong {
   display: block;
-  width: 100%;
-  max-width: 88px;
-  max-height: 52px;
-  object-fit: contain;
+  margin-top: 2mm;
+  font-weight: 800;
 }
 
-.waybill-invoice .logo-tagline {
+.paid-stamp {
+  position: absolute;
+  left: 8mm;
+  top: 14mm;
+  transform: rotate(-8deg);
+  border: 2px solid #d53b3b;
+  color: #d53b3b;
+  opacity: 0.45;
+  padding: 1.5mm 5mm;
+  font-size: 15pt;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+}
+
+.right-body-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 51mm;
+}
+
+.payment-box {
+  border-right: 1px solid #111827;
+}
+
+.payment-heading {
+  padding: 1.2mm 1.5mm 0;
+  text-align: center;
+  color: #425166;
+  font-weight: 800;
+}
+
+.payment-value {
+  min-height: 8mm;
+  padding: 1mm 1.5mm;
+  border-bottom: 1px solid #111827;
+  text-align: center;
+  font-weight: 900;
+}
+
+.sender-sign,
+.receiver-sign {
+  min-height: 18mm;
+  padding: 1mm 1.5mm;
+  border-bottom: 1px solid #111827;
+}
+
+.receiver-sign {
+  min-height: 20mm;
+}
+
+.fee-box .bill-line {
+  min-height: 6.2mm;
+}
+
+.collect-box {
+  min-height: 18mm;
+  padding: 1mm 1.5mm;
+  border-bottom: 1px solid #111827;
+  background: #d9f26b;
+  text-align: center;
+}
+
+.collect-box span {
+  display: block;
+  color: #31530a;
+  font-weight: 900;
+}
+
+.collect-box strong {
+  display: block;
+  margin-top: 1.5mm;
+  color: #31530a;
+  font-size: 18pt;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.bill-footer {
+  display: grid;
+  grid-template-columns: 1fr 25mm 1fr 1fr;
+  min-height: 29mm;
+}
+
+.service-box,
+.qr-box,
+.employee-box {
+  border-right: 1px solid #111827;
+}
+
+.employee-box:last-child {
+  border-right: 0;
+}
+
+.service-box {
+  padding: 1.5mm;
+}
+
+.service-box .bill-line {
+  min-height: auto;
+  border-bottom: 0;
+  padding: 0 0 1mm;
+}
+
+.service-box p {
+  margin: 1mm 0 0;
+  color: #425166;
+  font-size: 7.1pt;
   font-style: italic;
-  font-size: 8pt;
-  color: #333;
-}
-
-.waybill-invoice .sign-area {
-  min-height: 28px;
-}
-
-.waybill-invoice .footer-small {
-  font-size: 7.5pt;
   line-height: 1.2;
 }
 
-.waybill-invoice .checkbox-line {
-  font-size: 8pt;
-  margin-top: 2px;
+.qr-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-box img {
+  width: 21mm;
+  height: 21mm;
+}
+
+.employee-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.5mm;
+  text-align: center;
+  color: #425166;
+  font-size: 7.8pt;
+  font-weight: 700;
+}
+
+.employee-box label {
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+  color: #1d2836;
+  text-align: left;
+}
+
+.employee-box label span {
+  display: inline-block;
+  width: 3.3mm;
+  height: 3.3mm;
+  border: 1px solid #111827;
 }
