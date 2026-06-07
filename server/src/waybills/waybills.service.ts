@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, In, IsNull, Like, Repository } from 'typeorm';
+import { Brackets, In, IsNull, Like, Repository, SelectQueryBuilder } from 'typeorm';
 import { HubEntity } from '../hubs/hub.entity';
 import { PaymentType } from '../common/enums';
 import { clampPaginationLimit } from '../common/pagination';
@@ -275,6 +275,8 @@ export class WaybillsService {
         );
     }
 
+    this.applyIncompleteSplitFilter(qb, query.only_incomplete_split);
+
     const [waybills, totalWaybills] = await qb
       .orderBy('waybill.created_at', 'DESC')
       .skip((page - 1) * limit)
@@ -298,9 +300,20 @@ export class WaybillsService {
       return map;
     }, new Map());
 
+    const onlyIncompleteSplit = this.isTruthyQueryFlag(query.only_incomplete_split);
+
     const items = waybills.flatMap((waybill) => {
       const sanitized = this.sanitize(waybill as WaybillRecord, currentUser);
       const waybillSplits = splitsByWaybill.get(waybill.id) ?? [];
+
+      if (onlyIncompleteSplit) {
+        const totalPackages = this.resolveTotalPackages(waybill as WaybillRecord);
+        const allocated = waybillSplits.reduce((sum, row) => sum + Number(row.package_count ?? 0), 0);
+        const remaining = totalPackages - allocated;
+        if (remaining <= 0) return [];
+        return [this.mapInventoryTripLine(sanitized, null, remaining)];
+      }
+
       if (!waybillSplits.length) {
         return vendorId ? [] : [this.mapInventoryTripLine(sanitized, null)];
       }
@@ -310,12 +323,13 @@ export class WaybillsService {
     return {
       items,
       meta: {
-        total: items.length,
+        total: totalWaybills,
         total_waybills: totalWaybills,
         total_lines: items.length,
         page,
         limit,
-        total_pages: Math.ceil(totalWaybills / limit),
+        total_pages: Math.max(1, Math.ceil(totalWaybills / limit)),
+        only_incomplete_split: onlyIncompleteSplit,
       },
     };
   }
@@ -329,13 +343,19 @@ export class WaybillsService {
   }
 
   async getPackageSplits(id: string, currentUser: UserEntity) {
-    const waybill = await this.findOne(id, currentUser);
+    const waybill = await this.waybillsRepository.findOne({
+      where: { id, deleted_at: IsNull() } as any,
+      relations: ['origin_hub', 'dest_hub', 'order'],
+    }) as WaybillRecord | null;
+    if (!waybill) throw new NotFoundException('Waybill not found');
+    this.assertWaybillAccess(waybill, currentUser);
+    const sanitized = this.sanitize(waybill, currentUser);
     const splits = await this.splitsRepository.find({
       where: { waybill_id: id },
       relations: ['trip', 'trip.truck', 'truck'],
       order: { loading_position: 'ASC', id: 'ASC' },
     });
-    return this.buildSplitResponse(waybill, splits);
+    return this.buildSplitResponse(sanitized as WaybillRecord, splits);
   }
 
   async listCashVouchersForWaybill(waybillId: string, currentUser: UserEntity) {
@@ -437,7 +457,11 @@ export class WaybillsService {
       throw new BadRequestException('Cannot split a finalized waybill');
     }
 
-    const totalPackages = Math.max(1, Number(waybill.package_count ?? 1));
+    const waybillWithOrder = await this.waybillsRepository.findOne({
+      where: { id, deleted_at: IsNull() } as any,
+      relations: ['order'],
+    });
+    const totalPackages = this.resolveTotalPackages((waybillWithOrder ?? waybill) as WaybillRecord);
     const allocated = dto.splits.reduce((sum, line) => sum + line.package_count, 0);
     if (allocated > totalPackages) {
       throw new BadRequestException(`Allocated packages (${allocated}) exceed order total (${totalPackages})`);
@@ -565,8 +589,9 @@ export class WaybillsService {
     }
 
     const splits = await qb
-      .orderBy('COALESCE(truck.bks, truck.license_plate, \'zzz\')', 'ASC')
-      .addOrderBy('split.loading_position', 'ASC', 'NULLS LAST')
+      .orderBy('truck.bks', 'ASC')
+      .addOrderBy('truck.license_plate', 'ASC')
+      .addOrderBy('split.loading_position', 'ASC')
       .addOrderBy('split.id', 'ASC')
       .getMany();
 
@@ -708,8 +733,33 @@ export class WaybillsService {
     return parts[2] ?? parts[parts.length - 1] ?? '';
   }
 
+  private applyIncompleteSplitFilter(qb: SelectQueryBuilder<WaybillEntity>, flag?: string) {
+    if (!this.isTruthyQueryFlag(flag)) return;
+
+    qb.andWhere(`(
+      SELECT COALESCE(SUM(incomplete_split.package_count), 0)
+      FROM waybill_splits incomplete_split
+      WHERE incomplete_split.waybill_id = waybill.id
+    ) < ${this.totalPackagesSqlExpr}`);
+  }
+
+  private resolveTotalPackages(waybill: WaybillRecord): number {
+    const fromWaybill = Number(waybill.package_count ?? 0);
+    const fromOrder = Number(waybill.order?.package_count ?? 0);
+    return Math.max(1, fromWaybill, fromOrder);
+  }
+
+  private readonly totalPackagesSqlExpr = `GREATEST(1, COALESCE(waybill.package_count, 0), COALESCE(
+    (SELECT o.package_count FROM orders o WHERE o.id = waybill.order_id),
+    0
+  ))`;
+
+  private isTruthyQueryFlag(flag?: string): boolean {
+    return ['1', 'true', 'yes'].includes(String(flag ?? '').trim().toLowerCase());
+  }
+
   private buildSplitResponse(waybill: WaybillRecord, splits: WaybillSplitEntity[]) {
-    const totalPackages = Math.max(1, Number(waybill.package_count ?? 1));
+    const totalPackages = this.resolveTotalPackages(waybill);
     const totalFreight = Number(waybill.freight_amount ?? waybill.cost_amount ?? 0);
     const totalCod = Number(waybill.cod_amount ?? 0);
     const allocated = splits.reduce((sum, row) => sum + row.package_count, 0);
@@ -895,15 +945,18 @@ export class WaybillsService {
     return this.sanitize(await this.waybillsRepository.save(waybill), currentUser);
   }
 
-  private mapInventoryTripLine(waybill: WaybillRecord, split: WaybillSplitEntity | null) {
-    const totalPackages = Math.max(1, Number(waybill.package_count ?? 1));
+  private mapInventoryTripLine(waybill: WaybillRecord, split: WaybillSplitEntity | null, remainingPackages?: number) {
+    const totalPackages = this.resolveTotalPackages(waybill);
     const totalFreight = Number(waybill.freight_amount ?? waybill.cost_amount ?? 0);
     const totalCod = Number(waybill.cod_amount ?? 0);
-    const tripPackages = split ? split.package_count : totalPackages;
+    const tripPackages = remainingPackages ?? (split ? split.package_count : totalPackages);
     const ratio = tripPackages / totalPackages;
     const truck = split?.truck ?? split?.trip?.truck ?? null;
     const licensePlate = truck?.bks ?? truck?.license_plate ?? null;
     const carrier = split?.carrier_label ?? truck?.nha_xe ?? null;
+    const unallocatedLabel = remainingPackages != null && remainingPackages < totalPackages
+      ? `Còn ${remainingPackages} kiện · Chưa phân xe`
+      : 'Chưa phân xe';
 
     return {
       ...waybill,
@@ -912,9 +965,10 @@ export class WaybillsService {
       truck_id: split?.truck_id ?? split?.trip?.truck_id ?? null,
       trip_package_count: tripPackages,
       order_total_packages: totalPackages,
+      remaining_packages: remainingPackages ?? (split ? null : totalPackages),
       trip_label: split
         ? [licensePlate, carrier, split.trip_id ? `Chuyến #${split.trip_id}` : null].filter(Boolean).join(' · ') || 'Đã phân xe'
-        : 'Chưa phân xe',
+        : unallocatedLabel,
       license_plate: licensePlate,
       trip_nha_xe: carrier,
       trip_status: split?.trip?.status ?? null,

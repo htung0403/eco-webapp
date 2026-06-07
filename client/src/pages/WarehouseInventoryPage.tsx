@@ -85,8 +85,16 @@ const normalizeStatus = (waybill: WaybillInventoryItem) => String(waybill.curren
 const isMutableWaybill = (waybill: WaybillInventoryItem) => MUTABLE_WAYBILL_STATUSES.includes(normalizeStatus(waybill));
 const formatHub = (hub: HubSummary | null | undefined, fallback?: string | number | null) => hub ? [hub.code?.toUpperCase(), hub.name].filter(Boolean).join(' · ') || `Hub #${hub.id}` : fallback ? `Hub #${fallback}` : '—';
 
+const isIncompleteSplitRow = (item: WaybillInventoryItem) => {
+  if (item.split_id) return false;
+  if (item.remaining_packages != null) return Number(item.remaining_packages) > 0;
+  if (item.trip_label?.startsWith('Còn ') || item.trip_label === 'Chưa phân xe') return true;
+  const totalPackages = Math.max(1, Number(item.order_total_packages ?? item.package_count ?? 1));
+  return Number(item.trip_package_count ?? item.package_count ?? 0) < totalPackages;
+};
+
 const buildQuery = (filters: InventoryFilters) => {
-  const params = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit) });
+  const params = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit), only_incomplete_split: '1' });
   if (filters.keyword.trim()) params.set('keyword', filters.keyword.trim());
   if (filters.ma_kh.trim()) params.set('ma_kh', filters.ma_kh.trim());
   if (filters.statuses.length) params.set('status', filters.statuses.join(','));
@@ -189,9 +197,9 @@ export default function WarehouseInventoryPage() {
     setError('');
     try {
       const response = await apiRequest<InventoryListResponse | WaybillInventoryItem[]>(`/waybills/inventory/trip-lines?${buildQuery(filters)}`);
-      const items = normalizeList(response);
+      const items = normalizeList(response).filter(isIncompleteSplitRow);
       setWaybills(items);
-      setTotal(normalizeTotal(response, items.length));
+      setTotal(Array.isArray(response) ? items.length : response.meta?.total_waybills ?? response.meta?.total ?? items.length);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Không thể tải danh sách tồn kho theo chuyến.');
       setWaybills([]);
@@ -311,6 +319,12 @@ export default function WarehouseInventoryPage() {
         </div>
       )}
 
+      <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-2.5 text-[13px] text-amber-900">
+        <span className="font-bold">Chỉ hiển thị đơn chưa chia hết</span>
+        {' — '}
+        Các dòng đã phân đủ kiện lên xe sẽ không xuất hiện trong danh sách này.
+      </div>
+
       <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
         <div className="p-3 border-b border-border bg-card shrink-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -363,7 +377,7 @@ export default function WarehouseInventoryPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
-          {isLoading ? <StateCard compact icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải dữ liệu" description="Hệ thống đang lấy danh sách vận đơn tồn kho từ API." /> : waybills.length === 0 ? <StateCard compact icon={<Package size={24} />} title="Chưa có vận đơn phù hợp" description="Thử thay đổi từ khóa hoặc bộ lọc để xem thêm dữ liệu tồn kho." /> : (
+          {isLoading ? <StateCard compact icon={<Loader2 className="animate-spin" size={24} />} title="Đang tải dữ liệu" description="Hệ thống đang lấy danh sách vận đơn tồn kho từ API." /> : waybills.length === 0 ? <StateCard compact icon={<Package size={24} />} title="Chưa có đơn cần chia" description="Tất cả đơn tồn kho đã phân hết kiện lên xe, hoặc thử đổi bộ lọc." /> : (
             <>
               <table className="hidden md:table w-full min-w-[1280px] text-left border-collapse">
                 <thead className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-600">
@@ -482,7 +496,12 @@ function InventoryRow({
       case 'trip_label':
         return (
           <td className={cellClass}>
-            <span className={clsx('font-bold', waybill.trip_label === 'Chưa phân xe' ? 'text-amber-700' : 'text-foreground')}>
+            <span className={clsx(
+              'font-bold',
+              !waybill.trip_label || waybill.trip_label.includes('Chưa phân') || waybill.trip_label.startsWith('Còn')
+                ? 'text-amber-700'
+                : 'text-foreground',
+            )}>
               {waybill.trip_label || '—'}
             </span>
             {waybill.loading_position ? (
@@ -520,9 +539,11 @@ function InventoryRow({
       case 'package_count':
         return (
           <td className={`${cellClass} font-medium`}>
-            {waybill.trip_package_count != null
-              ? `${waybill.trip_package_count} / ${waybill.order_total_packages ?? waybill.package_count ?? waybill.trip_package_count}`
-              : displayValue(waybill.package_count || waybill.declared_package_count)}
+            {waybill.remaining_packages != null
+              ? `${waybill.remaining_packages} / ${waybill.order_total_packages ?? waybill.package_count ?? waybill.remaining_packages}`
+              : waybill.trip_package_count != null
+                ? `${waybill.trip_package_count} / ${waybill.order_total_packages ?? waybill.package_count ?? waybill.trip_package_count}`
+                : displayValue(waybill.package_count || waybill.declared_package_count)}
           </td>
         );
       case 'weight':
@@ -622,7 +643,11 @@ function InventoryCard({ waybill, canUpdate, canEdit, canDelete, onDetail, onEdi
           />
         } />
         <MobileInfo label="COD" value={displayValue(waybill.cod_amount, ' đ')} />
-        <MobileInfo label="Số kiện" value={displayValue(waybill.package_count || waybill.declared_package_count)} />
+        <MobileInfo label="Số kiện" value={
+          waybill.remaining_packages != null
+            ? `${waybill.remaining_packages} / ${waybill.order_total_packages ?? waybill.package_count ?? waybill.remaining_packages} (còn chia)`
+            : displayValue(waybill.package_count || waybill.declared_package_count)
+        } />
         <MobileInfo label="Cân nặng" value={displayValue(waybill.actual_weight || waybill.weight, ' kg')} />
         <MobileInfo label="Ngày nhận" value={formatDate(waybill.received_at || waybill.created_at)} />
       </div>

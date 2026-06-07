@@ -35,7 +35,7 @@ export interface InventoryColumnDef {
 export const INVENTORY_COLUMNS: InventoryColumnDef[] = [
   { id: 'order_code', label: 'Mã đơn hàng', defaultVisible: true },
   { id: 'waybill_code', label: 'Mã vận đơn', defaultVisible: true },
-  { id: 'trip_label', label: 'Xe / chuyến', defaultVisible: true },
+  { id: 'trip_label', label: 'Phân xe', defaultVisible: true },
   { id: 'loaded_at', label: 'Ngày bốc hàng', defaultVisible: true },
   { id: 'received_at', label: 'Ngày nhận đơn', defaultVisible: false },
   { id: 'noi_den', label: 'Tỉnh đến', defaultVisible: true },
@@ -43,7 +43,7 @@ export const INVENTORY_COLUMNS: InventoryColumnDef[] = [
   { id: 'ma_kh', label: 'Mã KH', defaultVisible: true },
   { id: 'receiver_address', label: 'Địa chỉ đến', defaultVisible: true },
   { id: 'receiver_phone', label: 'SĐT người nhận', defaultVisible: true },
-  { id: 'package_count', label: 'Kiện (chuyến / đơn)', defaultVisible: true, align: 'right' },
+  { id: 'package_count', label: 'Kiện còn / đơn', defaultVisible: true, align: 'right' },
   { id: 'weight', label: 'Trọng lượng (kg)', defaultVisible: true, align: 'right' },
   { id: 'volume', label: 'Thể tích (m³)', defaultVisible: true, align: 'right' },
   { id: 'freight', label: 'Cước phí', defaultVisible: true, managerOnly: true, align: 'right' },

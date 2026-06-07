@@ -243,7 +243,8 @@ export class TripsService {
       .leftJoinAndSelect('trip.start_hub', 'start_hub')
       .leftJoinAndSelect('trip.end_hub', 'end_hub')
       .where('trip.status = :status', { status: TripStatus.IN_TRANSIT })
-      .orderBy('COALESCE(trip.expected_arrival_time, trip.arrival_time)', 'ASC', 'NULLS LAST')
+      .orderBy('trip.expected_arrival_time', 'ASC')
+      .addOrderBy('trip.arrival_time', 'ASC')
       .take(limit);
 
     const endHubId = query.end_hub_id != null ? String(query.end_hub_id) : currentUser.hub_id;
@@ -276,7 +277,8 @@ export class TripsService {
       .leftJoinAndSelect('trip.end_hub', 'end_hub')
       .where('trip.status IN (:...statuses)', { statuses: ALLOCATION_BOARD_STATUSES })
       .andWhere('trip.manifest_id IS NOT NULL')
-      .orderBy('COALESCE(trip.expected_arrival_time, trip.departure_time)', 'ASC', 'NULLS LAST')
+      .orderBy('trip.expected_arrival_time', 'ASC')
+      .addOrderBy('trip.departure_time', 'ASC')
       .take(limit);
 
     const endHubId = query.end_hub_id != null ? String(query.end_hub_id) : currentUser.hub_id;

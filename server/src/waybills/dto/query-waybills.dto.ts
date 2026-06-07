@@ -20,6 +20,7 @@ export class QueryWaybillsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() to_date?: string;
   @ApiPropertyOptional({ description: 'Alias for from_date used by inventory filters' }) @IsOptional() @IsString() received_from?: string;
   @ApiPropertyOptional({ description: 'Alias for to_date used by inventory filters' }) @IsOptional() @IsString() received_to?: string;
+  @ApiPropertyOptional({ description: 'Only waybills with remaining unallocated packages (1/true)' }) @IsOptional() @IsString() only_incomplete_split?: string;
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number = 1;
   @ApiPropertyOptional({ default: 20 }) @IsOptional() @Transform(normalizePaginationLimit) @IsInt() @Min(1) @Max(100) limit?: number = 20;
 }

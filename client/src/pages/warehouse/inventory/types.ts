@@ -63,6 +63,7 @@ export interface WaybillInventoryItem {
   truck_id?: string | number | null;
   trip_package_count?: number | null;
   order_total_packages?: number | null;
+  remaining_packages?: number | null;
   trip_label?: string | null;
   license_plate?: string | null;
   trip_nha_xe?: string | null;
@@ -111,6 +112,7 @@ export interface InventoryListResponse {
     total_lines?: number;
     page?: number;
     limit?: number;
+    only_incomplete_split?: boolean;
   };
 }
 
