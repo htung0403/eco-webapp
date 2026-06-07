@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { AlertTriangle, ArrowLeft, Building2, ChevronDown, Loader2, PackageCheck, Plus, RefreshCw, Search, Truck, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, Loader2, PackageCheck, Plus, Printer, RefreshCw, Search, Truck, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../../../lib/api';
@@ -8,6 +8,8 @@ import { FilterSelect } from '../../../components/ui/FilterSelect';
 import type { AuthUserProfile } from '../../login/types';
 import LoadPlanningTruckBoard from './LoadPlanningTruckBoard';
 import type { FilterOption, HubSummary, LoadPlanningBoardFilters, LoadPlanningBoardResponse } from './types';
+import { SPLIT_LOAD_STATUSES } from '../splits/splitLoadStatus';
+import { buildLoadPlanningQuery, mapLoadPlanningBoardToPrintPayload, saveLoadPlanningPrintPayload, summarizeLoadPlanningFilters } from '../../print/loadPlanningPrintUtils';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
 const MANAGER = 32;
@@ -18,6 +20,9 @@ const defaultFilters: LoadPlanningBoardFilters = {
   origin_hub_id: [],
   dest_hub_id: [],
   truck_id: [],
+  load_status: [],
+  date_from: '',
+  date_to: '',
 };
 
 const getStoredUser = (): AuthUserProfile | null => {
@@ -33,12 +38,14 @@ interface Props {
   bannerTitle?: string;
   bannerDescription?: string;
   showManifestButton?: boolean;
+  forcedLoadStatuses?: string[];
 }
 
 export default function LoadPlanningBoardPanel({
   bannerTitle = 'Phân xe · đóng xếp hàng',
   bannerDescription = 'Đơn đã phân xe tại tiếp nhận / tồn kho hiện theo từng biển số. Bấm trạng thái để cập nhật Chờ bốc → Đã tới.',
   showManifestButton = false,
+  forcedLoadStatuses,
 }: Props) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -53,6 +60,7 @@ export default function LoadPlanningBoardPanel({
   const [hubs, setHubs] = useState<HubSummary[]>([]);
   const [trucks, setTrucks] = useState<Array<{ id: string; label: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [error, setError] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<string[]>(['origin']);
@@ -65,7 +73,8 @@ export default function LoadPlanningBoardPanel({
     [hubs],
   );
   const truckOptions = useMemo(() => trucks.map((truck) => ({ value: truck.id, label: truck.label })), [trucks]);
-  const activeFilterCount = filters.origin_hub_id.length + filters.dest_hub_id.length + filters.truck_id.length;
+  const loadStatusOptions = useMemo(() => SPLIT_LOAD_STATUSES.map((status) => ({ value: status.value, label: status.label })), []);
+  const activeFilterCount = filters.origin_hub_id.length + filters.dest_hub_id.length + filters.truck_id.length + filters.load_status.length + (filters.date_from ? 1 : 0) + (filters.date_to ? 1 : 0);
   const truckGroups = board?.trucks ?? [];
 
   useEffect(() => {
@@ -83,9 +92,11 @@ export default function LoadPlanningBoardPanel({
 
   async function fetchOptions() {
     try {
+      const boardParams = new URLSearchParams({ limit: '100' });
+      if (forcedLoadStatuses?.length) boardParams.set('load_status', forcedLoadStatuses.join(','));
       const [hubResponse, boardResponse] = await Promise.all([
         apiRequest<HubSummary[]>('/hubs/active'),
-        apiRequest<LoadPlanningBoardResponse>('/waybills/load-planning/board?limit=100'),
+        apiRequest<LoadPlanningBoardResponse>(`/waybills/load-planning/board?${boardParams.toString()}`),
       ]);
       setHubs(Array.isArray(hubResponse) ? hubResponse : []);
       setTrucks(buildTruckOptions(boardResponse.trucks ?? []));
@@ -99,12 +110,7 @@ export default function LoadPlanningBoardPanel({
     setIsLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams({ limit: '100' });
-      if (filters.keyword.trim()) params.set('keyword', filters.keyword.trim());
-      if (filters.origin_hub_id.length) params.set('origin_hub_id', filters.origin_hub_id.join(','));
-      if (filters.dest_hub_id.length) params.set('dest_hub_id', filters.dest_hub_id.join(','));
-      if (filters.truck_id.length) params.set('truck_id', filters.truck_id.join(','));
-      const response = await apiRequest<LoadPlanningBoardResponse>(`/waybills/load-planning/board?${params.toString()}`);
+      const response = await apiRequest<LoadPlanningBoardResponse>(`/waybills/load-planning/board?${buildLoadPlanningQuery(filters, forcedLoadStatuses, 100)}`);
       setBoard(response);
       setTrucks(buildTruckOptions(response.trucks ?? []));
     } catch (err) {
@@ -123,6 +129,29 @@ export default function LoadPlanningBoardPanel({
   };
   const openFilters = () => { setDraftFilters(filters); setIsFilterOpen(true); };
   const applyFilters = () => { setFilters(draftFilters); setIsFilterOpen(false); };
+
+  async function printFilteredRows() {
+    setIsPrinting(true);
+    setError('');
+    try {
+      const response = await apiRequest<LoadPlanningBoardResponse>(`/waybills/load-planning/board?${buildLoadPlanningQuery(filters, forcedLoadStatuses, 500)}`);
+      const payload = mapLoadPlanningBoardToPrintPayload(
+        response,
+        canViewCost,
+        summarizeLoadPlanningFilters(filters, forcedLoadStatuses),
+      );
+      if (!payload.rows.length) {
+        setError('Không có dữ liệu phù hợp bộ lọc để in.');
+        return;
+      }
+      saveLoadPlanningPrintPayload(payload);
+      window.open('/print/load-planning-board', '_blank');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Không thể chuẩn bị dữ liệu in.');
+    } finally {
+      setIsPrinting(false);
+    }
+  }
 
   return (
     <div className="h-full min-h-0 flex flex-col gap-2">
@@ -150,6 +179,10 @@ export default function LoadPlanningBoardPanel({
             <button type="button" title="Làm mới" onClick={() => void fetchBoard()} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground hover:bg-muted">
               <RefreshCw size={16} />
             </button>
+            <button type="button" title="In phiếu" disabled={isPrinting || isLoading} onClick={() => void printFilteredRows()} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-primary/30 bg-blue-50 text-primary hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 md:w-auto md:px-3 md:gap-2">
+              {isPrinting ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
+              <span className="hidden md:inline text-[13px] font-extrabold">In phiếu</span>
+            </button>
             <button type="button" title="Mở bộ lọc" onClick={openFilters} className="relative h-10 w-10 rounded-lg border border-primary/30 bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center md:hidden">
               <PackageCheck size={16} />
               {activeFilterCount > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-white">{activeFilterCount}</span>}
@@ -173,6 +206,9 @@ export default function LoadPlanningBoardPanel({
             <FilterSelect multiple icon={Building2} placeholder="Bưu cục đi" options={hubOptions} value={filters.origin_hub_id} onValueChange={(value) => updateFilters({ origin_hub_id: value })} />
             <FilterSelect multiple icon={Building2} placeholder="Bưu cục đến" options={hubOptions} value={filters.dest_hub_id} onValueChange={(value) => updateFilters({ dest_hub_id: value })} />
             <FilterSelect multiple icon={Truck} placeholder="Biển số xe" options={truckOptions} value={filters.truck_id} onValueChange={(value) => updateFilters({ truck_id: value })} />
+            {!forcedLoadStatuses?.length && <FilterSelect multiple icon={PackageCheck} placeholder="Trạng thái" options={loadStatusOptions} value={filters.load_status} onValueChange={(value) => updateFilters({ load_status: value })} />}
+            <DateInput label="Từ ngày" value={filters.date_from} onChange={(value) => updateFilters({ date_from: value })} />
+            <DateInput label="Tới ngày" value={filters.date_to} onChange={(value) => updateFilters({ date_to: value })} />
           </div>
 
           {!isLoading && board && (
@@ -218,6 +254,8 @@ export default function LoadPlanningBoardPanel({
         setOpenGroups={setOpenGroups}
         hubOptions={hubOptions}
         truckOptions={truckOptions}
+        loadStatusOptions={forcedLoadStatuses?.length ? [] : loadStatusOptions}
+        onDateChange={(patch) => setDraftFilters((prev) => ({ ...prev, ...patch }))}
         onClose={() => setIsFilterOpen(false)}
         onApply={applyFilters}
       />
@@ -244,6 +282,21 @@ function StateBlock({ icon, title, description }: { icon: ReactNode; title: stri
   );
 }
 
+function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[12px] font-bold text-muted-foreground">
+      <CalendarDays size={14} className="text-primary" />
+      <span>{label}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-7 min-w-[132px] bg-transparent text-[12px] font-bold text-foreground outline-none"
+      />
+    </label>
+  );
+}
+
 function FilterBottomSheet({
   isOpen,
   draftFilters,
@@ -252,6 +305,8 @@ function FilterBottomSheet({
   setOpenGroups,
   hubOptions,
   truckOptions,
+  loadStatusOptions,
+  onDateChange,
   onClose,
   onApply,
 }: {
@@ -262,6 +317,8 @@ function FilterBottomSheet({
   setOpenGroups: Dispatch<SetStateAction<string[]>>;
   hubOptions: FilterOption[];
   truckOptions: FilterOption[];
+  loadStatusOptions: FilterOption[];
+  onDateChange: (patch: Pick<LoadPlanningBoardFilters, 'date_from'> | Pick<LoadPlanningBoardFilters, 'date_to'>) => void;
   onClose: () => void;
   onApply: () => void;
 }) {
@@ -270,9 +327,10 @@ function FilterBottomSheet({
     { id: 'origin', title: 'Bưu cục đi', key: 'origin_hub_id' as const, options: hubOptions },
     { id: 'dest', title: 'Bưu cục đến', key: 'dest_hub_id' as const, options: hubOptions },
     { id: 'truck', title: 'Biển số xe', key: 'truck_id' as const, options: truckOptions },
+    ...(loadStatusOptions.length ? [{ id: 'status', title: 'Trạng thái', key: 'load_status' as const, options: loadStatusOptions }] : []),
   ];
   const toggleGroup = (id: string) => setOpenGroups((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
-  const setArray = (key: 'origin_hub_id' | 'dest_hub_id' | 'truck_id', value: string[]) => setDraftFilters((prev) => ({ ...prev, [key]: value }));
+  const setArray = (key: 'origin_hub_id' | 'dest_hub_id' | 'truck_id' | 'load_status', value: string[]) => setDraftFilters((prev) => ({ ...prev, [key]: value }));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center md:hidden">
@@ -283,6 +341,22 @@ function FilterBottomSheet({
           <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground"><X size={18} /></button>
         </div>
         <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+          <div className="mb-3 rounded-2xl border border-border bg-white p-3">
+            <div className="mb-3 flex items-center gap-2 text-[13px] font-extrabold text-foreground">
+              <CalendarDays size={16} className="text-primary" />
+              Khoảng ngày bốc
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-[12px] font-bold text-muted-foreground">
+                Từ ngày
+                <input type="date" value={draftFilters.date_from} onChange={(event) => onDateChange({ date_from: event.target.value })} className="mt-1 h-10 w-full rounded-lg border border-border px-2 text-[13px] font-bold text-foreground outline-none" />
+              </label>
+              <label className="text-[12px] font-bold text-muted-foreground">
+                Tới ngày
+                <input type="date" value={draftFilters.date_to} onChange={(event) => onDateChange({ date_to: event.target.value })} className="mt-1 h-10 w-full rounded-lg border border-border px-2 text-[13px] font-bold text-foreground outline-none" />
+              </label>
+            </div>
+          </div>
           {groups.map((group) => (
             <FilterGroup
               key={group.id}

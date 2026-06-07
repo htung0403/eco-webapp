@@ -24,6 +24,21 @@ export class QueryLoadPlanningBoardDto {
   @IsString()
   truck_id?: string;
 
+  @ApiPropertyOptional({ description: 'Comma-separated split load statuses' })
+  @IsOptional()
+  @IsString()
+  load_status?: string;
+
+  @ApiPropertyOptional({ description: 'Filter dispatch date from YYYY-MM-DD' })
+  @IsOptional()
+  @IsString()
+  date_from?: string;
+
+  @ApiPropertyOptional({ description: 'Filter dispatch date to YYYY-MM-DD' })
+  @IsOptional()
+  @IsString()
+  date_to?: string;
+
   @ApiPropertyOptional({ description: 'Filter by company name (ten_cty / ma_kh / sender)' })
   @IsOptional()
   @IsString()
@@ -40,6 +55,6 @@ export class QueryLoadPlanningBoardDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(500)
   limit?: number = 50;
 }

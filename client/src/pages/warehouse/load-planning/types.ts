@@ -134,4 +134,7 @@ export interface LoadPlanningBoardFilters {
   origin_hub_id: string[];
   dest_hub_id: string[];
   truck_id: string[];
+  load_status: string[];
+  date_from: string;
+  date_to: string;
 }
