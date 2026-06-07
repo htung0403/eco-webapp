@@ -19,6 +19,8 @@ export interface Truck {
   status: TruckStatus;
   ten_lai_xe?: string | null;
   nha_xe?: string | null;
+  vendor_id?: string | number | null;
+  vendor?: { id?: string | number; name?: string | null; code?: string | null } | null;
   bks?: string | null;
   loai_xe?: string | null;
   khu_vuc?: string | null;
@@ -44,6 +46,7 @@ export interface TruckFormState {
   license_plate: string;
   bks: string;
   ten_lai_xe: string;
+  vendor_id: string;
   nha_xe: string;
   loai_xe: string;
   khu_vuc: string;

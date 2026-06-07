@@ -6,6 +6,8 @@ import { WaybillPriority, WaybillStatus } from './waybill.enums';
 
 export class QueryWaybillsDto {
   @ApiPropertyOptional() @IsOptional() @IsString() keyword?: string;
+  @ApiPropertyOptional({ description: 'Exact customer code (ma_kh)' }) @IsOptional() @IsString() ma_kh?: string;
+  @ApiPropertyOptional({ description: 'Filter waybills assigned to vendor trucks/trips' }) @IsOptional() @IsString() vendor_id?: string;
   @ApiPropertyOptional({ enum: WaybillStatus, description: 'Single status or comma-separated statuses' }) @IsOptional() @IsString() status?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() origin_hub_id?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() dest_hub_id?: string;

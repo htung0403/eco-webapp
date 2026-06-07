@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { BarChart3, Building2, Calculator, PackageSearch, Search, Truck, Users, Warehouse } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { BarChart3, Building2, Calculator, PackagePlus, PackageSearch, Search, Settings, Truck, Users, Warehouse } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ActionCard } from '../components/ui/ActionCard';
 import { getGreetingPeriod, getLoginDisplayName, getStoredAuthUser } from '../lib/authUser';
 import type { AuthUserProfile } from './login/types';
+
+const MANAGER_ROLES = 32 | 64;
+
+const WAREHOUSE_ORDER_ROLES = 1 | 2 | 32 | 64;
 
 const dashboardModules = [
   {
@@ -12,6 +16,14 @@ const dashboardModules = [
     description: 'Tồn kho, nhập đơn, tiếp nhận, manifest và đóng xếp hàng.',
     href: '/warehouse',
     colorScheme: 'blue' as const,
+  },
+  {
+    icon: PackagePlus,
+    title: 'Quản lý Đơn hàng',
+    description: 'Tạo đơn, tồn kho, tiếp nhận, ưu tiên giao và khách hàng.',
+    href: '/orders',
+    colorScheme: 'green' as const,
+    requiredRoleMask: WAREHOUSE_ORDER_ROLES,
   },
   {
     icon: PackageSearch,
@@ -61,6 +73,15 @@ const dashboardModules = [
     description: 'Bưu cục, xe & tài xế, NCC, in phiếu và hồ sơ cá nhân.',
     href: '/admin',
     colorScheme: 'blue' as const,
+    requiredRoleMask: MANAGER_ROLES,
+  },
+  {
+    icon: Settings,
+    title: 'Cấu hình NCC',
+    description: 'Danh sách nhà cung cấp vận tải đường trục, tuyến và bảng giá.',
+    href: '/admin/vendors',
+    colorScheme: 'purple' as const,
+    requiredRoleMask: MANAGER_ROLES,
   },
 ];
 
@@ -69,6 +90,14 @@ const Dashboard: React.FC = () => {
   const [user, setUser] = useState<AuthUserProfile | null>(() => getStoredAuthUser());
   const loginName = getLoginDisplayName(user);
   const greetingPeriod = getGreetingPeriod();
+  const roleMask = user?.role_mask ?? 0;
+  const visibleModules = useMemo(
+    () =>
+      dashboardModules.filter(
+        module => !module.requiredRoleMask || (roleMask & module.requiredRoleMask) !== 0,
+      ),
+    [roleMask],
+  );
 
   useEffect(() => {
     const syncUser = () => setUser(getStoredAuthUser());
@@ -117,7 +146,7 @@ const Dashboard: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-          {dashboardModules.map((module) => (
+          {visibleModules.map((module) => (
             <ActionCard key={module.href} {...module} />
           ))}
         </div>

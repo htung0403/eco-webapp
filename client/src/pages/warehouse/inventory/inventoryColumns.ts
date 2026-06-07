@@ -1,7 +1,9 @@
 import type { WaybillInventoryItem } from './types';
 
 export type InventoryColumnId =
+  | 'order_code'
   | 'waybill_code'
+  | 'trip_label'
   | 'loaded_at'
   | 'received_at'
   | 'noi_den'
@@ -31,7 +33,9 @@ export interface InventoryColumnDef {
 }
 
 export const INVENTORY_COLUMNS: InventoryColumnDef[] = [
+  { id: 'order_code', label: 'Mã đơn hàng', defaultVisible: true },
   { id: 'waybill_code', label: 'Mã vận đơn', defaultVisible: true },
+  { id: 'trip_label', label: 'Xe / chuyến', defaultVisible: true },
   { id: 'loaded_at', label: 'Ngày bốc hàng', defaultVisible: true },
   { id: 'received_at', label: 'Ngày nhận đơn', defaultVisible: false },
   { id: 'noi_den', label: 'Tỉnh đến', defaultVisible: true },
@@ -39,7 +43,7 @@ export const INVENTORY_COLUMNS: InventoryColumnDef[] = [
   { id: 'ma_kh', label: 'Mã KH', defaultVisible: true },
   { id: 'receiver_address', label: 'Địa chỉ đến', defaultVisible: true },
   { id: 'receiver_phone', label: 'SĐT người nhận', defaultVisible: true },
-  { id: 'package_count', label: 'Số kiện', defaultVisible: true, align: 'right' },
+  { id: 'package_count', label: 'Kiện (chuyến / đơn)', defaultVisible: true, align: 'right' },
   { id: 'weight', label: 'Trọng lượng (kg)', defaultVisible: true, align: 'right' },
   { id: 'volume', label: 'Thể tích (m³)', defaultVisible: true, align: 'right' },
   { id: 'freight', label: 'Cước phí', defaultVisible: true, managerOnly: true, align: 'right' },
@@ -49,11 +53,11 @@ export const INVENTORY_COLUMNS: InventoryColumnDef[] = [
   { id: 'dest_hub', label: 'Hub đến', defaultVisible: false },
   { id: 'payment_type', label: 'TT', defaultVisible: false },
   { id: 'cod_amount', label: 'COD', defaultVisible: true, align: 'right' },
-  { id: 'priority', label: 'Ưu tiên', defaultVisible: false },
+  { id: 'priority', label: 'Ưu tiên', defaultVisible: true },
   { id: 'actions', label: 'Thao tác', defaultVisible: true },
 ];
 
-export const INVENTORY_COLUMN_STORAGE_KEY = 'eco_inventory_visible_columns_v4';
+export const INVENTORY_COLUMN_STORAGE_KEY = 'eco_inventory_visible_columns_v5';
 
 export function getDefaultVisibleColumnIds(canViewPricing: boolean): InventoryColumnId[] {
   return INVENTORY_COLUMNS.filter((col) => {
@@ -73,8 +77,16 @@ export function loadVisibleColumnIds(canViewPricing: boolean): InventoryColumnId
       INVENTORY_COLUMNS.filter((c) => !c.managerOnly || canViewPricing).map((c) => c.id),
     );
     const filtered = parsed.filter((id) => allowed.has(id));
-    if (!filtered.includes('waybill_code')) filtered.unshift('waybill_code');
+    if (!filtered.includes('order_code')) filtered.unshift('order_code');
+    if (!filtered.includes('waybill_code')) {
+      const orderIdx = filtered.indexOf('order_code');
+      filtered.splice(orderIdx + 1, 0, 'waybill_code');
+    }
     if (!filtered.includes('actions')) filtered.push('actions');
+    if (!filtered.includes('priority')) {
+      const actionsIdx = filtered.indexOf('actions');
+      filtered.splice(actionsIdx >= 0 ? actionsIdx : filtered.length, 0, 'priority');
+    }
     return filtered.length ? filtered : getDefaultVisibleColumnIds(canViewPricing);
   } catch {
     return getDefaultVisibleColumnIds(canViewPricing);
@@ -183,12 +195,20 @@ export function getStorageAgeRowClass(waybill: WaybillInventoryItem): string {
 
 export function computeGrandTotals(waybills: WaybillInventoryItem[], includeFreight: boolean): InventoryGrandTotals {
   return waybills.reduce(
-    (acc, w) => ({
-      package_count: acc.package_count + Math.max(1, Number(w.package_count || w.declared_package_count || 0)),
-      weight_kg: acc.weight_kg + resolveWeightKg(w),
-      volume_m3: acc.volume_m3 + resolveVolumeM3(w),
-      freight: acc.freight + (includeFreight ? resolveFreight(w) : 0),
-    }),
+    (acc, w) => {
+      const packages = Math.max(
+        1,
+        Number(w.trip_package_count ?? w.package_count ?? w.declared_package_count ?? 0),
+      );
+      const totalPackages = Math.max(1, Number(w.order_total_packages ?? w.package_count ?? packages));
+      const ratio = packages / totalPackages;
+      return {
+        package_count: acc.package_count + packages,
+        weight_kg: acc.weight_kg + resolveWeightKg(w) * ratio,
+        volume_m3: acc.volume_m3 + resolveVolumeM3(w) * ratio,
+        freight: acc.freight + (includeFreight ? (Number(w.allocated_freight ?? resolveFreight(w)) || 0) : 0),
+      };
+    },
     { package_count: 0, weight_kg: 0, volume_m3: 0, freight: 0 },
   );
 }

@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Search, ChevronLeft } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ModuleCard } from '../components/ui/ModuleCard';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { moduleData } from '../data/moduleData';
+import { getVisibleItems, moduleData } from '../data/moduleData';
 import { sidebarMenu } from '../data/sidebarMenu';
+import { getStoredAuthUser } from '../lib/authUser';
 import WarehouseCustomerList from './warehouse/customers/WarehouseCustomerList';
 
 type ModuleTab = 'tat-ca' | 'danh-dau' | 'khach-hang';
@@ -15,19 +16,31 @@ const ModulePage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isWarehouse = location.pathname === '/warehouse';
+  const isOrders = location.pathname === '/orders';
   const data = moduleData[location.pathname] || [];
   const currentItem = sidebarMenu.find((item) => item.path === location.pathname);
+  const roleMask = getStoredAuthUser()?.role_mask ?? 0;
+
+  const visibleSections = useMemo(
+    () =>
+      data
+        .map(section => ({
+          ...section,
+          items: getVisibleItems(section, roleMask),
+        }))
+        .filter(section => section.items.length > 0),
+    [data, roleMask],
+  );
 
   useEffect(() => {
     const tab = (location.state as { tab?: ModuleTab } | null)?.tab;
-    if (isWarehouse && tab === 'khach-hang') {
+    if (isOrders && tab === 'khach-hang') {
       setActiveTab('khach-hang');
     }
-  }, [isWarehouse, location.state]);
+  }, [isOrders, location.state]);
 
   const searchPlaceholder =
-    isWarehouse && activeTab === 'khach-hang'
+    isOrders && activeTab === 'khach-hang'
       ? 'Tìm mã KH, tên, SĐT, địa chỉ...'
       : 'Tìm module theo tên hoặc mô tả...';
 
@@ -75,7 +88,7 @@ const ModulePage: React.FC = () => {
           >
             Đánh dấu
           </button>
-          {isWarehouse && (
+          {isOrders && (
             <button
               onClick={() => setActiveTab('khach-hang')}
               className={clsx(
@@ -104,15 +117,15 @@ const ModulePage: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'khach-hang' && isWarehouse ? (
+      {activeTab === 'khach-hang' && isOrders ? (
         <WarehouseCustomerList embedded keyword={searchQuery} />
       ) : activeTab === 'danh-dau' ? (
         <div className="text-center py-16 text-muted-foreground bg-card/50 rounded-2xl border border-border mt-4">
           Chưa có module nào được đánh dấu.
         </div>
-      ) : data.length > 0 ? (
+      ) : visibleSections.length > 0 ? (
         <div className="space-y-8">
-          {data.map((section, idx) => {
+          {visibleSections.map((section, idx) => {
             const filteredItems = section.items.filter(
               (item) =>
                 item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -145,7 +158,7 @@ const ModulePage: React.FC = () => {
           })}
 
           {searchQuery &&
-            !data.some((s) =>
+            !visibleSections.some((s) =>
               s.items.some(
                 (i) =>
                   i.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

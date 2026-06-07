@@ -96,19 +96,47 @@ export function hubIdFromCode(hubs: HubSummary[], code: string) {
   return String(hubs.find((h) => h.code?.toUpperCase() === normalized)?.id || '');
 }
 
+/** Chuẩn hóa SĐT VN: bỏ khoảng trắng, +84 → 0, thiếu số 0 đầu thì bổ sung */
+export function normalizeVnPhone(raw: string): string {
+  let digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('84') && digits.length >= 11) digits = `0${digits.slice(2)}`;
+  if (digits.length === 9 && /^[35789]/.test(digits)) digits = `0${digits}`;
+  return digits;
+}
+
+export function isValidVnPhone(raw: string): boolean {
+  const phone = normalizeVnPhone(raw);
+  if (!phone) return false;
+  if (/^0(3|5|7|8|9)\d{8}$/.test(phone)) return true;
+  if (/^0(2[0-9]|24|28)\d{7,8}$/.test(phone)) return true;
+  return /^0\d{9,10}$/.test(phone);
+}
+
+function parseContactInfo(info?: string | null) {
+  const parts = (info || '').split('|').map((part) => part.trim());
+  return {
+    name: parts[0] || '',
+    phone: parts[1] || '',
+    address: parts[2] || '',
+  };
+}
+
 function waybillToOrderFormBase(waybill: WaybillDetail, hubs: HubSummary[]): NewOrderFormState {
   const destId = waybill.dest_hub_id ? String(waybill.dest_hub_id) : '';
   const originId = waybill.origin_hub_id ? String(waybill.origin_hub_id) : '';
   const destCode = waybill.dest_hub?.code?.toUpperCase() || hubCodeFromId(hubs, destId);
+  const sender = parseContactInfo(waybill.sender_info);
+  const receiver = parseContactInfo(waybill.receiver_info);
 
   return {
     ...emptyOrderForm(),
-    maKh: waybill.sender_info?.split('|')[0]?.trim() || '',
-    nguoiGui: waybill.sender_info?.split('|')[1]?.trim() || waybill.sender_info || '',
-    diaChiGui: waybill.sender_info?.split('|')[2]?.trim() || '',
-    dienThoaiNhan: waybill.receiver_info?.split('|')[0]?.trim() || '',
-    nguoiNhan: waybill.receiver_info?.split('|')[1]?.trim() || waybill.receiver_info || '',
-    diaChiNhan: waybill.receiver_address || waybill.receiver_info?.split('|')[2]?.trim() || waybill.receiver_info || '',
+    maKh: waybill.ma_kh?.trim() || '',
+    nguoiGui: waybill.sender_name?.trim() || sender.name || waybill.sender_info || '',
+    diaChiGui: waybill.sender_address?.trim() || sender.address || '',
+    dienThoaiKh: waybill.sender_phone?.trim() || sender.phone || '',
+    dienThoaiNhan: waybill.receiver_phone?.trim() || receiver.phone || '',
+    nguoiNhan: waybill.receiver_name?.trim() || receiver.name || waybill.receiver_info || '',
+    diaChiNhan: waybill.receiver_address?.trim() || receiver.address || waybill.receiver_info || '',
     noiDen: destCode || 'HCM',
     originHubId: originId,
     destHubId: destId,
@@ -128,6 +156,8 @@ function waybillToOrderFormBase(waybill: WaybillDetail, hubs: HubSummary[]): New
     phuongThuc:
       waybill.payment_type === 'COD' ? 'COD' : waybill.payment_type === 'CC' ? 'Tiền mặt' : 'Công nợ tháng',
     ghiChu: waybill.note || waybill.notes || '',
+    xeLay: String((waybill as { xe_lay?: string }).xe_lay ?? ''),
+    xePhat: String((waybill as { xe_phat?: string }).xe_phat ?? ''),
     trangThai: String(waybill.current_state || waybill.status || 'RECEIVED'),
   };
 }
@@ -157,11 +187,12 @@ export function buildCreatePayload(form: NewOrderFormState, volumetricWeight: nu
   const cod = parseNumber(form.cod);
 
   return {
+    waybill_code: form.soBill.trim().toUpperCase(),
     sender_name: form.nguoiGui.trim(),
     sender_phone: form.dienThoaiKh.trim() || '0900000000',
     sender_address: form.diaChiGui.trim() || form.nguoiGui.trim(),
     receiver_name: form.nguoiNhan.trim(),
-    receiver_phone: form.dienThoaiNhan.trim() || '0900000000',
+    receiver_phone: normalizeVnPhone(form.dienThoaiNhan.trim()) || '0900000000',
     receiver_address: form.diaChiNhan.trim(),
     origin_hub_id: form.originHubId,
     dest_hub_id: form.destHubId,
@@ -169,6 +200,8 @@ export function buildCreatePayload(form: NewOrderFormState, volumetricWeight: nu
     package_count: Math.max(1, parseInt(form.soKien, 10) || 1),
     freight_amount: paymentType === 'COD' ? 0 : freight,
     cod_amount: paymentType === 'COD' ? cod || freight : undefined,
+    xe_lay: form.xeLay.trim() || undefined,
+    xe_phat: form.xePhat.trim() || undefined,
     note: [
       form.maKh && `ma_kh=${form.maKh}`,
       form.noiDung && `content=${form.noiDung}`,

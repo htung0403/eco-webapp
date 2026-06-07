@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { getDatabaseUrl, getDatabaseUrlHelp, isSupabaseDirectDatabaseUrl } from './database-url';
 import { AuthModule } from './auth/auth.module';
 import { CarrierDirectoryModule } from './carrier-directory/carrier-directory.module';
+import { FundBalanceModule } from './fund-balances/fund-balance.module';
 import { CashJournalEntryModule } from './cash-journal-entries/cash-journal-entry.module';
 import { CashTransactionDetailModule } from './cash-transaction-details/cash-transaction-detail.module';
 import { ChanhShipmentModule } from './chanh-shipments/chanh-shipment.module';
@@ -28,6 +29,7 @@ import { VehicleCostModule } from './vehicle-costs/vehicle-cost.module';
 import { VehicleDirectoryModule } from './vehicle-directory/vehicle-directory.module';
 import { WaybillsModule } from './waybills/waybills.module';
 import { WarehouseModule } from './warehouses/warehouse.module';
+import { OrdersModule } from './orders/orders.module';
 
 const getPositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -79,6 +81,7 @@ const getPositiveInteger = (value: string | undefined, fallback: number) => {
     CustomersModule,
     UsersModule,
     WaybillsModule,
+    OrdersModule,
     ManifestsModule,
     TrucksModule,
     VendorsModule,
@@ -98,6 +101,7 @@ const getPositiveInteger = (value: string | undefined, fallback: number) => {
     ChanhShipmentModule,
     CustomerDirectoryModule,
     CashJournalEntryModule,
+    FundBalanceModule,
     WarehouseModule,
   ],
   controllers: [AppController],

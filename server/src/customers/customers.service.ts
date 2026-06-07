@@ -138,13 +138,23 @@ export class CustomersService {
 
     try {
       const rows: Array<{ code: string; cnt: string }> = await this.customersRepository.manager.query(
-        `SELECT UPPER(TRIM(ma_kh)) AS code, COUNT(*)::int AS cnt
-         FROM waybills
-         WHERE deleted_at IS NULL
-           AND ma_kh IS NOT NULL
-           AND TRIM(ma_kh) <> ''
-           AND UPPER(TRIM(ma_kh)) = ANY($1)
-         GROUP BY UPPER(TRIM(ma_kh))`,
+        `SELECT UPPER(TRIM(code)) AS code, COUNT(*)::int AS cnt
+         FROM (
+           SELECT ma_kh AS code
+           FROM waybills
+           WHERE deleted_at IS NULL
+             AND ma_kh IS NOT NULL
+             AND TRIM(ma_kh) <> ''
+             AND UPPER(TRIM(ma_kh)) = ANY($1)
+           UNION ALL
+           SELECT (regexp_match(note, 'ma_kh=([^|]+)', 'i'))[1] AS code
+           FROM waybills
+           WHERE deleted_at IS NULL
+             AND note ILIKE '%ma_kh=%'
+             AND UPPER(TRIM((regexp_match(note, 'ma_kh=([^|]+)', 'i'))[1])) = ANY($1)
+         ) matched
+         WHERE code IS NOT NULL AND TRIM(code) <> ''
+         GROUP BY UPPER(TRIM(code))`,
         [normalized],
       );
       for (const row of rows) {

@@ -30,6 +30,8 @@ import {
   UserCheck,
   Users,
   Warehouse,
+  Receipt,
+  Wallet,
 } from 'lucide-react';
 import type { ModuleCardProps } from '../components/ui/ModuleCard';
 
@@ -68,10 +70,7 @@ export const moduleGroups: ModuleGroup[] = [
     requiredRoleMask: WAREHOUSE_ROLES,
     items: [
       { icon: Warehouse, title: 'Danh sách đơn tồn kho', description: 'Theo dõi vận đơn đang lưu tại bưu cục.', colorScheme: 'blue', path: '/warehouse/inventory', requiredRoleMask: WAREHOUSE_ROLES, isHidden: true },
-      { icon: Users, title: 'Danh sách Khách hàng', description: 'Tra cứu mã KH và thông tin người gửi từ vận đơn.', colorScheme: 'emerald', path: '/warehouse/customers', requiredRoleMask: WAREHOUSE_ROLES },
       { icon: Warehouse, title: 'Kho', description: 'Quản lý danh mục kho vận hành.', colorScheme: 'slate', path: '/warehouse/warehouses', requiredRoleMask: WAREHOUSE_ROLES },
-      { icon: PackagePlus, title: 'Nhập đơn mới', description: 'Tạo vận đơn và ghi nhận thông tin gửi hàng.', colorScheme: 'green', path: '/warehouse/orders/new', requiredRoleMask: WAREHOUSE_STAFF },
-      { icon: PackageCheck, title: 'Tiếp nhận đơn tại kho', description: 'Scan mã và cập nhật trạng thái nhập kho.', colorScheme: 'teal', path: '/warehouse/orders/:id/receive', requiredRoleMask: WAREHOUSE_STAFF },
       { icon: AlertTriangle, title: 'Dự kiến xe đến', description: 'Xe đang chạy — sắp xếp theo giờ đến kho HCM.', colorScheme: 'orange', path: '/warehouse/expected-arrivals', requiredRoleMask: WAREHOUSE_ROLES | DISPATCHER },
       { icon: AlertTriangle, title: 'Thông báo hàng đến dự kiến', description: 'Theo dõi danh sách hàng sắp về bưu cục.', colorScheme: 'orange', path: '/warehouse/incoming', requiredRoleMask: WAREHOUSE_ROLES, isHidden: true },
       { icon: ListChecks, title: 'Phân loại ưu tiên giao hàng', description: 'Sắp xếp vận đơn theo mức độ ưu tiên.', colorScheme: 'purple', path: '/warehouse/priority', requiredRoleMask: WAREHOUSE_ROLES },
@@ -81,12 +80,25 @@ export const moduleGroups: ModuleGroup[] = [
     ],
   },
   {
+    id: 'orders',
+    path: '/orders',
+    section: 'Quản lý Đơn hàng',
+    requiredRoleMask: WAREHOUSE_ROLES | MANAGER_ROLES,
+    items: [
+      { icon: PackagePlus, title: 'Nhập đơn mới', description: 'Tạo vận đơn và ghi nhận thông tin gửi hàng.', colorScheme: 'green', path: '/orders/new', requiredRoleMask: WAREHOUSE_STAFF | MANAGER_ROLES },
+      { icon: Users, title: 'Danh sách Khách hàng', description: 'Tra cứu mã KH và thông tin người gửi từ vận đơn.', colorScheme: 'emerald', path: '/orders/customers', requiredRoleMask: WAREHOUSE_ROLES | MANAGER_ROLES },
+      { icon: Warehouse, title: 'Danh sách đơn tồn kho', description: 'Theo dõi vận đơn đang lưu tại bưu cục.', colorScheme: 'blue', path: '/warehouse/inventory', requiredRoleMask: WAREHOUSE_ROLES | MANAGER_ROLES, isHidden: true },
+      { icon: AlertTriangle, title: 'Thông báo hàng đến dự kiến', description: 'Theo dõi danh sách hàng sắp về bưu cục.', colorScheme: 'orange', path: '/warehouse/incoming', requiredRoleMask: WAREHOUSE_ROLES | MANAGER_ROLES, isHidden: true },
+      { icon: ListChecks, title: 'Phân loại ưu tiên giao hàng', description: 'Sắp xếp vận đơn theo mức độ ưu tiên.', colorScheme: 'purple', path: '/warehouse/priority', requiredRoleMask: WAREHOUSE_ROLES | MANAGER_ROLES },
+      { icon: FileSearch, title: 'Tìm kiếm vận đơn', description: 'Tra cứu vận đơn theo mã, trạng thái và bưu cục.', colorScheme: 'slate', path: '/search/waybills' },
+    ],
+  },
+  {
     id: 'delivery',
     path: '/delivery',
     section: 'Quản lý giao hàng',
     requiredRoleMask: DELIVERY_ROLES,
     items: [
-      { icon: Route, title: 'Tách hàng theo tuyến giao', description: 'Phân tuyến giao hàng theo địa bàn.', colorScheme: 'blue', path: '/delivery/routing', requiredRoleMask: DISPATCHER },
       { icon: Handshake, title: 'Bàn giao vận đơn cho tài xế', description: 'Bàn giao đơn cho tài xế chặng cuối.', colorScheme: 'green', path: '/delivery/handover', requiredRoleMask: DISPATCHER },
       { icon: TruckIcon, title: 'Giao hàng dọc đường (chành)', description: 'Ghi nhận giao hàng trong hành trình.', colorScheme: 'teal', path: '/delivery/en-route', requiredRoleMask: DRIVER },
       { icon: Building2, title: 'Giao hàng tại bưu cục đích', description: 'Xử lý đơn tại điểm nhận đích.', colorScheme: 'purple', path: '/delivery/hub-dropoff', requiredRoleMask: DISPATCHER },
@@ -103,11 +115,8 @@ export const moduleGroups: ModuleGroup[] = [
     requiredRoleMask: DISPATCHER,
     items: [
       { icon: Truck, title: 'Danh sách chuyến xe', description: 'Theo dõi các chuyến xe đường trục.', colorScheme: 'blue', path: '/trips/list', requiredRoleMask: DISPATCHER },
-      { icon: PackagePlus, title: 'Tạo chuyến xe mới (NCC)', description: 'Tạo chuyến cho nhà cung cấp vận tải.', colorScheme: 'green', path: '/trips/new', requiredRoleMask: DISPATCHER },
-      { icon: FileText, title: 'Chi tiết chuyến xe', description: 'Xem thông tin xe, manifest và hành trình.', colorScheme: 'teal', path: '/trips/:id', requiredRoleMask: DISPATCHER },
-      { icon: PackageCheck, title: 'Vị trí xếp hàng', description: 'Đánh số thứ tự dỡ hàng sau khi xe khởi hành.', colorScheme: 'amber', path: '/trips/:id/loading-sequence', requiredRoleMask: DISPATCHER },
-      { icon: Fuel, title: 'Chi phí phát sinh chuyến', description: 'Ghi nhận dầu và chi phí dọc đường.', colorScheme: 'orange', path: '/trips/:id/expenses', requiredRoleMask: DISPATCHER },
-      { icon: BadgeDollarSign, title: 'Lãi/lỗ tạm tính chuyến', description: 'Theo dõi hiệu quả chi phí chuyến xe.', colorScheme: 'purple', path: '/trips/:id/profit', requiredRoleMask: MANAGER, isHidden: true },
+      { icon: Fuel, title: 'Chi phí phát sinh chuyến', description: 'Ghi nhận dầu và chi phí dọc đường.', colorScheme: 'orange', path: '/trips/expenses', requiredRoleMask: DISPATCHER },
+      { icon: BadgeDollarSign, title: 'Lãi/lỗ tạm tính chuyến', description: 'Theo dõi hiệu quả chi phí chuyến xe.', colorScheme: 'purple', path: '/trips/profit', requiredRoleMask: MANAGER, isHidden: true },
       { icon: TruckIcon, title: 'Quản lý xe đường trục', description: 'Quản lý phương tiện chạy tuyến đường trục và trạng thái khai thác.', colorScheme: 'cyan', path: '/trips/trunk-vehicles', requiredRoleMask: DISPATCHER },
       { icon: TruckIcon, title: 'Quản lý xe nội bộ', description: 'Quản lý đội xe và định mức nhiên liệu.', colorScheme: 'cyan', path: '/trucks', requiredRoleMask: DISPATCHER },
       { icon: ShieldCheck, title: 'Chấm điểm tài xế', description: 'Đánh giá hiệu suất tài xế vận tải.', colorScheme: 'amber', path: '/drivers/performance', requiredRoleMask: DISPATCHER },
@@ -166,7 +175,6 @@ export const moduleGroups: ModuleGroup[] = [
         path: '/hr/staff',
         requiredRoleMask: MANAGER_ROLES,
       },
-      { icon: IdCard, title: 'Nhân sự', description: 'Quản lý hồ sơ nhân sự theo bộ phận, vị trí và SĐT.', colorScheme: 'purple', path: '/hr/staff-members', requiredRoleMask: MANAGER_ROLES },
       {
         icon: Clock,
         title: 'Chấm công',
@@ -188,7 +196,8 @@ export const moduleGroups: ModuleGroup[] = [
       { icon: CreditCard, title: 'Phê duyệt chi phí NCC đường trục', description: 'Duyệt chi phí nhà cung cấp vận tải.', colorScheme: 'purple', path: '/finance/approve/vendor', requiredRoleMask: ACCOUNTANT },
       { icon: Building2, title: 'Công nợ & Thanh toán NCC', description: 'Bảng kê chuyến, phiếu chi và sổ cái dư nợ nhà xe.', colorScheme: 'pink', path: '/finance/vendor-debt', requiredRoleMask: ACCOUNTANT },
       { icon: Calculator, title: 'Đối soát tiền mặt bưu cục', description: 'Theo dõi COD, CC và nộp tiền bưu cục.', colorScheme: 'amber', path: '/finance/hub-reconciliation', requiredRoleMask: ACCOUNTANT },
-      { icon: Banknote, title: 'Thu chi CT', description: 'Quản lý phiếu thu chi chi tiết theo chi phí xe.', colorScheme: 'teal', path: '/finance/cash-transaction-details', requiredRoleMask: ACCOUNTANT | MANAGER_ROLES },
+      { icon: Receipt, title: 'Phiếu thu chi', description: 'Lập và tra cứu phiếu thu, phiếu chi theo chi phí xe.', colorScheme: 'teal', path: '/finance/cash-vouchers', requiredRoleMask: ACCOUNTANT | MANAGER_ROLES },
+      { icon: Wallet, title: 'Số quỹ', description: 'Theo dõi số dư quỹ tiền mặt theo mã quỹ và bưu cục.', colorScheme: 'emerald', path: '/finance/fund-balances', requiredRoleMask: ACCOUNTANT | MANAGER_ROLES },
       { icon: ClipboardList, title: 'Nhật ký thu chi', description: 'Ghi nhận thu nhập và chi phí theo nguồn/phân loại.', colorScheme: 'slate', path: '/finance/cash-journal', requiredRoleMask: ACCOUNTANT | MANAGER_ROLES },
     ],
   },
@@ -212,22 +221,30 @@ export const moduleGroups: ModuleGroup[] = [
       { icon: Building2, title: 'Quản lý bưu cục', description: 'Quản lý bưu cục HAN, HCM và thông tin liên quan.', colorScheme: 'blue', path: '/admin/hubs', requiredRoleMask: DIRECTOR },
       { icon: TruckIcon, title: 'Quản lý xe & tài xế', description: 'Quản lý phương tiện, tài xế và phân công.', colorScheme: 'teal', path: '/admin/trucks', requiredRoleMask: DIRECTOR },
       { icon: Route, title: 'Danh mục tuyến giao', description: 'Mã tuyến dùng khi gán vận đơn và in tồn kho.', colorScheme: 'cyan', path: '/admin/routes', requiredRoleMask: DISPATCHER | MANAGER_ROLES },
-      { icon: Settings, title: 'Cấu hình NCC đường trục', description: 'Thiết lập nhà cung cấp vận tải đường trục.', colorScheme: 'purple', path: '/admin/vendors', requiredRoleMask: DIRECTOR },
-      { icon: TruckIcon, title: 'Nhà xe', description: 'Quản lý khu vực, nhà cung cấp và BKS.', colorScheme: 'cyan', path: '/admin/carriers', requiredRoleMask: DIRECTOR },
+      { icon: Settings, title: 'Cấu hình NCC đường trục', description: 'Thiết lập nhà cung cấp vận tải đường trục.', colorScheme: 'purple', path: '/admin/vendors', requiredRoleMask: MANAGER_ROLES },
+      { icon: TruckIcon, title: 'Nhà xe', description: 'Gán BKS theo khu vực; nhà xe chọn từ NCC đường trục.', colorScheme: 'cyan', path: '/admin/carriers', requiredRoleMask: MANAGER_ROLES },
       { icon: Printer, title: 'In phiếu giao nhận', description: 'Template in phiếu giao nhận riêng.', colorScheme: 'orange', path: '/print/waybill/:id', isPrint: true },
       { icon: IdCard, title: 'Hồ sơ & cài đặt cá nhân', description: 'Quản lý hồ sơ và tuỳ chọn cá nhân.', colorScheme: 'green', path: '/profile' },
     ],
   },
 ];
 
-export const getVisibleItems = (group: ModuleGroup, roleMask: number): ModuleCardItem[] =>
-  group.items.filter((item) => {
-    if (item.isHidden && (roleMask & MANAGER) === 0) {
+export const getVisibleItems = (group: ModuleGroup, roleMask: number): ModuleCardItem[] => {
+  const isManagerPlus = (roleMask & MANAGER_ROLES) !== 0;
+
+  return group.items.filter((item) => {
+    if (item.isHidden && !isManagerPlus) {
       return false;
+    }
+
+    // MANAGER/DIRECTOR: xem toàn bộ module (trừ mục ẩn đã lọc ở trên)
+    if (isManagerPlus) {
+      return true;
     }
 
     return !item.requiredRoleMask || (roleMask & item.requiredRoleMask) !== 0;
   });
+};
 
 export const moduleData: Record<string, ModuleGroup[]> = moduleGroups.reduce<Record<string, ModuleGroup[]>>(
   (data, group) => ({

@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
 
 export class CreateWaybillDto {
+  @ApiProperty({ description: 'Số bill nhập tay' }) @IsString() @IsNotEmpty() waybill_code: string;
   @ApiProperty() @IsString() @IsNotEmpty() sender_name: string;
   @ApiProperty() @IsString() @IsNotEmpty() sender_phone: string;
   @ApiProperty() @IsString() @IsNotEmpty() sender_address: string;
@@ -16,5 +17,13 @@ export class CreateWaybillDto {
   @ApiPropertyOptional({ default: 0 }) @IsOptional() @IsNumber() @Min(0) freight_amount?: number;
   @ApiPropertyOptional({ default: 0 }) @IsOptional() @IsNumber() @Min(0) cc_amount?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() note?: string;
+  @ApiPropertyOptional({ description: 'Biển số xe lấy hàng — nhiều xe cách nhau bởi dấu phẩy' })
+  @IsOptional()
+  @IsString()
+  xe_lay?: string;
+  @ApiPropertyOptional({ description: 'Biển số xe phát hàng — nhiều xe cách nhau bởi dấu phẩy' })
+  @IsOptional()
+  @IsString()
+  xe_phat?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() expected_delivery_at?: string;
 }

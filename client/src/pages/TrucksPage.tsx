@@ -27,6 +27,7 @@ import {
   khuVucValueFromColumnId,
 } from './trucks/data';
 import type { DriverSummary, FilterOption, Truck, TruckFilters, TruckFormState, TruckListResponse } from './trucks/types';
+import { fetchVendorSelectOptions, findVendorOption } from '../lib/vendorOptions';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
 const DISPATCHER = 8;
@@ -37,6 +38,7 @@ const emptyForm: TruckFormState = {
   license_plate: '',
   bks: '',
   ten_lai_xe: '',
+  vendor_id: '',
   nha_xe: '',
   loai_xe: '',
   khu_vuc: '',
@@ -99,6 +101,7 @@ export default function TrucksPage() {
   const [isFormClosing, setIsFormClosing] = useState(false);
   const [isDetailClosing, setIsDetailClosing] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
+  const [vendorOptions, setVendorOptions] = useState<FilterOption[]>([]);
 
   const user = useMemo(getStoredUser, []);
   const roleMask = user?.role_mask ?? 0;
@@ -126,6 +129,14 @@ export default function TrucksPage() {
 
   useEffect(() => {
     if (canView) void loadDrivers();
+  }, [canView]);
+
+  useEffect(() => {
+    if (canView) {
+      void fetchVendorSelectOptions()
+        .then(options => setVendorOptions(options.map(option => ({ value: option.value, label: option.label }))))
+        .catch(() => setVendorOptions([]));
+    }
   }, [canView]);
 
   useEffect(() => {
@@ -189,12 +200,15 @@ export default function TrucksPage() {
   }
 
   function openEdit(truck: Truck) {
+    const vendorId = normalizeId(truck.vendor_id ?? truck.vendor?.id);
+    const matchedVendor = findVendorOption(vendorOptions, vendorId, truck.vendor?.name || truck.nha_xe);
     setSelectedTruck(truck);
     setFormState({
       license_plate: truck.license_plate || '',
       bks: truck.bks || truck.license_plate || '',
       ten_lai_xe: truck.ten_lai_xe || '',
-      nha_xe: truck.nha_xe || '',
+      vendor_id: matchedVendor?.value || vendorId,
+      nha_xe: matchedVendor?.label || truck.vendor?.name || truck.nha_xe || '',
       loai_xe: truck.loai_xe || '',
       khu_vuc: truck.khu_vuc || '',
       payload: String(truck.payload ?? ''),
@@ -230,6 +244,7 @@ export default function TrucksPage() {
       license_plate: plate,
       bks: formState.bks.trim().toUpperCase() || plate,
       ten_lai_xe: formState.ten_lai_xe.trim() || undefined,
+      vendor_id: formState.vendor_id || undefined,
       nha_xe: formState.nha_xe.trim() || undefined,
       loai_xe: formState.loai_xe.trim() || undefined,
       khu_vuc: formState.khu_vuc.trim() || undefined,
@@ -497,6 +512,7 @@ export default function TrucksPage() {
         setFormField={setFormField}
         statusOptions={[{ value: '', label: 'Chọn trạng thái' }, ...statusOptions]}
         khuVucOptions={khuVucOptions}
+        vendorOptions={vendorOptions}
       />
       <TruckDetailDialog
         isOpen={Boolean(detailTruck)}

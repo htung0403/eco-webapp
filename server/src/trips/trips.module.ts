@@ -9,13 +9,14 @@ import { VendorEntity } from '../vendors/vendor.entity';
 import { ExpensesModule } from '../expenses/expenses.module';
 import { VendorsModule } from '../vendors/vendors.module';
 import { WaybillEntity } from '../waybills/waybill.entity';
+import { WaybillSplitEntity } from '../waybills/waybill-split.entity';
 import { TripEntity } from './trip.entity';
 import { TripsController } from './trips.controller';
 import { TripsService } from './trips.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TripEntity, TruckEntity, ManifestEntity, ManifestWaybillEntity, WaybillEntity, HubEntity, VendorEntity, VendorDebtEntryEntity]),
+    TypeOrmModule.forFeature([TripEntity, TruckEntity, ManifestEntity, ManifestWaybillEntity, WaybillEntity, WaybillSplitEntity, HubEntity, VendorEntity, VendorDebtEntryEntity]),
     VendorsModule,
     ExpensesModule,
   ],

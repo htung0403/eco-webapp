@@ -4,8 +4,8 @@ import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 import { CreatableSearchableSelect } from '../../../components/ui/CreatableSearchableSelect';
 import { SearchableSelect } from '../../../components/ui/SearchableSelect';
-import type { FilterOption, TruckFormState } from '../types';
 import { LOAI_XE_CATEGORY_OPTIONS } from '../data';
+import type { FilterOption, TruckFormState } from '../types';
 
 interface Props {
   isOpen: boolean;
@@ -18,6 +18,7 @@ interface Props {
   setFormField: <K extends keyof TruckFormState>(key: K, value: TruckFormState[K]) => void;
   statusOptions: FilterOption[];
   khuVucOptions: string[];
+  vendorOptions: FilterOption[];
 }
 
 const inputClass =
@@ -34,8 +35,10 @@ export default function AddEditTruckDialog({
   setFormField,
   statusOptions,
   khuVucOptions,
+  vendorOptions,
 }: Props) {
   const loaiXeOptions = LOAI_XE_CATEGORY_OPTIONS.map((value) => ({ value, label: value }));
+  const khuVucSelectOptions = khuVucOptions.map((value) => ({ value, label: value }));
   if (!isOpen && !isClosing) return null;
 
   return createPortal(
@@ -87,9 +90,9 @@ export default function AddEditTruckDialog({
                 <CreatableSearchableSelect
                   value={formState.khu_vuc}
                   onValueChange={(value) => setFormField('khu_vuc', value)}
-                  options={khuVucOptions}
+                  options={khuVucSelectOptions}
                   placeholder="Chọn hoặc nhập khu vực"
-                  createLabel={(query) => `Thêm khu vực "${query}"`}
+                  createLabel="Thêm khu vực"
                   className="pl-10"
                 />
               </Field>
@@ -98,11 +101,18 @@ export default function AddEditTruckDialog({
 
           <Section title="Nhà xe & lái xe" icon={<Building2 size={16} />}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Nhà xe" icon={<Building2 size={16} />}>
-                <input
-                  value={formState.nha_xe}
-                  onChange={(e) => setFormField('nha_xe', e.target.value)}
-                  className={inputClass}
+              <Field label="Nhà xe (NCC)" icon={<Building2 size={16} />}>
+                <SearchableSelect
+                  value={formState.vendor_id}
+                  options={[{ value: '', label: 'Chọn nhà xe từ NCC' }, ...vendorOptions]}
+                  onValueChange={(vendorId) => {
+                    const vendor = vendorOptions.find((option) => option.value === vendorId);
+                    setFormField('vendor_id', vendorId);
+                    setFormField('nha_xe', vendor?.label || '');
+                  }}
+                  placeholder="Chọn NCC"
+                  searchPlaceholder="Tìm NCC..."
+                  className="h-10 pl-10"
                 />
               </Field>
               <Field label="Tên lái xe" icon={<User size={16} />}>

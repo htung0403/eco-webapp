@@ -55,24 +55,39 @@ describe('WaybillsService', () => {
     hubsRepository = {
       findOne: jest.fn().mockResolvedValue({ id: '1', is_active: true }),
     };
-    service = new WaybillsService(waybillsRepository, hubsRepository);
+    const ordersService = {
+      createFromWaybillEntry: jest.fn().mockResolvedValue({ id: 'o1', order_code: 'DH20260101-001' }),
+    };
+    service = new WaybillsService(
+      waybillsRepository,
+      hubsRepository,
+      { find: jest.fn(), delete: jest.fn(), save: jest.fn(), create: jest.fn() } as any,
+      { findOne: jest.fn() } as any,
+      { findOne: jest.fn() } as any,
+      ordersService as any,
+    );
     jest.spyOn(Date, 'now').mockReturnValue(1770000000000);
     jest.spyOn(Math, 'random').mockReturnValue(0.123);
   });
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('create creates RECEIVED waybill and generates unique waybill_code', async () => {
+  it('create requires manual waybill_code', async () => {
+    await expect(service.create({ waybill_code: '', sender_name: 'A', sender_phone: '1', sender_address: 'HN', receiver_name: 'B', receiver_phone: '2', receiver_address: 'HCM', origin_hub_id: '1', dest_hub_id: '2', weight: 3 }, manager)).rejects.toThrow(BadRequestException);
+  });
+
+  it('create uses provided waybill_code', async () => {
     waybillsRepository.findOne.mockResolvedValue(null);
-    const result = await service.create({ sender_name: 'A', sender_phone: '1', sender_address: 'HN', receiver_name: 'B', receiver_phone: '2', receiver_address: 'HCM', origin_hub_id: '1', dest_hub_id: '2', weight: 3 }, manager);
-    expect(result.waybill_code).toMatch(/^ECO/);
+    const result = await service.create({ waybill_code: 'ECO109602', sender_name: 'A', sender_phone: '1', sender_address: 'HN', receiver_name: 'B', receiver_phone: '2', receiver_address: 'HCM', origin_hub_id: '1', dest_hub_id: '2', weight: 3 }, manager);
+    expect(result.waybill_code).toBe('ECO109602');
+    expect(result.order_code).toBe('DH20260101-001');
     expect(result.status).toBe(WaybillStatus.RECEIVED);
-    expect(waybillsRepository.save).toHaveBeenCalledWith(expect.objectContaining({ current_state: WaybillStatus.RECEIVED }));
+    expect(waybillsRepository.save).toHaveBeenCalledWith(expect.objectContaining({ waybill_code: 'ECO109602', current_state: WaybillStatus.RECEIVED }));
   });
 
   it('create blocks missing or inactive hub', async () => {
     hubsRepository.findOne.mockResolvedValueOnce(null);
-    await expect(service.create({ sender_name: 'A', sender_phone: '1', sender_address: 'HN', receiver_name: 'B', receiver_phone: '2', receiver_address: 'HCM', origin_hub_id: '1', dest_hub_id: '2', weight: 3 }, manager)).rejects.toThrow(BadRequestException);
+    await expect(service.create({ waybill_code: 'ECO1', sender_name: 'A', sender_phone: '1', sender_address: 'HN', receiver_name: 'B', receiver_phone: '2', receiver_address: 'HCM', origin_hub_id: '1', dest_hub_id: '2', weight: 3 }, manager)).rejects.toThrow(BadRequestException);
   });
 
   it('findAll applies keyword/status/hub/priority/date filters', async () => {
@@ -120,8 +135,15 @@ describe('WaybillsService', () => {
     await expect(service.assignPriority('1', { priority: WaybillPriority.URGENT }, manager)).rejects.toThrow(BadRequestException);
   });
 
-  it('assignRoute blocks invalid status', async () => {
+  it('assignRoute allows RECEIVED and IN_WAREHOUSE', async () => {
     waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.RECEIVED }));
+    await expect(service.assignRoute('1', { route_code: 'R1' }, manager)).resolves.toMatchObject({ route_code: 'R1', status: WaybillStatus.IN_WAREHOUSE });
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.IN_WAREHOUSE, current_state: WaybillStatus.IN_WAREHOUSE }));
+    await expect(service.assignRoute('1', { route_code: 'R2' }, manager)).resolves.toMatchObject({ route_code: 'R2' });
+  });
+
+  it('assignRoute blocks invalid status', async () => {
+    waybillsRepository.findOne.mockResolvedValue(makeWaybill({ status: WaybillStatus.IN_TRANSIT, current_state: WaybillStatus.IN_TRANSIT }));
     await expect(service.assignRoute('1', { route_code: 'R1' }, manager)).rejects.toThrow(BadRequestException);
   });
 

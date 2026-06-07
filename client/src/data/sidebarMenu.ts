@@ -3,8 +3,10 @@ import {
   Building2,
   Calculator,
   Home,
+  PackagePlus,
   PackageSearch,
   Search,
+  Settings,
   Truck,
   TruckIcon,
   Users,
@@ -23,7 +25,8 @@ export type SidebarItem = {
 
 export const sidebarMenu: SidebarItem[] = [
   { id: 'home', icon: Home, label: 'Trang chủ', path: '/' },
-  { id: 'warehouse', icon: Warehouse, label: 'Quản lý kho', path: '/warehouse', requiredRoleMask: 1 | 2 },
+  { id: 'orders', icon: PackagePlus, label: 'Quản lý Đơn hàng', path: '/orders', requiredRoleMask: 1 | 2 | 32 | 64 },
+  { id: 'warehouse', icon: Warehouse, label: 'Quản lý kho', path: '/warehouse', requiredRoleMask: 1 | 2 | 32 | 64 },
   { id: 'delivery', icon: PackageSearch, label: 'Quản lý giao hàng', path: '/delivery', requiredRoleMask: 4 | 8 },
   { id: 'delivery-tasks', icon: PackageSearch, label: 'Nhiệm vụ giao hàng', path: '/nhiem-vu-giao-hang', requiredRoleMask: 4 | 8 | 32 | 64 },
   { id: 'trips', icon: Truck, label: 'Quản lý xe', path: '/trips', requiredRoleMask: 8 },
@@ -34,7 +37,8 @@ export const sidebarMenu: SidebarItem[] = [
   { id: 'finance', icon: Calculator, label: 'Tài chính', path: '/finance', requiredRoleMask: 16 },
   { id: 'hr', icon: Users, label: 'Nhân sự', path: '/hr', requiredRoleMask: 32 | 64 },
   { id: 'dashboard', icon: BarChart3, label: 'Dashboard BGĐ', path: '/dashboard', requiredRoleMask: 32 | 64 },
-  { id: 'admin', icon: Building2, label: 'Quản trị', path: '/admin', requiredRoleMask: 64 },
+  { id: 'admin', icon: Building2, label: 'Quản trị', path: '/admin', requiredRoleMask: 32 | 64 },
+  { id: 'vendors', icon: Settings, label: 'Cấu hình NCC', path: '/admin/vendors', requiredRoleMask: 32 | 64 },
 ];
 
 export const getVisibleMenu = (roleMask: number): SidebarItem[] =>

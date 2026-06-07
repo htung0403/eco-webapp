@@ -9,11 +9,11 @@ export default function WarehouseCustomersPage() {
     <div className="flex h-full min-h-0 flex-col gap-2">
       <button
         type="button"
-        onClick={() => navigate('/warehouse')}
+        onClick={() => navigate('/orders')}
         className="flex h-10 w-fit items-center gap-2 rounded-lg border border-border px-3 text-[13px] font-bold text-muted-foreground hover:bg-muted"
       >
         <ArrowLeft size={15} />
-        Quay lại module Kho
+        Quay lại module Đơn hàng
       </button>
       <WarehouseCustomerList manageable />
     </div>

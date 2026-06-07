@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, Loader2, Package, PackageCheck, RotateCcw, Search, ShieldAlert, Warehouse } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, Layers, Loader2, Package, PackageCheck, RotateCcw, Search, ShieldAlert, Warehouse } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 
 import { ApiError, apiRequest } from '../lib/api';
 import WaybillReceiveConfirmDialog from './warehouse/orders/dialogs/WaybillReceiveConfirmDialog';
+import WaybillPackageSplitEditor from './warehouse/inventory/WaybillPackageSplitEditor';
 import type { BadgeConfig, HubSummary, ReceiveFormState, ReceiveWaybillPayload, UserSummary, WaybillDetail } from './warehouse/orders/types';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
@@ -89,21 +90,41 @@ export default function WarehouseOrderReceivePage() {
   const userHubIds = useMemo(() => getUserHubIds(user), [user]);
   const status = normalizeStatus(waybill);
   const isReceived = status === 'RECEIVED';
-  const isTerminal = status === 'RETURNED' || status === 'CANCELLED' || status === 'DELIVERED';
+  const isFinalized = status === 'RETURNED' || status === 'CANCELLED' || status === 'DELIVERED';
+  const isTerminal = isFinalized;
   const hubAllowed = userHubIds.size === 0 || userHubIds.has(normalizeId(waybill?.current_hub_id)) || userHubIds.has(normalizeId(waybill?.origin_hub_id));
   const hasManifestOrTrip = Boolean(waybill?.manifest_id || waybill?.trip_id);
+  const splitDisabled = !waybill || isFinalized || hasManifestOrTrip || !hubAllowed;
+  const splitDisabledReason = !waybill
+    ? undefined
+    : isFinalized
+      ? 'Vận đơn đã kết thúc, không thể tách hàng.'
+      : hasManifestOrTrip
+        ? 'Vận đơn đã gắn manifest/chuyến — không thể tách tại đây.'
+        : !hubAllowed
+          ? 'Vận đơn không thuộc hub được phân quyền.'
+          : undefined;
   const alreadyInWarehouse = status === 'IN_WAREHOUSE';
   const receiveDisabled = !waybill || !hasReceiveRole || !isReceived || isTerminal || hasManifestOrTrip || !hubAllowed || alreadyInWarehouse || isSubmitting;
 
   const warnings = useMemo(() => {
     const items: string[] = [];
     if (!hasReceiveRole) items.push('Tài khoản hiện tại không có quyền WAREHOUSE, PACKER, MANAGER hoặc DIRECTOR để tiếp nhận đơn.');
-    if (waybill && !isReceived) items.push(`Vận đơn đang ở trạng thái ${status || 'không xác định'}, chỉ được tiếp nhận khi trạng thái là RECEIVED.`);
+    if (waybill && !isReceived && !alreadyInWarehouse) {
+      items.push(`Vận đơn đang ở trạng thái ${status || 'không xác định'}, chỉ được tiếp nhận khi trạng thái là RECEIVED.`);
+    }
     if (waybill && hasManifestOrTrip) items.push('Vận đơn đã gắn manifest hoặc chuyến xe nên không thể tiếp nhận tại kho.');
     if (waybill && isTerminal) items.push('Vận đơn đã hủy/trả hàng/hoàn tất, không được nhập kho lại.');
     if (waybill && !hubAllowed) items.push('Vận đơn không thuộc hub được phân quyền của nhân sự hiện tại.');
     return items;
-  }, [hasManifestOrTrip, hasReceiveRole, hubAllowed, isReceived, isTerminal, status, waybill]);
+  }, [alreadyInWarehouse, hasManifestOrTrip, hasReceiveRole, hubAllowed, isReceived, isTerminal, status, waybill]);
+
+  const infoMessages = useMemo(() => {
+    if (waybill && alreadyInWarehouse && !isTerminal) {
+      return ['Vận đơn đã trong kho (IN_WAREHOUSE). Không cần tiếp nhận lại — có thể phân xe bên dưới.'];
+    }
+    return [];
+  }, [alreadyInWarehouse, isTerminal, waybill]);
 
   const setFormField = <K extends keyof ReceiveFormState>(key: K, value: ReceiveFormState[K]) => setFormState(prev => ({ ...prev, [key]: value }));
 
@@ -220,7 +241,7 @@ export default function WarehouseOrderReceivePage() {
             <Warehouse size={14} /> Module 1 · Kho & Bưu cục
           </div>
           <h1 className="text-2xl font-black tracking-tight text-foreground">Tiếp nhận đơn tại kho</h1>
-          <p className="mt-2 max-w-2xl text-[13px] text-muted-foreground">Quét mã vận đơn, kiểm tra điều kiện nghiệp vụ và xác nhận chuyển trạng thái RECEIVED sang IN_WAREHOUSE.</p>
+          <p className="mt-2 max-w-2xl text-[13px] text-muted-foreground">Quét mã vận đơn, tách hàng phân xe, upload ảnh và xác nhận chuyển trạng thái RECEIVED → IN_WAREHOUSE.</p>
         </div>
         <button type="button" onClick={() => navigate('/warehouse/inventory')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-[13px] font-bold text-foreground transition-colors hover:bg-muted">
           <ArrowLeft size={16} /> Về danh sách tồn kho
@@ -265,6 +286,15 @@ export default function WarehouseOrderReceivePage() {
                 </Field>
               </div>
 
+              {infoMessages.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {infoMessages.map(item => (
+                    <div key={item} className="flex gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-bold text-emerald-800">
+                      <CheckCircle2 size={16} className="mt-0.5 shrink-0" />{item}
+                    </div>
+                  ))}
+                </div>
+              )}
               {warnings.length > 0 && (
                 <div className="mt-4 space-y-2">
                   {warnings.map(item => <Alert key={item} message={item} />)}
@@ -278,6 +308,20 @@ export default function WarehouseOrderReceivePage() {
                 <button type="submit" disabled={receiveDisabled} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-bold text-white shadow-sm shadow-primary/20 transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"><PackageCheck size={16} /> Xác nhận tiếp nhận</button>
               </div>
             </form>
+
+            {waybill && (
+              <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-center gap-2 border-b border-border pb-3">
+                  <Layers size={16} className="text-violet-700" />
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-violet-700">Tách hàng · phân xe ngay</span>
+                </div>
+                <WaybillPackageSplitEditor
+                  waybill={waybill}
+                  disabled={splitDisabled}
+                  disabledReason={splitDisabledReason}
+                />
+              </section>
+            )}
           </div>
 
           <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">

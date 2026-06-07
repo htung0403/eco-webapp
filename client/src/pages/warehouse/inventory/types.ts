@@ -21,6 +21,8 @@ export interface UserSummary {
 
 export interface WaybillInventoryItem {
   id: string | number;
+  order_id?: string | number | null;
+  order_code?: string | null;
   waybill_code?: string | null;
   code?: string | null;
   sender_info?: string | null;
@@ -56,6 +58,19 @@ export interface WaybillInventoryItem {
   noi_den?: string | null;
   loaded_at?: string | null;
   the_tich_m3?: number | string | null;
+  split_id?: string | number | null;
+  trip_id?: string | number | null;
+  truck_id?: string | number | null;
+  trip_package_count?: number | null;
+  order_total_packages?: number | null;
+  trip_label?: string | null;
+  license_plate?: string | null;
+  trip_nha_xe?: string | null;
+  trip_status?: string | null;
+  loading_position?: number | null;
+  split_note?: string | null;
+  allocated_freight?: number | null;
+  allocated_cod?: number | null;
 }
 
 export interface WaybillInventoryDetail extends WaybillInventoryItem {
@@ -72,6 +87,7 @@ export interface WaybillInventoryDetail extends WaybillInventoryItem {
 
 export interface InventoryFilters {
   keyword: string;
+  ma_kh: string;
   statuses: string[];
   hubIds: string[];
   paymentTypes: string[];
@@ -91,6 +107,8 @@ export interface InventoryListResponse {
   limit?: number;
   meta?: {
     total?: number;
+    total_waybills?: number;
+    total_lines?: number;
     page?: number;
     limit?: number;
   };
@@ -112,4 +130,91 @@ export interface PriorityFormState {
 
 export interface RouteFormState {
   route_code: string;
+}
+
+export interface AllocationBoardItem {
+  waybill_id: string | number;
+  waybill_code?: string | null;
+  loading_position?: number | null;
+  vi_tri_hang?: number | null;
+  ngay_boc?: string | null;
+  ma_tinh?: string | null;
+  ten_cty?: string | null;
+  dv?: string | null;
+  mat_hang?: string | null;
+  mat_hang_note?: string | null;
+  noi_tra?: string | null;
+  so_luong?: number | null;
+  loai?: string | null;
+  dia_chi?: string | null;
+  xe_phat?: string | null;
+  noi_den?: string | null;
+  weight?: number | null;
+  the_tich_m3?: number | null;
+  is_highlighted?: boolean;
+}
+
+export interface AllocationBoardTrip {
+  trip_id: string | number;
+  status?: string | null;
+  license_plate?: string | null;
+  nha_xe?: string | null;
+  driver_name?: string | null;
+  driver_phone?: string | null;
+  expected_arrival_time?: string | null;
+  departure_time?: string | null;
+  manifest_code?: string | null;
+  start_hub?: HubSummary | null;
+  end_hub?: HubSummary | null;
+  items: AllocationBoardItem[];
+  contains_highlight?: boolean;
+}
+
+export interface AllocationBoardResponse {
+  trips: AllocationBoardTrip[];
+  total?: number;
+  waybill_placement?: {
+    trip_id: string | number;
+    license_plate?: string | null;
+    loading_position?: number | null;
+    manifest_code?: string | null;
+    status?: string | null;
+  } | null;
+}
+
+export interface WaybillSplitLine {
+  id?: string | number;
+  waybill_id?: string | number;
+  trip_id?: string | number | null;
+  truck_id?: string | number | null;
+  package_count: number;
+  loading_position?: number | null;
+  carrier_label?: string | null;
+  note?: string | null;
+  load_status?: string | null;
+  license_plate?: string | null;
+  nha_xe?: string | null;
+  trip_status?: string | null;
+  allocated_freight?: number;
+  allocated_cod?: number;
+}
+
+export interface WaybillSplitResponse {
+  waybill_id: string | number;
+  waybill_code?: string | null;
+  total_packages: number;
+  allocated_packages: number;
+  remaining_packages: number;
+  total_freight: number;
+  total_cod: number;
+  splits: WaybillSplitLine[];
+}
+
+export interface TruckPickOption {
+  id: string;
+  label: string;
+  license_plate?: string | null;
+  bks?: string | null;
+  nha_xe?: string | null;
+  ten_lai_xe?: string | null;
 }

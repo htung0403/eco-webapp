@@ -54,7 +54,7 @@ export default function TruckDetailDialog({ isOpen, isClosing, truck, onClose, f
             title="Nhà xe & lái xe"
             icon={<Building2 size={16} />}
             rows={[
-              ['Nhà xe', truck.nha_xe || '—'],
+              ['Nhà xe (NCC)', truck.vendor?.name || truck.nha_xe || '—'],
               ['Tên lái xe', truck.ten_lai_xe || getDriverName(truck)],
               ['Tài xế hệ thống', getDriverName(truck)],
             ]}

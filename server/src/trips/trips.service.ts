@@ -13,11 +13,13 @@ import { TruckEntity } from '../trucks/truck.entity';
 import { UserEntity } from '../users/user.entity';
 import { VendorsService } from '../vendors/vendors.service';
 import { WaybillEntity } from '../waybills/waybill.entity';
+import { WaybillSplitEntity } from '../waybills/waybill-split.entity';
 import { ArriveTripDto } from './dto/arrive-trip.dto';
 import { AssignManifestDto } from './dto/assign-manifest.dto';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { QueryTripsDto } from './dto/query-trips.dto';
 import { QueryExpectedArrivalsDto } from './dto/query-expected-arrivals.dto';
+import { QueryAllocationBoardDto } from './dto/query-allocation-board.dto';
 import { UpdateLoadingSequenceDto } from './dto/update-loading-sequence.dto';
 import { UpdateTripCargoTotalsDto } from './dto/update-trip-cargo-totals.dto';
 import { UpdateTripCostsDto } from './dto/update-trip-costs.dto';
@@ -26,6 +28,7 @@ import { TripEntity } from './trip.entity';
 
 const ACTIVE_TRIP_STATUSES = [TripStatus.PLANNED, TripStatus.IN_TRANSIT];
 const LOADING_SEQUENCE_STATUSES = [TripStatus.IN_TRANSIT, TripStatus.ARRIVED, TripStatus.COMPLETED];
+const ALLOCATION_BOARD_STATUSES = [TripStatus.PLANNED, TripStatus.IN_TRANSIT, TripStatus.ARRIVED];
 
 type Money = string | number | null | undefined;
 
@@ -38,6 +41,7 @@ export class TripsService {
     @InjectRepository(ManifestWaybillEntity) private readonly manifestWaybillsRepository: Repository<ManifestWaybillEntity>,
     @InjectRepository(WaybillEntity) private readonly waybillsRepository: Repository<WaybillEntity>,
     @InjectRepository(HubEntity) private readonly hubsRepository: Repository<HubEntity>,
+    @InjectRepository(WaybillSplitEntity) private readonly waybillSplitsRepository: Repository<WaybillSplitEntity>,
     private readonly vendorsService: VendorsService,
   ) {}
 
@@ -262,6 +266,105 @@ export class TripsService {
     return { data, total: data.length };
   }
 
+  async getAllocationBoard(query: QueryAllocationBoardDto, currentUser: UserEntity) {
+    const limit = clampPaginationLimit(query.limit, 50);
+    const highlightWaybillId = query.waybill_id?.trim() ? String(query.waybill_id).trim() : null;
+    const qb = this.tripsRepository.createQueryBuilder('trip')
+      .leftJoinAndSelect('trip.truck', 'truck')
+      .leftJoinAndSelect('trip.manifest', 'manifest')
+      .leftJoinAndSelect('trip.start_hub', 'start_hub')
+      .leftJoinAndSelect('trip.end_hub', 'end_hub')
+      .where('trip.status IN (:...statuses)', { statuses: ALLOCATION_BOARD_STATUSES })
+      .andWhere('trip.manifest_id IS NOT NULL')
+      .orderBy('COALESCE(trip.expected_arrival_time, trip.departure_time)', 'ASC', 'NULLS LAST')
+      .take(limit);
+
+    const endHubId = query.end_hub_id != null ? String(query.end_hub_id) : currentUser.hub_id;
+    if (endHubId) qb.andWhere('trip.end_hub_id = :endHubId', { endHubId });
+    this.applyHubScope(qb, currentUser);
+
+    const trips = await qb.getMany();
+    const manifestRows = await Promise.all(trips.map(async (trip) => {
+      if (!trip.manifest_id) return [] as ManifestWaybillEntity[];
+      return this.manifestWaybillsRepository.find({
+        where: { manifest_id: String(trip.manifest_id) },
+        relations: ['waybill'],
+        order: { loading_position: 'ASC' },
+      });
+    }));
+    const waybillIds = [...new Set(manifestRows.flat().map((row) => row.waybill_id))];
+    const splitRows = waybillIds.length
+      ? await this.waybillSplitsRepository.find({
+        where: { waybill_id: In(waybillIds) },
+        relations: ['trip', 'truck', 'trip.truck'],
+      })
+      : [];
+    const splitsByWaybill = splitRows.reduce<Map<string, WaybillSplitEntity[]>>((map, row) => {
+      const list = map.get(row.waybill_id) ?? [];
+      list.push(row);
+      map.set(row.waybill_id, list);
+      return map;
+    }, new Map());
+
+    const board = await Promise.all(trips.map(async (trip, tripIndex) => {
+      const rows = manifestRows[tripIndex] ?? [];
+
+      const items = rows
+        .filter((row) => row.waybill)
+        .flatMap((row, idx) => {
+          const tripSplits = (splitsByWaybill.get(String(row.waybill_id)) ?? [])
+            .filter((split) =>
+              split.trip_id === String(trip.id)
+              || (!split.trip_id && split.truck_id && trip.truck_id && split.truck_id === String(trip.truck_id)),
+            );
+          if (tripSplits.length) {
+            return tripSplits.map((split, splitIdx) => this.mapAllocationDispatchRow(
+              row,
+              idx + splitIdx,
+              trip.end_hub,
+              trip.truck,
+              highlightWaybillId,
+              split,
+            ));
+          }
+          return [this.mapAllocationDispatchRow(row, idx, trip.end_hub, trip.truck, highlightWaybillId)];
+        });
+
+      return {
+        trip_id: trip.id,
+        status: trip.status,
+        license_plate: trip.truck?.license_plate ?? trip.truck?.bks ?? null,
+        nha_xe: trip.truck?.nha_xe ?? trip.truck?.vendor?.name ?? null,
+        driver_name: trip.driver_name ?? trip.truck?.ten_lai_xe ?? null,
+        driver_phone: trip.driver_phone,
+        expected_arrival_time: trip.expected_arrival_time ?? trip.arrival_time,
+        departure_time: trip.departure_time,
+        start_hub: trip.start_hub,
+        end_hub: trip.end_hub,
+        manifest_code: trip.manifest?.manifest_code ?? null,
+        items,
+        contains_highlight: items.some((item) => item.is_highlighted),
+      };
+    }));
+
+    const hostTrip = board.find((trip) => trip.contains_highlight) ?? null;
+    const hostItem = hostTrip?.items.find((item) => item.is_highlighted) ?? null;
+
+    return {
+      trips: board,
+      total: board.length,
+      waybill_placement: hostTrip && hostItem
+        ? {
+            trip_id: hostTrip.trip_id,
+            license_plate: hostTrip.license_plate,
+            loading_position: hostItem.loading_position,
+            manifest_code: hostTrip.manifest_code,
+            status: hostTrip.status,
+          }
+        : null,
+    };
+  }
+
   async getLoadingSequence(id: string, currentUser: UserEntity) {
     const trip = await this.findOne(id, currentUser);
     if (!LOADING_SEQUENCE_STATUSES.includes(trip.status)) {
@@ -453,5 +556,85 @@ export class TripsService {
   private resolveTripCost(dto: CreateTripDto): number {
     const cost = dto.trip_cost ?? dto.other_costs ?? 0;
     return Number(cost) > 0 ? Number(cost) : 0;
+  }
+
+  private mapAllocationDispatchRow(
+    row: ManifestWaybillEntity,
+    index: number,
+    endHub: HubEntity | null | undefined,
+    truck: TruckEntity | null | undefined,
+    highlightWaybillId: string | null,
+    split?: WaybillSplitEntity,
+  ) {
+    const wb = row.waybill!;
+    const wbExtra = wb as WaybillEntity & Record<string, unknown>;
+    const position = split?.loading_position ?? row.loading_position ?? index + 1;
+    const loadedAt = row.loaded_at ?? wb.loaded_at ?? null;
+    const hubCode = (endHub?.code ?? wb.noi_den ?? 'HCM').toUpperCase();
+    const companyName = wb.ma_kh?.trim()
+      || this.parseContactName(wb.sender_info)
+      || wb.waybill_code;
+    const routeCode = wb.route_code?.trim();
+    const dv = routeCode && routeCode.length <= 4
+      ? routeCode.toUpperCase()
+      : String(wbExtra.dich_vu ?? wbExtra.loai_bp ?? 'TC').slice(0, 4).toUpperCase() || 'TC';
+    const note = split?.note?.trim() ?? wb.note?.trim() ?? '';
+    const parenthetical = note.match(/\([^)]+\)/)?.[0] ?? null;
+    const goodsBody = String(wbExtra.noi_dung ?? '').trim() || wb.waybill_code;
+    const matHang = goodsBody;
+    const matHangNote = parenthetical
+      ?? (note && /xe|kiện|lô/i.test(note) ? note : null);
+    const deliveryType = String(wbExtra.loai_giao_hang ?? '').trim() || 'Giao tận nơi';
+    const noiTra = `Kho ${hubCode} ${deliveryType}`;
+    const quantity = Number(split?.package_count ?? wb.package_count ?? 1);
+    const unitRaw = String(wbExtra.don_gia_don_vi ?? '').toLowerCase();
+    const loai = unitRaw.includes('pallet') ? 'pallet' : 'kiện';
+    const address = wb.receiver_address?.trim() || this.parseContactAddress(wb.receiver_info);
+    const splitTruck = split?.truck ?? split?.trip?.truck ?? null;
+    const truckLabel = String(split?.carrier_label ?? wbExtra.xe_phat ?? splitTruck?.nha_xe ?? truck?.nha_xe ?? truck?.ten_lai_xe ?? '').trim();
+
+    return {
+      waybill_id: row.waybill_id,
+      split_id: split?.id ?? null,
+      waybill_code: wb.waybill_code,
+      loading_position: position,
+      vi_tri_hang: position,
+      ngay_boc: this.formatDispatchDate(loadedAt),
+      ma_tinh: hubCode,
+      ten_cty: companyName,
+      dv,
+      mat_hang: matHang,
+      mat_hang_note: matHangNote,
+      noi_tra: noiTra,
+      so_luong: quantity,
+      loai,
+      dia_chi: address,
+      noi_den: wb.noi_den,
+      weight: wb.weight,
+      the_tich_m3: wb.the_tich_m3,
+      xe_phat: truckLabel || null,
+      is_highlighted: highlightWaybillId === String(row.waybill_id),
+    };
+  }
+
+  private formatDispatchDate(value: Date | null | undefined): string | null {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${day}/${month}`;
+  }
+
+  private parseContactName(info?: string | null): string {
+    if (!info?.trim()) return '';
+    const parts = info.split('|').map((part) => part.trim());
+    return parts[0] || parts[1] || '';
+  }
+
+  private parseContactAddress(info?: string | null): string {
+    if (!info?.trim()) return '';
+    const parts = info.split('|').map((part) => part.trim());
+    return parts[2] || parts[parts.length - 1] || '';
   }
 }

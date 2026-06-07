@@ -7,6 +7,7 @@ import { TripEntity } from '../trips/trip.entity';
 import { UserEntity } from '../users/user.entity';
 import { CreateVendorPaymentDto } from './dto/create-vendor-payment.dto';
 import { QueryVendorDebtDto } from './dto/query-vendor-debt.dto';
+import { QueryVendorPaymentsDto } from './dto/query-vendor-payments.dto';
 import { QueryVendorsDto } from './dto/query-vendors.dto';
 import { UpdateVendorStatusDto } from './dto/update-vendor-status.dto';
 import { UpsertVendorDto } from './dto/upsert-vendor.dto';
@@ -195,6 +196,58 @@ export class VendorsService {
     });
   }
 
+  async listAllPayments(query: QueryVendorPaymentsDto = {}) {
+    const page = query.page ?? 1;
+    const limit = clampPaginationLimit(query.limit, 50);
+
+    const qb = this.paymentsRepository.createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.vendor', 'vendor')
+      .leftJoinAndSelect('payment.creator', 'creator')
+      .leftJoinAndSelect('payment.trips', 'trips');
+
+    if (query.vendor_id?.trim()) {
+      qb.andWhere('payment.vendor_id = :vendorId', { vendorId: query.vendor_id.trim() });
+    }
+    if (query.keyword?.trim()) {
+      const keyword = `%${query.keyword.trim()}%`;
+      qb.andWhere(new Brackets((inner) => inner
+        .where('vendor.code ILIKE :keyword', { keyword })
+        .orWhere('vendor.name ILIKE :keyword', { keyword })
+        .orWhere('payment.description ILIKE :keyword', { keyword })));
+    }
+    if (query.from_date) {
+      qb.andWhere('payment.payment_date >= :fromDate', { fromDate: query.from_date });
+    }
+    if (query.to_date) {
+      qb.andWhere(`payment.payment_date < (:toDate::date + interval '1 day')`, { toDate: query.to_date });
+    }
+    if (query.trip_id?.trim()) {
+      qb.andWhere('trips.id = :tripId', { tripId: query.trip_id.trim() });
+    }
+
+    const totalsQb = qb.clone();
+    const totalAmountRaw = await totalsQb
+      .select('COALESCE(SUM(payment.amount), 0)', 'sum_amount')
+      .getRawOne<{ sum_amount: string }>();
+
+    const [items, total] = await qb
+      .orderBy('payment.payment_date', 'DESC')
+      .addOrderBy('payment.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        total_amount: Number(totalAmountRaw?.sum_amount ?? 0),
+      },
+    };
+  }
+
   async recordPayment(vendorId: string, dto: CreateVendorPaymentDto, currentUser: UserEntity) {
     this.assertRole(currentUser, [Roles.ACCOUNTANT, Roles.MANAGER, Roles.DIRECTOR]);
     const vendor = await this.findOne(vendorId);
@@ -377,7 +430,25 @@ export class VendorsService {
     }
     ['status', 'service_type', 'province', 'contract_type'].forEach((field) => {
       const value = (query as Record<string, string | undefined>)[field];
-      if (value) qb.andWhere(`vendor.${field} = :${field}`, { [field]: value });
+      if (!value) return;
+      const values = value.split(',').map((item) => item.trim()).filter(Boolean);
+      if (!values.length) return;
+
+      if (field === 'province') {
+        qb.andWhere(
+          new Brackets((builder) => {
+            values.forEach((provinceValue, index) => {
+              builder.orWhere(`CONCAT(',', COALESCE(vendor.province, ''), ',') LIKE :provincePattern${index}`, {
+                [`provincePattern${index}`]: `%,${provinceValue},%`,
+              });
+            });
+          }),
+        );
+        return;
+      }
+
+      if (values.length === 1) qb.andWhere(`vendor.${field} = :${field}`, { [field]: values[0] });
+      else if (values.length > 1) qb.andWhere(`vendor.${field} IN (:...${field}Values)`, { [`${field}Values`]: values });
     });
   }
 

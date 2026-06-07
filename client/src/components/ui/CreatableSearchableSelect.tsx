@@ -1,162 +1,139 @@
 import * as React from 'react';
-import { Check, ChevronDown, Plus } from 'lucide-react';
+import { Check, ChevronDown, Plus, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from './command';
-import { Popover, PopoverAnchor, PopoverContent } from './popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './command';
+import { Popover, PopoverContent, PopoverTrigger } from './popover';
 
-export interface CreatableOption {
+interface Option {
   value: string;
   label: string;
 }
 
 interface CreatableSearchableSelectProps {
-  options: Array<string | CreatableOption>;
+  options: Option[];
   value?: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
+  searchPlaceholder?: string;
   emptyMessage?: string;
-  createLabel?: (query: string) => string;
+  createLabel?: string;
   className?: string;
   disabled?: boolean;
 }
 
-function normalizeOptions(options: Array<string | CreatableOption>): CreatableOption[] {
-  const map = new Map<string, CreatableOption>();
-  for (const item of options) {
-    const label = (typeof item === 'string' ? item : item.label).trim();
-    if (!label) continue;
-    const key = label.toLowerCase();
-    if (!map.has(key)) map.set(key, { value: typeof item === 'string' ? label : item.value || label, label });
-  }
-  return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'vi'));
-}
-
 export function CreatableSearchableSelect({
   options,
-  value = '',
+  value,
   onValueChange,
   placeholder = 'Chọn hoặc nhập mới...',
-  emptyMessage = 'Gõ để tìm hoặc thêm mới',
-  createLabel = (query) => `Thêm "${query}"`,
+  searchPlaceholder = 'Tìm hoặc gõ giá trị mới...',
+  emptyMessage = 'Không có kết quả.',
+  createLabel = 'Dùng giá trị',
   className,
   disabled = false,
 }: CreatableSearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
-  const [inputValue, setInputValue] = React.useState(value);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const optionList = React.useMemo(() => normalizeOptions(options), [options]);
+  const [search, setSearch] = React.useState('');
 
-  React.useEffect(() => {
-    setInputValue(value);
-  }, [value]);
+  const selectedOption = options.find(option => option.value === value);
+  const displayLabel = selectedOption?.label || value?.trim() || '';
+  const trimmedSearch = search.trim();
+  const hasExactMatch =
+    trimmedSearch.length > 0 &&
+    options.some(
+      option =>
+        option.value.toLowerCase() === trimmedSearch.toLowerCase() ||
+        option.label.toLowerCase() === trimmedSearch.toLowerCase(),
+    );
 
-  const filtered = React.useMemo(() => {
-    const q = inputValue.trim().toLowerCase();
-    if (!q) return optionList;
-    return optionList.filter((option) => option.label.toLowerCase().includes(q));
-  }, [inputValue, optionList]);
-
-  const trimmedQuery = inputValue.trim();
-  const hasExactMatch = optionList.some((option) => option.label.toLowerCase() === trimmedQuery.toLowerCase());
-  const showCreate = trimmedQuery.length > 0 && !hasExactMatch;
-
-  function commitValue(next: string) {
-    const trimmed = next.trim();
-    setInputValue(trimmed);
-    onValueChange(trimmed);
+  const applyValue = (nextValue: string) => {
+    onValueChange(nextValue);
+    setSearch('');
     setOpen(false);
-  }
-
-  function handleInputChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const next = event.target.value;
-    setInputValue(next);
-    onValueChange(next);
-    setOpen(true);
-  }
-
-  function handleBlur() {
-    window.setTimeout(() => {
-      if (containerRef.current?.contains(document.activeElement)) return;
-      setOpen(false);
-      if (trimmedQuery && trimmedQuery !== inputValue) commitValue(trimmedQuery);
-    }, 160);
-  }
+  };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <div ref={containerRef} className="relative flex w-full items-center">
-          <input
-            type="text"
-            disabled={disabled}
-            value={inputValue}
-            onChange={handleInputChange}
-            onFocus={() => setOpen(true)}
-            onBlur={handleBlur}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && trimmedQuery) {
-                event.preventDefault();
-                commitValue(trimmedQuery);
-              }
-              if (event.key === 'Escape') setOpen(false);
-            }}
-            placeholder={placeholder}
-            className={cn(
-              'h-10 w-full rounded-xl border border-border bg-white pr-9 text-[13px] font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-60',
-              className,
+    <Popover
+      open={open}
+      onOpenChange={nextOpen => {
+        setOpen(nextOpen);
+        if (!nextOpen) setSearch('');
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            'flex h-10 w-full items-center justify-between rounded-xl border border-border/80 bg-muted/10 px-4 py-2 text-[13px] font-medium transition-all hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/10',
+            open && 'border-primary ring-2 ring-primary/5',
+            !displayLabel && 'text-muted-foreground/60',
+            className,
+          )}
+        >
+          <span className="truncate">{displayLabel || placeholder}</span>
+          <div className="ml-2 flex items-center gap-1.5">
+            {value && !disabled && (
+              <X
+                size={14}
+                className="cursor-pointer text-muted-foreground/40 transition-colors hover:text-red-500"
+                onClick={event => {
+                  event.stopPropagation();
+                  onValueChange('');
+                }}
+              />
             )}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            disabled={disabled}
-            onClick={() => setOpen((prev) => !prev)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
-          >
-            <ChevronDown size={16} className={cn('transition-transform', open && 'rotate-180')} />
-          </button>
-        </div>
-      </PopoverAnchor>
-      <PopoverContent
-        align="start"
-        className="z-[10000] w-[var(--radix-popover-trigger-width)] p-0 shadow-xl border-border/60"
-        onOpenAutoFocus={(event) => event.preventDefault()}
-      >
-        <Command shouldFilter={false} className="rounded-xl overflow-hidden">
-          <CommandList className="max-h-56 p-1">
-            {filtered.length === 0 && !showCreate ? (
-              <CommandEmpty className="py-5 text-[12px] text-muted-foreground">{emptyMessage}</CommandEmpty>
-            ) : null}
-            {filtered.length > 0 && (
-              <CommandGroup>
-                {filtered.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={option.label}
-                    onSelect={() => commitValue(option.label)}
-                    className={cn(
-                      'flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium cursor-pointer',
-                      value === option.label && 'bg-primary/10 text-primary',
-                    )}
-                  >
-                    <span>{option.label}</span>
-                    {value === option.label && <Check className="h-4 w-4 text-primary" />}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-            {showCreate && (
-              <CommandGroup>
+            <ChevronDown
+              size={16}
+              className={cn('text-muted-foreground/40 transition-transform duration-200', open && 'rotate-180')}
+            />
+          </div>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="z-[10000] w-full min-w-[var(--radix-popover-trigger-width)] p-0 shadow-xl border-border/60">
+        <Command shouldFilter className="rounded-xl overflow-hidden">
+          <div className="border-b border-border/40 bg-muted/5">
+            <CommandInput
+              value={search}
+              onValueChange={setSearch}
+              placeholder={searchPlaceholder}
+              className="h-10 border-none text-[13px] focus:ring-0"
+              onKeyDown={event => {
+                if (event.key === 'Enter' && trimmedSearch && !hasExactMatch) {
+                  event.preventDefault();
+                  applyValue(trimmedSearch);
+                }
+              }}
+            />
+          </div>
+          <CommandList className="max-h-60 p-1">
+            <CommandEmpty className="py-4 text-[12px] text-muted-foreground">{emptyMessage}</CommandEmpty>
+            <CommandGroup>
+              {options.map(option => (
                 <CommandItem
-                  value={`__create__${trimmedQuery}`}
-                  onSelect={() => commitValue(trimmedQuery)}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-bold text-primary cursor-pointer"
+                  key={option.value}
+                  value={`${option.label} ${option.value}`}
+                  onSelect={() => applyValue(option.value)}
+                  className={cn(
+                    'flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium',
+                    value === option.value && 'bg-primary/10 text-primary',
+                  )}
+                >
+                  {option.label}
+                  {value === option.value && <Check className="h-4 w-4 text-primary" />}
+                </CommandItem>
+              ))}
+              {trimmedSearch && !hasExactMatch && (
+                <CommandItem
+                  value={`__create__ ${trimmedSearch}`}
+                  onSelect={() => applyValue(trimmedSearch)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-bold text-primary"
                 >
                   <Plus size={14} />
-                  {createLabel(trimmedQuery)}
+                  {createLabel}: &quot;{trimmedSearch}&quot;
                 </CommandItem>
-              </CommandGroup>
-            )}
+              )}
+            </CommandGroup>
           </CommandList>
         </Command>
       </PopoverContent>

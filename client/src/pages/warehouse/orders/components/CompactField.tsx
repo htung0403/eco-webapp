@@ -24,7 +24,7 @@ export function CompactField({
   labelWidth?: string;
 }) {
   return (
-    <div className={clsx('flex min-w-0 items-center gap-1.5', className)}>
+    <div className={clsx('flex min-w-0 gap-1.5', className ?? 'items-center')}>
       <span className={clsx('shrink-0 text-[12px] font-bold text-slate-700', labelWidth)}>{label}</span>
       <div className="min-w-0 flex-1">{children}</div>
     </div>

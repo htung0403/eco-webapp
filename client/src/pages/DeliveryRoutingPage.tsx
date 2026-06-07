@@ -18,7 +18,7 @@ const DISPATCHER = 8;
 const MANAGER = 32;
 const DIRECTOR = 64;
 const defaultFilters: RoutingFilters = { keyword: '', statuses: [], originHubIds: [], destHubIds: [], paymentTypes: [], page: 1, limit: 10 };
-const routeableStates = ['IN_WAREHOUSE', 'AT_DEST_HUB'];
+const routeableStates = ['RECEIVED', 'IN_WAREHOUSE', 'AT_DEST_HUB'];
 
 const statusConfig: Record<string, BadgeConfig> = {
   IN_WAREHOUSE: { label: 'Trong kho', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },

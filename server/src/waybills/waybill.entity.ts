@@ -2,6 +2,7 @@ import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToO
 import { PaymentType, WaybillState } from '../common/enums';
 import { HubEntity } from '../hubs/hub.entity';
 import { ManifestWaybillEntity } from '../manifests/manifest-waybill.entity';
+import { OrderEntity } from '../orders/order.entity';
 import { UserEntity } from '../users/user.entity';
 
 @Entity('waybills')
@@ -76,6 +77,9 @@ export class WaybillEntity {
   current_hub_id: string | null;
 
   @Column({ type: 'bigint', nullable: true })
+  order_id: string | null;
+
+  @Column({ type: 'bigint', nullable: true })
   last_mile_driver_id: string | null;
 
   @Column({ type: 'varchar', nullable: true })
@@ -101,6 +105,12 @@ export class WaybillEntity {
 
   @Column({ type: 'varchar', nullable: true })
   note: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  xe_lay: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  xe_phat: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
   received_at: Date | null;
@@ -151,6 +161,10 @@ export class WaybillEntity {
   @ManyToOne(() => HubEntity, (hub) => hub.dest_waybills)
   @JoinColumn({ name: 'dest_hub_id' })
   dest_hub: HubEntity;
+
+  @ManyToOne(() => OrderEntity, (order) => order.waybills, { nullable: true })
+  @JoinColumn({ name: 'order_id' })
+  order: OrderEntity | null;
 
   @ManyToOne(() => UserEntity, (user) => user.delivery_waybills, { nullable: true })
   @JoinColumn({ name: 'last_mile_driver_id' })

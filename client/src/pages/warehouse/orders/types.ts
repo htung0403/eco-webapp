@@ -26,8 +26,14 @@ export interface WaybillDetail {
   waybill_code?: string | null;
   code?: string | null;
   sender_info?: string | null;
+  sender_name?: string | null;
+  sender_phone?: string | null;
+  sender_address?: string | null;
   receiver_info?: string | null;
+  receiver_name?: string | null;
+  receiver_phone?: string | null;
   receiver_address?: string | null;
+  ma_kh?: string | null;
   weight?: number | string | null;
   volumetric_weight?: number | string | null;
   actual_weight?: number | string | null;
@@ -87,6 +93,7 @@ export interface CreateWaybillFormState {
 }
 
 export interface CreateWaybillPayload {
+  waybill_code: string;
   sender_info: string;
   sender_name: string;
   sender_phone: string;

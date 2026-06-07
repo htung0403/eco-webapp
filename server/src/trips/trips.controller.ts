@@ -12,6 +12,7 @@ import { AssignManifestDto } from './dto/assign-manifest.dto';
 import { CompleteTripDto } from './dto/complete-trip.dto';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { QueryExpectedArrivalsDto } from './dto/query-expected-arrivals.dto';
+import { QueryAllocationBoardDto } from './dto/query-allocation-board.dto';
 import { QueryTripsDto } from './dto/query-trips.dto';
 import { UpdateLoadingSequenceDto } from './dto/update-loading-sequence.dto';
 import { UpdateTripCargoTotalsDto } from './dto/update-trip-cargo-totals.dto';
@@ -48,6 +49,13 @@ export class TripsController {
   @ApiOperation({ summary: 'List in-transit trips sorted by expected arrival (for destination hub)' })
   getExpectedArrivals(@Query() query: QueryExpectedArrivalsDto, @CurrentUser() currentUser: UserEntity) {
     return this.tripsService.getExpectedArrivals(query, currentUser);
+  }
+
+  @Get('allocation-board')
+  @RequireRoles(Roles.WAREHOUSE, Roles.PACKER, Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Trip allocation board — truck and loading position per waybill' })
+  getAllocationBoard(@Query() query: QueryAllocationBoardDto, @CurrentUser() currentUser: UserEntity) {
+    return this.tripsService.getAllocationBoard(query, currentUser);
   }
 
   @Get(':id')

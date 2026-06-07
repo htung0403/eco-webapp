@@ -22,7 +22,7 @@ const getRoleRedirectPath = (roleMask: number) => {
   if ((roleMask & 8) !== 0) return '/trips';
   if ((roleMask & 4) !== 0) return '/nhiem-vu-giao-hang';
   if ((roleMask & 2) !== 0) return '/warehouse/manifests';
-  if ((roleMask & 1) !== 0) return '/warehouse/orders/new';
+  if ((roleMask & 1) !== 0) return '/orders/new';
   return '/warehouse';
 };
 

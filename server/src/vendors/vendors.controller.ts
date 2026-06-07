@@ -8,6 +8,7 @@ import { Roles } from '../common/roles';
 import { UserEntity } from '../users/user.entity';
 import { CreateVendorPaymentDto } from './dto/create-vendor-payment.dto';
 import { QueryVendorDebtDto } from './dto/query-vendor-debt.dto';
+import { QueryVendorPaymentsDto } from './dto/query-vendor-payments.dto';
 import { QueryVendorsDto } from './dto/query-vendors.dto';
 import { UpdateVendorStatusDto } from './dto/update-vendor-status.dto';
 import { UpsertVendorDto } from './dto/upsert-vendor.dto';
@@ -45,6 +46,13 @@ export class VendorsController {
   @ApiOperation({ summary: 'Công nợ phải trả theo nhà cung cấp' })
   debtReport(@Query() query: QueryVendorDebtDto) {
     return this.vendorsService.getDebtReport(query);
+  }
+
+  @Get('payments')
+  @RequireRoles(Roles.DISPATCHER, Roles.ACCOUNTANT, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Danh sách phiếu chi NCC (toàn hệ thống)' })
+  listAllPayments(@Query() query: QueryVendorPaymentsDto) {
+    return this.vendorsService.listAllPayments(query);
   }
 
   @Get(':id/debt-dashboard')

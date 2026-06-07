@@ -84,3 +84,54 @@ export interface TripListResponse {
 }
 
 export interface AssignTripFormState { trip_id: string; }
+
+export interface LoadPlanningBoardItem {
+  split_id?: string | number;
+  waybill_id: string | number;
+  waybill_code?: string | null;
+  loading_position?: number | null;
+  vi_tri_hang?: number | null;
+  ngay_boc?: string | null;
+  ma_tinh?: string | null;
+  ten_cty?: string | null;
+  dv?: string | null;
+  mat_hang?: string | null;
+  mat_hang_note?: string | null;
+  noi_tra?: string | null;
+  so_luong?: number | null;
+  loai?: string | null;
+  dia_chi?: string | null;
+  xe_phat?: string | null;
+  noi_den?: string | null;
+  weight?: number | null;
+  the_tich_m3?: number | null;
+  allocated_freight?: number;
+  load_status?: string | null;
+}
+
+export interface LoadPlanningTruckGroup {
+  truck_id: string | number;
+  license_plate?: string | null;
+  nha_xe?: string | null;
+  ten_lai_xe?: string | null;
+  trip_id?: string | number | null;
+  trip_status?: string | null;
+  manifest_code?: string | null;
+  total_packages: number;
+  total_weight: number;
+  total_freight?: number;
+  items: LoadPlanningBoardItem[];
+}
+
+export interface LoadPlanningBoardResponse {
+  trucks: LoadPlanningTruckGroup[];
+  total_trucks: number;
+  total_items: number;
+}
+
+export interface LoadPlanningBoardFilters {
+  keyword: string;
+  origin_hub_id: string[];
+  dest_hub_id: string[];
+  truck_id: string[];
+}

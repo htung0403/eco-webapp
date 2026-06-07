@@ -297,7 +297,7 @@ export default function WarehouseCustomerList({
                         <button
                           type="button"
                           onClick={() =>
-                            navigate('/warehouse/orders/new', {
+                            navigate('/orders/new', {
                               state: { maKh: customer.code, nguoiGui: customer.name },
                             })
                           }

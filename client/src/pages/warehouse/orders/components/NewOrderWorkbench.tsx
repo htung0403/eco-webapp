@@ -13,6 +13,7 @@ import type { HubSummary } from '../types';
 import { CompactField, CompactInput, CompactSelect, FormSection } from './CompactField';
 import BillListSidebar from './BillListSidebar';
 import CustomerMaKhCombobox from './CustomerMaKhCombobox';
+import TruckCheckboxPicker, { type OrderTruckOption } from './TruckCheckboxPicker';
 
 interface Props {
   form: NewOrderFormState;
@@ -25,6 +26,8 @@ interface Props {
   onSelectBill: (bill: BillListItem) => void;
   hubOptions: { value: string; label: string }[];
   hubs?: HubSummary[];
+  pickupTrucks?: OrderTruckOption[];
+  isPickupTrucksLoading?: boolean;
   onSave: () => void;
   onNew: () => void;
   onDelete: () => void;
@@ -46,6 +49,8 @@ export default function NewOrderWorkbench({
   onSelectBill,
   hubOptions,
   hubs = [],
+  pickupTrucks = [],
+  isPickupTrucksLoading = false,
   onSave,
   onNew,
   onDelete,
@@ -176,9 +181,9 @@ export default function NewOrderWorkbench({
                 <CompactField label="Số bill">
                   <CompactInput
                     value={form.soBill}
-                    readOnly
-                    placeholder="Đang lấy mã bill..."
-                    className="bg-slate-50 font-bold text-primary"
+                    onChange={(e) => setField('soBill', e.target.value.toUpperCase())}
+                    placeholder="Nhập số bill..."
+                    className="font-bold text-primary"
                   />
                 </CompactField>
                 <CompactField label="Loại BP">
@@ -281,17 +286,31 @@ export default function NewOrderWorkbench({
               <CompactField label="Ghi chú">
                 <CompactInput value={form.ghiChu} onChange={(e) => setField('ghiChu', e.target.value)} />
               </CompactField>
-              <div className="grid grid-cols-1 gap-1.5 xl:grid-cols-4">
-                <CompactField label="Xe lấy">
-                  <CompactInput value={form.xeLay} onChange={(e) => setField('xeLay', e.target.value)} />
+              <div className="grid grid-cols-1 gap-1.5 xl:grid-cols-2">
+                <CompactField label="Xe lấy" className="items-start">
+                  <TruckCheckboxPicker
+                    options={pickupTrucks}
+                    value={form.xeLay}
+                    onChange={(value) => setField('xeLay', value)}
+                    isLoading={isPickupTrucksLoading}
+                    placeholder="Chọn xe lấy..."
+                  />
                 </CompactField>
-                <CompactField label="Bưu tá">
+                <CompactField label="Xe phát" className="items-start">
+                  <TruckCheckboxPicker
+                    options={pickupTrucks}
+                    value={form.xePhat}
+                    onChange={(value) => setField('xePhat', value)}
+                    isLoading={isPickupTrucksLoading}
+                    placeholder="Chọn xe phát..."
+                  />
+                </CompactField>
+              </div>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                <CompactField label="Bưu tá lấy">
                   <CompactInput value={form.buuTaLay} onChange={(e) => setField('buuTaLay', e.target.value)} />
                 </CompactField>
-                <CompactField label="Xe phát">
-                  <CompactInput value={form.xePhat} onChange={(e) => setField('xePhat', e.target.value)} />
-                </CompactField>
-                <CompactField label="Bưu tá">
+                <CompactField label="Bưu tá phát">
                   <CompactInput value={form.buuTaPhat} onChange={(e) => setField('buuTaPhat', e.target.value)} />
                 </CompactField>
               </div>

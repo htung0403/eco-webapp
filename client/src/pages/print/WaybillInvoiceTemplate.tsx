@@ -1,5 +1,7 @@
 import type { WaybillPrintData } from './waybillPrintUtils';
 
+export const WAYBILL_PRINT_LOGO_SRC = '/z7901426682318_7c6139835f49e94fff8a3f239aaea0b8.jpg';
+
 const Cell = ({ label, value, colSpan }: { label: string; value?: string; colSpan?: number }) => (
   <td colSpan={colSpan}>
     <span className="cell-label">{label}</span>{' '}
@@ -22,9 +24,8 @@ export default function WaybillInvoiceTemplate({ data }: Props) {
           {/* Header */}
           <tr>
             <td style={{ width: '16%' }}>
-              <div style={{ padding: 4 }}>
-                <div style={{ fontWeight: 'bold', fontSize: '11pt' }}>ECO</div>
-                <div className="logo-tagline">Express &amp; Exacting</div>
+              <div className="logo-box">
+                <img src={WAYBILL_PRINT_LOGO_SRC} alt="ECO Express" className="logo-img" />
               </div>
             </td>
             <td colSpan={4}>

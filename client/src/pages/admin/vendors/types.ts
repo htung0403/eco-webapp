@@ -1,9 +1,28 @@
-export type VendorRecord = Record<string, unknown> & { id?: string | number | null };
+export interface Vendor {
+  id: string | number;
+  code?: string | null;
+  name?: string | null;
+  service_type?: string | null;
+  contact_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  province?: string | null;
+  contract_type?: string | null;
+  status?: string | null;
+  payable_balance?: string | number | null;
+  routes?: Record<string, unknown> | unknown[] | null;
+  pricing?: Record<string, unknown> | unknown[] | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type VendorRecord = Vendor;
 
 export interface VendorListResponse {
-  data?: VendorRecord[];
-  items?: VendorRecord[];
-  vendors?: VendorRecord[];
+  data?: Vendor[];
+  items?: Vendor[];
+  vendors?: Vendor[];
   total?: number;
   page?: number;
   limit?: number;
@@ -31,4 +50,14 @@ export interface FilterOption {
   label: string;
 }
 
-export type VendorFormState = Record<string, string>;
+export interface VendorFormState {
+  code: string;
+  name: string;
+  service_type: string;
+  contact_name: string;
+  phone: string;
+  email: string;
+  province: string;
+  contract_type: string;
+  status: string;
+}

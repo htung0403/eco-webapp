@@ -12,16 +12,19 @@ import {
   buildCreatePayload,
   calcVolumetricWeight,
   isPricingField,
+  isValidVnPhone,
   waybillToBillItem,
   waybillToOrderForm,
 } from './warehouse/orders/orderFormUtils';
 import type { CustomerListItem, CustomerListResponse } from './warehouse/customers/types';
-import type { BillListItem, NewOrderFormState, OrderWorkbenchTab } from './warehouse/orders/orderFormTypes';
+import type { TruckListResponse } from '../trucks/types';
+import { normalizeTruckList, toOrderTruckOption } from './warehouse/orders/truckSelectionUtils';
+import type { OrderTruckOption } from './warehouse/orders/components/TruckCheckboxPicker';
+import type { BillListItem, NewOrderFormState } from './warehouse/orders/orderFormTypes';
 import type { BadgeConfig, CreatedWaybill, HubSummary, PaymentType, UserSummary, WaybillDetail } from './warehouse/orders/types';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
 const CREATE_ROLES = 1 | 32 | 64;
-const phonePattern = /^(0[3|5|7|8|9])+([0-9]{8})$/;
 
 const statusConfig: Record<string, BadgeConfig> = {
   RECEIVED: { label: 'Đã tạo đơn', className: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -74,6 +77,8 @@ export default function WarehouseOrderNewPage() {
   const [hubError, setHubError] = useState('');
   const [actionError, setActionError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pickupTrucks, setPickupTrucks] = useState<OrderTruckOption[]>([]);
+  const [isPickupTrucksLoading, setIsPickupTrucksLoading] = useState(false);
   const [createdWaybill, setCreatedWaybill] = useState<CreatedWaybill | null>(null);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isSuccessClosing, setIsSuccessClosing] = useState(false);
@@ -102,14 +107,19 @@ export default function WarehouseOrderNewPage() {
     }
   }, []);
 
-  const refreshNextBillCode = useCallback(async () => {
+  const loadPickupTrucks = useCallback(async () => {
+    setIsPickupTrucksLoading(true);
     try {
-      const { waybill_code } = await apiRequest<{ waybill_code: string }>('/waybills/next-code');
-      if (waybill_code) {
-        setForm((prev) => ({ ...prev, soBill: waybill_code }));
-      }
+      const response = await apiRequest<TruckListResponse>('/trucks?limit=100');
+      const trucks = normalizeTruckList(response)
+        .map(toOrderTruckOption)
+        .filter((truck): truck is OrderTruckOption => Boolean(truck))
+        .sort((a, b) => a.plate.localeCompare(b.plate, 'vi'));
+      setPickupTrucks(trucks);
     } catch {
-      setForm((prev) => ({ ...prev, soBill: '' }));
+      setPickupTrucks([]);
+    } finally {
+      setIsPickupTrucksLoading(false);
     }
   }, []);
 
@@ -130,8 +140,7 @@ export default function WarehouseOrderNewPage() {
           noiDen: 'HCM',
           nvgn: loginName !== 'bạn' ? loginName : 'ADMIN',
         }));
-        await loadBills();
-        await refreshNextBillCode();
+        await Promise.all([loadBills(), loadPickupTrucks()]);
       } catch (error) {
         setHubError(error instanceof ApiError ? error.message : 'Không thể tải danh sách bưu cục.');
       } finally {
@@ -139,10 +148,26 @@ export default function WarehouseOrderNewPage() {
       }
     };
     void load();
-  }, [loadBills, loginName, refreshNextBillCode, user?.hub_id]);
+  }, [loadBills, loadPickupTrucks, loginName, user?.hub_id]);
 
   useEffect(() => {
-    const state = location.state as { maKh?: string; nguoiGui?: string } | null;
+    const state = location.state as { maKh?: string; nguoiGui?: string; waybillId?: string } | null;
+
+    if (state?.waybillId && !isLoading && hubs.length > 0) {
+      const waybillId = state.waybillId;
+      void (async () => {
+        try {
+          const detail = await apiRequest<WaybillDetail>(`/waybills/${waybillId}`);
+          setSelectedBillId(String(waybillId));
+          setForm(waybillToOrderForm(detail, hubs));
+          navigate(location.pathname, { replace: true, state: null });
+        } catch {
+          setActionError('Không tải được vận đơn để sửa.');
+        }
+      })();
+      return;
+    }
+
     if (!state?.maKh || isLoading || hubs.length === 0) return;
 
     const code = state.maKh.toUpperCase();
@@ -167,7 +192,7 @@ export default function WarehouseOrderNewPage() {
         }),
       );
     })();
-  }, [location.state, isLoading, hubs]);
+  }, [location.state, isLoading, hubs, navigate, location.pathname]);
 
   const setField = <K extends keyof NewOrderFormState>(key: K, value: NewOrderFormState[K]) => {
     setForm((prev) => {
@@ -192,10 +217,11 @@ export default function WarehouseOrderNewPage() {
   };
 
   const validate = () => {
+    if (!form.soBill.trim()) return 'Số bill là bắt buộc.';
     if (!form.nguoiGui.trim()) return 'Người gửi là bắt buộc.';
     if (!form.nguoiNhan.trim()) return 'Người nhận là bắt buộc.';
     if (!form.diaChiNhan.trim()) return 'Địa chỉ nhận là bắt buộc.';
-    if (form.dienThoaiNhan.trim() && !phonePattern.test(form.dienThoaiNhan.trim())) {
+    if (form.dienThoaiNhan.trim() && !isValidVnPhone(form.dienThoaiNhan)) {
       return 'Số điện thoại người nhận không hợp lệ.';
     }
     if (!form.originHubId) return 'Chọn bưu cục gửi.';
@@ -228,7 +254,6 @@ export default function WarehouseOrderNewPage() {
       nvgn: loginName !== 'bạn' ? loginName : 'ADMIN',
     });
     setActionError('');
-    void refreshNextBillCode();
   };
 
   const handleSave = async () => {
@@ -312,7 +337,7 @@ export default function WarehouseOrderNewPage() {
       <div className="flex shrink-0 items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 shadow-sm">
         <button
           type="button"
-          onClick={() => navigate('/warehouse/inventory')}
+          onClick={() => navigate('/orders')}
           className="flex h-9 w-9 items-center justify-center rounded-lg border border-border hover:bg-muted"
         >
           <ArrowLeft size={15} />
@@ -348,6 +373,8 @@ export default function WarehouseOrderNewPage() {
             onSelectBill={(bill) => void handleSelectBill(bill)}
             hubOptions={hubOptions}
             hubs={hubs}
+            pickupTrucks={pickupTrucks}
+            isPickupTrucksLoading={isPickupTrucksLoading}
             onSave={() => void handleSave()}
             onNew={handleNew}
             onDelete={() => void handleDelete()}

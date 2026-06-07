@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, Filter, Flag, Loader2, Package, Printer, RefreshCcw, Route, Search, ShieldAlert, Tag, SlidersHorizontal, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, Filter, Flag, HandCoins, Layers, Loader2, Package, Pencil, Printer, RefreshCcw, Search, ShieldAlert, Tag, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
+import { ConfirmDialog, type ConfirmDialogState } from '../components/ui/ConfirmDialog';
 import { DayPicker } from '../components/ui/DayPicker';
 import { FilterSelect } from '../components/ui/FilterSelect';
 import type { AuthUserProfile } from './login/types';
-import AssignPriorityDialog from './warehouse/inventory/dialogs/AssignPriorityDialog';
-import AssignRouteDialog from './warehouse/inventory/dialogs/AssignRouteDialog';
+import WaybillPackageSplitDialog from './warehouse/inventory/dialogs/WaybillPackageSplitDialog';
 import WaybillInventoryDetailDialog from './warehouse/inventory/dialogs/WaybillInventoryDetailDialog';
+import WaybillPriorityControl from './warehouse/inventory/WaybillPriorityControl';
+import WaybillRouteControl from './warehouse/inventory/WaybillRouteControl';
+import SplitOrderDialog from './warehouse/inventory/dialogs/SplitOrderDialog';
+import WaybillCashVoucherDialog from './warehouse/inventory/dialogs/WaybillCashVoucherDialog';
 import { mapWaybillsToPrintRows, saveInventoryPrintPayload, summarizeFilters } from './print/inventoryPrintUtils';
 import InventoryColumnPicker from './warehouse/inventory/InventoryColumnPicker';
 import {
@@ -20,7 +25,6 @@ import {
   resolveLoadedAt,
   resolveMaKh,
   resolveNoiDen,
-  resolveRoute,
   resolveReceiverAddress,
   resolveReceiverPhone,
   resolveVolumeM3,
@@ -28,13 +32,15 @@ import {
   saveVisibleColumnIds,
   type InventoryColumnId,
 } from './warehouse/inventory/inventoryColumns';
-import type { BadgeConfig, FilterOption, HubSummary, InventoryFilters, InventoryListResponse, PriorityFormState, RouteFormState, WaybillInventoryDetail, WaybillInventoryItem } from './warehouse/inventory/types';
+import type { BadgeConfig, FilterOption, HubSummary, InventoryFilters, InventoryListResponse, WaybillInventoryDetail, WaybillInventoryItem } from './warehouse/inventory/types';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
+const WAREHOUSE = 1;
 const MANAGER = 32;
 const DIRECTOR = 64;
 const DISPATCHER = 8;
-const defaultFilters: InventoryFilters = { keyword: '', statuses: [], hubIds: [], paymentTypes: [], priorities: [], receivedFrom: '', receivedTo: '', page: 1, limit: 10 };
+const MUTABLE_WAYBILL_STATUSES = ['RECEIVED', 'IN_WAREHOUSE'];
+const defaultFilters: InventoryFilters = { keyword: '', ma_kh: '', statuses: [], hubIds: [], paymentTypes: [], priorities: [], receivedFrom: '', receivedTo: '', page: 1, limit: 10 };
 
 const statusConfig: Record<string, BadgeConfig> = {
   RECEIVED: { label: 'Đã tạo đơn', className: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -68,19 +74,21 @@ const getStoredUser = (): AuthUserProfile | null => {
 };
 
 const hasManagerAccess = (roleMask: number) => (roleMask & (MANAGER | DIRECTOR)) !== 0;
+const canEditWaybill = (roleMask: number) => (roleMask & (WAREHOUSE | MANAGER | DIRECTOR)) !== 0;
 const canMutateInventory = (roleMask: number) => (roleMask & (DISPATCHER | MANAGER | DIRECTOR)) !== 0;
 const normalizeList = (response: InventoryListResponse | WaybillInventoryItem[]) => Array.isArray(response) ? response : response.data || response.items || response.waybills || [];
-const normalizeTotal = (response: InventoryListResponse | WaybillInventoryItem[], fallback: number) => Array.isArray(response) ? fallback : response.total ?? response.meta?.total ?? fallback;
+const normalizeTotal = (response: InventoryListResponse | WaybillInventoryItem[], fallback: number) => Array.isArray(response) ? fallback : response.meta?.total_waybills ?? response.total ?? response.meta?.total ?? fallback;
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString('vi-VN') : '—';
 const displayCode = (waybill: WaybillInventoryItem) => waybill.waybill_code || waybill.code || `#${waybill.id}`;
 const displayValue = (value: unknown, suffix = '') => value === null || value === undefined || value === '' ? '—' : `${value}${suffix}`;
 const normalizeStatus = (waybill: WaybillInventoryItem) => String(waybill.current_state || waybill.status || '').toUpperCase();
-const normalizePriority = (waybill: WaybillInventoryItem) => String(waybill.priority || 'NORMAL').toUpperCase();
+const isMutableWaybill = (waybill: WaybillInventoryItem) => MUTABLE_WAYBILL_STATUSES.includes(normalizeStatus(waybill));
 const formatHub = (hub: HubSummary | null | undefined, fallback?: string | number | null) => hub ? [hub.code?.toUpperCase(), hub.name].filter(Boolean).join(' · ') || `Hub #${hub.id}` : fallback ? `Hub #${fallback}` : '—';
 
 const buildQuery = (filters: InventoryFilters) => {
   const params = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit) });
   if (filters.keyword.trim()) params.set('keyword', filters.keyword.trim());
+  if (filters.ma_kh.trim()) params.set('ma_kh', filters.ma_kh.trim());
   if (filters.statuses.length) params.set('status', filters.statuses.join(','));
   if (filters.hubIds.length) params.set('hub_id', filters.hubIds.join(','));
   if (filters.paymentTypes.length) params.set('payment_type', filters.paymentTypes.join(','));
@@ -91,7 +99,12 @@ const buildQuery = (filters: InventoryFilters) => {
 };
 
 export default function WarehouseInventoryPage() {
-  const [filters, setFilters] = useState<InventoryFilters>(defaultFilters);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [filters, setFilters] = useState<InventoryFilters>(() => ({
+    ...defaultFilters,
+    ma_kh: searchParams.get('ma_kh')?.trim() || '',
+  }));
   const [draftFilters, setDraftFilters] = useState<InventoryFilters>(defaultFilters);
   const [waybills, setWaybills] = useState<WaybillInventoryItem[]>([]);
   const [hubs, setHubs] = useState<HubSummary[]>([]);
@@ -101,30 +114,34 @@ export default function WarehouseInventoryPage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ status: true, hub: true, payment: false, priority: false, received: false });
   const [groupSearch, setGroupSearch] = useState<Record<string, string>>({ status: '', hub: '', payment: '', priority: '' });
-  const [selectedWaybill, setSelectedWaybill] = useState<WaybillInventoryItem | null>(null);
   const [detailWaybill, setDetailWaybill] = useState<WaybillInventoryDetail | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDetailClosing, setIsDetailClosing] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [isPriorityOpen, setIsPriorityOpen] = useState(false);
-  const [isPriorityClosing, setIsPriorityClosing] = useState(false);
-  const [priorityForm, setPriorityForm] = useState<PriorityFormState>({ priority: 'NORMAL' });
-  const [isRouteOpen, setIsRouteOpen] = useState(false);
-  const [isRouteClosing, setIsRouteClosing] = useState(false);
-  const [routeForm, setRouteForm] = useState<RouteFormState>({ route_code: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSplitOpen, setIsSplitOpen] = useState(false);
+  const [isSplitClosing, setIsSplitClosing] = useState(false);
+  const [isBoardOpen, setIsBoardOpen] = useState(false);
+  const [isBoardClosing, setIsBoardClosing] = useState(false);
+  const [splitWaybill, setSplitWaybill] = useState<WaybillInventoryItem | null>(null);
   const [actionError, setActionError] = useState('');
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [cashVoucherWaybill, setCashVoucherWaybill] = useState<WaybillInventoryItem | null>(null);
+  const [isCashVoucherOpen, setIsCashVoucherOpen] = useState(false);
+  const [isCashVoucherClosing, setIsCashVoucherClosing] = useState(false);
 
   const user = useMemo(getStoredUser, []);
   const canViewPage = hasManagerAccess(user?.role_mask ?? 0);
   const canUpdate = canMutateInventory(user?.role_mask ?? 0);
+  const canEdit = canEditWaybill(user?.role_mask ?? 0);
+  const canDelete = hasManagerAccess(user?.role_mask ?? 0);
   const [visibleColumnIds, setVisibleColumnIds] = useState<InventoryColumnId[]>(() =>
     loadVisibleColumnIds(canViewPage),
   );
   const totalPages = Math.max(1, Math.ceil(total / filters.limit));
   const hubOptions = useMemo(() => hubs.map(hub => ({ value: String(hub.id), label: formatHub(hub) })), [hubs]);
-  const activeFilterCount = filters.statuses.length + filters.hubIds.length + filters.paymentTypes.length + filters.priorities.length + Number(Boolean(filters.receivedFrom || filters.receivedTo));
+  const activeFilterCount = filters.statuses.length + filters.hubIds.length + filters.paymentTypes.length + filters.priorities.length + Number(Boolean(filters.receivedFrom || filters.receivedTo)) + Number(Boolean(filters.ma_kh.trim()));
   const visibleColumns = useMemo(
     () => INVENTORY_COLUMNS.filter((col) => visibleColumnIds.includes(col.id)),
     [visibleColumnIds],
@@ -133,10 +150,29 @@ export default function WarehouseInventoryPage() {
     () => computeGrandTotals(waybills, canViewPage),
     [waybills, canViewPage],
   );
-  const clearFilters = () => setFilters(defaultFilters);
+  const clearFilters = () => {
+    setFilters(defaultFilters);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('ma_kh');
+      return next;
+    });
+  };
+  const clearMaKhFilter = () => {
+    updateFilters({ ma_kh: '' });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('ma_kh');
+      return next;
+    });
+  };
   const setFilterArray = (key: keyof Pick<InventoryFilters, 'statuses' | 'hubIds' | 'paymentTypes' | 'priorities'>, value: string[]) => updateFilters({ [key]: value } as Partial<InventoryFilters>);
 
   useEffect(() => { if (canViewPage) void loadHubs(); }, [canViewPage]);
+  useEffect(() => {
+    const maKh = searchParams.get('ma_kh')?.trim() || '';
+    setFilters((prev) => (prev.ma_kh === maKh ? prev : { ...prev, ma_kh: maKh, page: 1 }));
+  }, [searchParams]);
   useEffect(() => { if (canViewPage) void loadInventory(); }, [filters, canViewPage]);
 
   async function loadHubs() {
@@ -152,12 +188,12 @@ export default function WarehouseInventoryPage() {
     setIsLoading(true);
     setError('');
     try {
-      const response = await apiRequest<InventoryListResponse | WaybillInventoryItem[]>(`/waybills/inventory?${buildQuery(filters)}`);
+      const response = await apiRequest<InventoryListResponse | WaybillInventoryItem[]>(`/waybills/inventory/trip-lines?${buildQuery(filters)}`);
       const items = normalizeList(response);
       setWaybills(items);
       setTotal(normalizeTotal(response, items.length));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Không thể tải danh sách vận đơn tồn kho.');
+      setError(err instanceof ApiError ? err.message : 'Không thể tải danh sách tồn kho theo chuyến.');
       setWaybills([]);
       setTotal(0);
     } finally {
@@ -170,7 +206,6 @@ export default function WarehouseInventoryPage() {
   const applyFilters = () => { setFilters({ ...draftFilters, page: 1 }); setIsFilterOpen(false); };
 
   const openDetail = async (waybill: WaybillInventoryItem) => {
-    setSelectedWaybill(waybill);
     setDetailWaybill(null);
     setIsDetailOpen(true);
     setIsDetailLoading(true);
@@ -184,25 +219,55 @@ export default function WarehouseInventoryPage() {
   };
 
   const closeDetail = () => { setIsDetailClosing(true); window.setTimeout(() => { setIsDetailOpen(false); setIsDetailClosing(false); setDetailWaybill(null); }, 180); };
-  const openPriority = (waybill: WaybillInventoryItem) => { setSelectedWaybill(waybill); setPriorityForm({ priority: normalizePriority(waybill) }); setActionError(''); setIsPriorityOpen(true); };
-  const closePriority = () => { setIsPriorityClosing(true); window.setTimeout(() => { setIsPriorityOpen(false); setIsPriorityClosing(false); }, 180); };
-  const openRoute = (waybill: WaybillInventoryItem) => { setSelectedWaybill(waybill); setRouteForm({ route_code: waybill.route_code || waybill.delivery_route || '' }); setActionError(''); setIsRouteOpen(true); };
-  const closeRoute = () => { setIsRouteClosing(true); window.setTimeout(() => { setIsRouteOpen(false); setIsRouteClosing(false); }, 180); };
-
-  async function submitPriority() {
-    if (!selectedWaybill) return;
-    setIsSubmitting(true);
-    setActionError('');
-    try {
-      await apiRequest(`/waybills/${selectedWaybill.id}/priority`, { method: 'PATCH', body: { priority: priorityForm.priority } });
-      closePriority();
-      await loadInventory();
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Không thể cập nhật ưu tiên.');
-    } finally {
-      setIsSubmitting(false);
+  const openSplit = (waybill: WaybillInventoryItem | null = null) => {
+    if (waybill) {
+      setSplitWaybill(waybill);
+      setIsSplitOpen(true);
+      return;
     }
-  }
+    setSplitWaybill(null);
+    setIsBoardOpen(true);
+  };
+  const closeSplit = () => { setIsSplitClosing(true); window.setTimeout(() => { setIsSplitOpen(false); setIsSplitClosing(false); setSplitWaybill(null); }, 180); };
+  const closeBoard = () => { setIsBoardClosing(true); window.setTimeout(() => { setIsBoardOpen(false); setIsBoardClosing(false); }, 180); };
+
+  const openCashVoucher = (waybill: WaybillInventoryItem) => {
+    setCashVoucherWaybill(waybill);
+    setIsCashVoucherOpen(true);
+  };
+  const closeCashVoucher = () => {
+    setIsCashVoucherClosing(true);
+    window.setTimeout(() => {
+      setIsCashVoucherOpen(false);
+      setIsCashVoucherClosing(false);
+      setCashVoucherWaybill(null);
+    }, 180);
+  };
+
+  const openEdit = (waybill: WaybillInventoryItem) => {
+    navigate('/orders/new', { state: { waybillId: String(waybill.id) } });
+  };
+
+  const confirmDeleteWaybill = (waybill: WaybillInventoryItem) => {
+    setConfirmDialog({
+      title: 'Xóa vận đơn',
+      message: `Xóa vận đơn ${displayCode(waybill)} khỏi hệ thống? Chỉ xóa được khi đơn ở trạng thái «Đã tạo đơn» hoặc «Trong kho».`,
+      confirmLabel: 'Xóa',
+      danger: true,
+      onConfirm: async () => {
+        setIsDeleting(true);
+        setActionError('');
+        try {
+          await apiRequest(`/waybills/${waybill.id}`, { method: 'DELETE' });
+          await loadInventory();
+        } catch (err) {
+          setActionError(err instanceof ApiError ? err.message : 'Không thể xóa vận đơn.');
+        } finally {
+          setIsDeleting(false);
+        }
+      },
+    });
+  };
 
   function handlePrintStockList() {
     setActionError('');
@@ -224,21 +289,6 @@ export default function WarehouseInventoryPage() {
     window.open('/print/inventory-stock', '_blank');
   }
 
-  async function submitRoute() {
-    if (!selectedWaybill) return;
-    setIsSubmitting(true);
-    setActionError('');
-    try {
-      await apiRequest(`/waybills/${selectedWaybill.id}/route`, { method: 'PATCH', body: { route_code: routeForm.route_code.trim() } });
-      closeRoute();
-      await loadInventory();
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Không thể gán tuyến.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   if (!canViewPage) {
     return <StateCard icon={<ShieldAlert size={24} />} title="Không có quyền truy cập" description="Trang danh sách đơn tồn kho chỉ hiển thị cho MANAGER hoặc DIRECTOR." />;
   }
@@ -247,6 +297,19 @@ export default function WarehouseInventoryPage() {
     <div className="h-full min-h-0 flex flex-col gap-2">
       {actionError && <Alert message={actionError} tone="red" />}
       {error && <Alert message={error} tone="red" />}
+      {filters.ma_kh.trim() && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-[13px]">
+          <span className="font-medium text-muted-foreground">Lọc theo Mã KH:</span>
+          <span className="font-extrabold text-primary">{filters.ma_kh.trim().toUpperCase()}</span>
+          <button
+            type="button"
+            onClick={clearMaKhFilter}
+            className="ml-auto rounded-lg border border-border bg-white px-3 py-1 text-[12px] font-bold text-muted-foreground hover:bg-muted"
+          >
+            × Bỏ lọc KH
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
         <div className="p-3 border-b border-border bg-card shrink-0 space-y-3">
@@ -258,7 +321,14 @@ export default function WarehouseInventoryPage() {
             <div className="hidden flex-1 md:block" />
             <button
               type="button"
-              title="Tùy chỉnh cột"
+              title="Bảng kê phát hàng — xe & vị trí"
+              onClick={() => openSplit(null)}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 text-[13px] font-bold text-violet-800 hover:bg-violet-100"
+            >
+              <Layers size={16} />
+              <span className="hidden sm:inline">Bảng kê xe</span>
+            </button>
+            <button
               onClick={() => setIsColumnPickerOpen(true)}
               className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-foreground hover:bg-muted"
             >
@@ -308,14 +378,18 @@ export default function WarehouseInventoryPage() {
                 <tbody>
                   {waybills.map((waybill) => (
                     <InventoryRow
-                      key={waybill.id}
+                      key={`${waybill.id}-${waybill.split_id ?? 'base'}`}
                       waybill={waybill}
                       columns={visibleColumns}
                       canViewPricing={canViewPage}
                       canUpdate={canUpdate}
+                      canEdit={canEdit}
+                      canDelete={canDelete}
                       onDetail={openDetail}
-                      onPriority={openPriority}
-                      onRoute={openRoute}
+                      onEdit={openEdit}
+                      onDelete={confirmDeleteWaybill}
+                      onSplit={openSplit}
+                      onCashVoucher={openCashVoucher}
                     />
                   ))}
                 </tbody>
@@ -333,7 +407,7 @@ export default function WarehouseInventoryPage() {
                   </tr>
                 </tfoot>
               </table>
-              <div className="grid gap-3 p-3 md:hidden">{waybills.map(waybill => <InventoryCard key={waybill.id} waybill={waybill} canUpdate={canUpdate} onDetail={openDetail} onPriority={openPriority} onRoute={openRoute} />)}</div>
+              <div className="grid gap-3 p-3 md:hidden">{waybills.map(waybill => <InventoryCard key={`${waybill.id}-${waybill.split_id ?? 'base'}`} waybill={waybill} canUpdate={canUpdate} canEdit={canEdit} canDelete={canDelete} onDetail={openDetail} onEdit={openEdit} onDelete={confirmDeleteWaybill} onSplit={openSplit} onCashVoucher={openCashVoucher} />)}</div>
             </>
           )}
         </div>
@@ -353,8 +427,16 @@ export default function WarehouseInventoryPage() {
 
       <FilterBottomSheet isOpen={isFilterOpen} draftFilters={draftFilters} setDraftFilters={setDraftFilters} openGroups={openGroups} setOpenGroups={setOpenGroups} groupSearch={groupSearch} setGroupSearch={setGroupSearch} hubOptions={hubOptions} onClose={() => setIsFilterOpen(false)} onApply={applyFilters} />
       <WaybillInventoryDetailDialog isOpen={isDetailOpen} isClosing={isDetailClosing} isLoading={isDetailLoading} waybill={detailWaybill} statusConfig={statusConfig} paymentConfig={paymentConfig} priorityConfig={priorityConfig} onClose={closeDetail} />
-      <AssignPriorityDialog isOpen={isPriorityOpen} isClosing={isPriorityClosing} isSubmitting={isSubmitting} waybill={selectedWaybill} formState={priorityForm} priorityConfig={priorityConfig} onChange={(priority) => setPriorityForm({ priority })} onClose={closePriority} onSubmit={submitPriority} />
-      <AssignRouteDialog isOpen={isRouteOpen} isClosing={isRouteClosing} isSubmitting={isSubmitting} waybill={selectedWaybill} formState={routeForm} onChange={(route_code) => setRouteForm({ route_code })} onClose={closeRoute} onSubmit={submitRoute} />
+      {splitWaybill && (
+        <WaybillPackageSplitDialog
+          isOpen={isSplitOpen}
+          isClosing={isSplitClosing}
+          waybill={splitWaybill}
+          onClose={closeSplit}
+          onSaved={() => void loadInventory()}
+        />
+      )}
+      <SplitOrderDialog isOpen={isBoardOpen} isClosing={isBoardClosing} waybill={null} onClose={closeBoard} />
       <InventoryColumnPicker
         isOpen={isColumnPickerOpen}
         visibleIds={visibleColumnIds}
@@ -365,6 +447,13 @@ export default function WarehouseInventoryPage() {
         }}
         onClose={() => setIsColumnPickerOpen(false)}
       />
+      <ConfirmDialog dialog={confirmDialog} isSubmitting={isDeleting} onClose={() => setConfirmDialog(null)} />
+      <WaybillCashVoucherDialog
+        isOpen={isCashVoucherOpen}
+        isClosing={isCashVoucherClosing}
+        waybill={cashVoucherWaybill}
+        onClose={closeCashVoucher}
+      />
     </div>
   );
 }
@@ -374,16 +463,33 @@ function InventoryRow({
   columns,
   canViewPricing,
   canUpdate,
+  canEdit,
+  canDelete,
   onDetail,
-  onPriority,
-  onRoute,
+  onEdit,
+  onDelete,
+  onSplit,
+  onCashVoucher,
 }: InventoryItemProps & { columns: typeof INVENTORY_COLUMNS; canViewPricing: boolean }) {
   const cellClass = 'px-4 py-3 border-r border-border text-[13px] max-w-[200px] truncate';
 
   const renderCell = (colId: InventoryColumnId) => {
     switch (colId) {
+      case 'order_code':
+        return <td className={`${cellClass} font-bold text-violet-800`}>{waybill.order_code || '—'}</td>;
       case 'waybill_code':
         return <td className={`${cellClass} font-extrabold text-primary`}>{displayCode(waybill)}</td>;
+      case 'trip_label':
+        return (
+          <td className={cellClass}>
+            <span className={clsx('font-bold', waybill.trip_label === 'Chưa phân xe' ? 'text-amber-700' : 'text-foreground')}>
+              {waybill.trip_label || '—'}
+            </span>
+            {waybill.loading_position ? (
+              <span className="ml-1 text-[11px] text-muted-foreground">· VT {waybill.loading_position}</span>
+            ) : null}
+          </td>
+        );
       case 'loaded_at':
         return (
           <td className={clsx(cellClass, getStorageAgeRowClass(waybill).includes('red') ? 'font-bold text-red-700' : getStorageAgeRowClass(waybill).includes('amber') ? 'font-bold text-amber-800' : 'text-muted-foreground')}>
@@ -397,13 +503,28 @@ function InventoryRow({
       case 'noi_den':
         return <td className={cellClass}>{resolveNoiDen(waybill)}</td>;
       case 'route':
-        return <td className={clsx(cellClass, 'font-bold text-foreground')}>{resolveRoute(waybill)}</td>;
+        return (
+          <td className="overflow-visible px-4 py-3 border-r border-border">
+            <WaybillRouteControl
+              waybillId={waybill.id}
+              value={waybill.route_code || waybill.delivery_route}
+              hubId={waybill.dest_hub_id ?? waybill.current_hub_id ?? waybill.origin_hub_id}
+              disabled={!canUpdate}
+            />
+          </td>
+        );
       case 'ma_kh':
         return <td className={cellClass}>{resolveMaKh(waybill)}</td>;
       case 'receiver_address':
         return <td className={cellClass}>{resolveReceiverAddress(waybill)}</td>;
       case 'package_count':
-        return <td className={`${cellClass} font-medium`}>{displayValue(waybill.package_count || waybill.declared_package_count)}</td>;
+        return (
+          <td className={`${cellClass} font-medium`}>
+            {waybill.trip_package_count != null
+              ? `${waybill.trip_package_count} / ${waybill.order_total_packages ?? waybill.package_count ?? waybill.trip_package_count}`
+              : displayValue(waybill.package_count || waybill.declared_package_count)}
+          </td>
+        );
       case 'weight':
         return <td className={`${cellClass} font-medium`}>{displayValue(resolveWeightKg(waybill) || null, ' kg')}</td>;
       case 'volume':
@@ -411,7 +532,7 @@ function InventoryRow({
       case 'freight':
         return (
           <td className={`${cellClass} font-bold`}>
-            {canViewPricing ? displayValue(resolveFreight(waybill) || null, ' đ') : '—'}
+            {canViewPricing ? displayValue(waybill.allocated_freight ?? resolveFreight(waybill), ' đ') : '—'}
           </td>
         );
       case 'sender_info':
@@ -425,11 +546,29 @@ function InventoryRow({
       case 'payment_type':
         return <td className="px-4 py-3 border-r border-border"><Badge config={paymentConfig[String(waybill.payment_type || '')]} fallback={waybill.payment_type || '—'} /></td>;
       case 'cod_amount':
-        return <td className={`${cellClass} font-bold`}>{displayValue(waybill.cod_amount, ' đ')}</td>;
+        return <td className={`${cellClass} font-bold`}>{displayValue(waybill.allocated_cod ?? waybill.cod_amount, ' đ')}</td>;
       case 'priority':
-        return <td className="px-4 py-3 border-r border-border"><Badge config={priorityConfig[normalizePriority(waybill)]} fallback={normalizePriority(waybill)} /></td>;
+        return (
+          <td className="overflow-visible px-4 py-3 border-r border-border">
+            <WaybillPriorityControl waybillId={waybill.id} value={waybill.priority} disabled={!canUpdate} />
+          </td>
+        );
       case 'actions':
-        return <td className="px-4 py-3"><Actions waybill={waybill} canUpdate={canUpdate} onDetail={onDetail} onPriority={onPriority} onRoute={onRoute} /></td>;
+        return (
+          <td className="px-4 py-3">
+            <Actions
+              waybill={waybill}
+              canEdit={canEdit}
+              canDelete={canDelete}
+              isMutable={isMutableWaybill(waybill)}
+              onDetail={onDetail}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onSplit={onSplit}
+              onCashVoucher={onCashVoucher}
+            />
+          </td>
+        );
       default:
         return <td className={cellClass}>—</td>;
     }
@@ -442,7 +581,7 @@ function InventoryRow({
   );
 }
 
-function InventoryCard({ waybill, canUpdate, onDetail, onPriority, onRoute }: InventoryItemProps) {
+function InventoryCard({ waybill, canUpdate, canEdit, canDelete, onDetail, onEdit, onDelete, onSplit, onCashVoucher }: InventoryItemProps) {
   return (
     <article className="rounded-2xl border border-border bg-white p-4 shadow-sm">
       <div className="flex items-start gap-3">
@@ -457,9 +596,9 @@ function InventoryCard({ waybill, canUpdate, onDetail, onPriority, onRoute }: In
             </div>
             <Badge config={statusConfig[normalizeStatus(waybill)]} fallback={normalizeStatus(waybill)} />
           </div>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge config={paymentConfig[String(waybill.payment_type || '')]} fallback={waybill.payment_type || '—'} />
-            <Badge config={priorityConfig[normalizePriority(waybill)]} fallback={normalizePriority(waybill)} />
+            <WaybillPriorityControl waybillId={waybill.id} value={waybill.priority} disabled={!canUpdate} compact />
           </div>
         </div>
       </div>
@@ -473,7 +612,15 @@ function InventoryCard({ waybill, canUpdate, onDetail, onPriority, onRoute }: In
       <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[12px]">
         <MobileInfo label="Người gửi" value={waybill.sender_info || '—'} />
         <MobileInfo label="Người nhận" value={waybill.receiver_info || '—'} />
-        <MobileInfo label="Tuyến" value={resolveRoute(waybill)} />
+        <MobileInfo label="Tuyến" value={
+          <WaybillRouteControl
+            waybillId={waybill.id}
+            value={waybill.route_code || waybill.delivery_route}
+            hubId={waybill.dest_hub_id ?? waybill.current_hub_id ?? waybill.origin_hub_id}
+            disabled={!canUpdate}
+            compact
+          />
+        } />
         <MobileInfo label="COD" value={displayValue(waybill.cod_amount, ' đ')} />
         <MobileInfo label="Số kiện" value={displayValue(waybill.package_count || waybill.declared_package_count)} />
         <MobileInfo label="Cân nặng" value={displayValue(waybill.actual_weight || waybill.weight, ' kg')} />
@@ -481,16 +628,72 @@ function InventoryCard({ waybill, canUpdate, onDetail, onPriority, onRoute }: In
       </div>
 
       <div className="mt-3 border-t border-border pt-3">
-        <Actions waybill={waybill} canUpdate={canUpdate} onDetail={onDetail} onPriority={onPriority} onRoute={onRoute} />
+        <Actions
+          waybill={waybill}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          isMutable={isMutableWaybill(waybill)}
+          onDetail={onDetail}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onSplit={onSplit}
+          onCashVoucher={onCashVoucher}
+        />
       </div>
     </article>
   );
 }
 
-interface InventoryItemProps { waybill: WaybillInventoryItem; canUpdate: boolean; onDetail: (waybill: WaybillInventoryItem) => void; onPriority: (waybill: WaybillInventoryItem) => void; onRoute: (waybill: WaybillInventoryItem) => void; }
+interface InventoryItemProps {
+  waybill: WaybillInventoryItem;
+  canUpdate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  onDetail: (waybill: WaybillInventoryItem) => void;
+  onEdit: (waybill: WaybillInventoryItem) => void;
+  onDelete: (waybill: WaybillInventoryItem) => void;
+  onSplit: (waybill: WaybillInventoryItem) => void;
+  onCashVoucher: (waybill: WaybillInventoryItem) => void;
+}
 
-function Actions({ waybill, canUpdate, onDetail, onPriority, onRoute }: InventoryItemProps) {
-  return <div className="flex flex-wrap gap-2"><button onClick={() => onDetail(waybill)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[12px] font-bold text-foreground hover:bg-muted"><Eye size={14} />Xem</button><button disabled={!canUpdate} onClick={() => onPriority(waybill)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[12px] font-bold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"><Flag size={14} />Ưu tiên</button><button disabled={!canUpdate} onClick={() => onRoute(waybill)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[12px] font-bold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"><Route size={14} />Tuyến</button></div>;
+function Actions({
+  waybill,
+  canEdit,
+  canDelete,
+  isMutable,
+  onDetail,
+  onEdit,
+  onDelete,
+  onSplit,
+  onCashVoucher,
+}: Pick<InventoryItemProps, 'waybill' | 'canEdit' | 'canDelete' | 'onDetail' | 'onEdit' | 'onDelete' | 'onSplit' | 'onCashVoucher'> & { isMutable: boolean }) {
+  const editDisabled = !canEdit || !isMutable;
+  const deleteDisabled = !canDelete || !isMutable;
+  const lockedTitle = 'Chỉ sửa/xóa được đơn ở trạng thái «Đã tạo đơn» hoặc «Trong kho»';
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button onClick={() => onDetail(waybill)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[12px] font-bold text-foreground hover:bg-muted"><Eye size={14} />Xem</button>
+      <button onClick={() => onCashVoucher(waybill)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 text-[12px] font-bold text-teal-800 hover:bg-teal-100"><HandCoins size={14} />Thu chi</button>
+      <button onClick={() => onSplit(waybill)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 text-[12px] font-bold text-violet-800 hover:bg-violet-100"><Layers size={14} />Chia đơn</button>
+      <button
+        disabled={editDisabled}
+        title={editDisabled ? (canEdit ? lockedTitle : 'Cần quyền WAREHOUSE trở lên') : 'Sửa thông tin đơn'}
+        onClick={() => onEdit(waybill)}
+        className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[12px] font-bold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        <Pencil size={14} />Sửa
+      </button>
+      <button
+        disabled={deleteDisabled}
+        title={deleteDisabled ? (canDelete ? lockedTitle : 'Chỉ MANAGER/DIRECTOR được xóa') : 'Xóa vận đơn'}
+        onClick={() => onDelete(waybill)}
+        className="inline-flex h-9 items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 text-[12px] font-bold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        <Trash2 size={14} />Xóa
+      </button>
+    </div>
+  );
 }
 
 function FilterBottomSheet({ isOpen, draftFilters, setDraftFilters, openGroups, setOpenGroups, groupSearch, setGroupSearch, hubOptions, onClose, onApply }: { isOpen: boolean; draftFilters: InventoryFilters; setDraftFilters: React.Dispatch<React.SetStateAction<InventoryFilters>>; openGroups: Record<string, boolean>; setOpenGroups: React.Dispatch<React.SetStateAction<Record<string, boolean>>>; groupSearch: Record<string, string>; setGroupSearch: React.Dispatch<React.SetStateAction<Record<string, string>>>; hubOptions: FilterOption[]; onClose: () => void; onApply: () => void; }) {

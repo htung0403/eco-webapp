@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { AlertCircle, Eye, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { ApiError, apiRequest } from '../../lib/api';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
+import { fetchVendorSelectOptions } from '../../lib/vendorOptions';
 
-type FieldType = 'text' | 'number' | 'date' | 'time' | 'password';
+type FieldType = 'text' | 'number' | 'date' | 'time' | 'password' | 'vendor';
 
 interface FieldConfig {
   key: string;
@@ -29,16 +31,16 @@ interface ListResponse {
   limit: number;
 }
 
-const commonMoneyFields = new Set(['amount', 'unit_price', 'transfer_fee', 'total_amount', 'cod_amount', 'external_vehicle_cost', 'customer_discount', 'final_profit', 'carrier_holding_amount', 'bo_fee', 'income_amount', 'expense_amount']);
+const commonMoneyFields = new Set(['amount', 'unit_price', 'transfer_fee', 'total_amount', 'cod_amount', 'external_vehicle_cost', 'customer_discount', 'final_profit', 'carrier_holding_amount', 'bo_fee', 'income_amount', 'expense_amount', 'balance_amount']);
 
 export const businessPageConfigs: Record<string, BusinessConfig> = {
-  vehicleDirectory: { title: 'Danh sách xe', description: 'Quản lý lái xe, khu vực, nhà xe, BKS và loại xe.', endpoint: '/vehicle-directory', fields: fields(['driver_name:Họ tên lái xe', 'region:Khu vực', 'carrier_name:Nhà xe', 'license_plate:BKS', 'vehicle_type:Loại xe']) },
+  vehicleDirectory: { title: 'Danh sách xe', description: 'Quản lý lái xe, khu vực, nhà xe, BKS và loại xe.', endpoint: '/vehicle-directory', fields: fields(['driver_name:Họ tên lái xe', 'region:Khu vực', 'carrier_name:Nhà xe:vendor', 'license_plate:BKS', 'vehicle_type:Loại xe']) },
   vehicleCosts: { title: 'Chi phí xe', description: 'Theo dõi chi phí phát sinh theo BKS và trạng thái xử lý.', endpoint: '/vehicle-costs', fields: fields(['cost_date:Ngày:date', 'license_plate:BKS', 'vehicle_type:Loại xe', 'cost_type:Loại CP', 'amount:Số tiền:number', 'status:Trạng thái']) },
-  cashTransactionDetails: { title: 'Thu chi CT', description: 'Quản lý phiếu thu chi chi tiết gắn với chi phí xe.', endpoint: '/cash-transaction-details', fields: fields(['vehicle_cost_id:ID chi phí:number', 'voucher_type:Loại phiếu', 'voucher_name:Tên phiếu', 'service_type:Loại DV', 'counterparty_unit:Đơn vị thu chi', 'content:Nội dung', 'performed_by:Người thực hiện', 'entry_date:Ngày:date', 'entry_time:Giờ:time', 'note:Ghi chú', 'amount:Số tiền:number']) },
+  cashVouchers: { title: 'Phiếu thu chi', description: 'Lập và tra cứu phiếu thu, phiếu chi theo chi phí xe.', endpoint: '/cash-transaction-details', fields: fields(['vehicle_cost_id:ID chi phí:number', 'voucher_type:Loại phiếu', 'voucher_name:Tên phiếu', 'service_type:Loại DV', 'counterparty_unit:Đơn vị thu chi', 'content:Nội dung', 'performed_by:Người thực hiện', 'entry_date:Ngày:date', 'entry_time:Giờ:time', 'note:Ghi chú', 'amount:Số tiền:number']) },
+  fundBalances: { title: 'Số quỹ', description: 'Theo dõi số dư quỹ tiền mặt theo mã quỹ và bưu cục.', endpoint: '/fund-balances', fields: fields(['record_date:Ngày:date', 'fund_code:Mã quỹ', 'fund_name:Tên quỹ', 'hub_name:Bưu cục', 'balance_amount:Số quỹ:number', 'note:Ghi chú']) },
   northSouthShipments: { title: 'Vận tải Bắc Nam', description: 'Quản lý bill vận tải, doanh thu, chi phí và lợi nhuận cuối.', endpoint: '/north-south-shipments', fields: fields(['bill:Bill', 'goods_name:Tên hàng', 'package_count:Số kiện:number', 'volume:Số khối:number', 'weight:Số cân:number', 'service_type:Dịch vụ', 'destination:Nơi đến', 'address:Địa chỉ', 'unit:ĐVT', 'unit_price:Đơn giá:number', 'transfer_fee:Trung chuyển:number', 'total_amount:Thành tiền:number', 'cod_amount:Thu hộ khách:number', 'payment_method:Hình thức thanh toán', 'note:Ghi chú', 'pickup_vehicle_status:TT xe lấy hàng', 'external_vehicle_cost:Cước xe ngoài:number', 'external_vehicle_payment_method:Hình thức tt xe ngoài', 'customer_discount:Chiết khấu khách:number', 'final_profit:Lợi nhuận cuối:number', 'carrier_holding_amount:Nhà xe cầm:number']) },
-  staffMembers: { title: 'Nhân sự', description: 'Quản lý nhân sự nội bộ; mật khẩu chỉ dùng khi tạo/cập nhật.', endpoint: '/staff-members', fields: fields(['full_name:Họ và tên', 'department:Bộ phận', 'position:Vị trí', 'phone:SĐT', 'password:Password:password:createOnly']) },
-  carrierDirectory: { title: 'Nhà xe', description: 'Danh mục nhà cung cấp/nhà xe theo khu vực và biển số.', endpoint: '/carrier-directory', fields: fields(['region:Khu vực', 'carrier_name:NHÀ CC', 'license_plate:BKS']) },
-  chanhShipments: { title: 'Chành', description: 'Quản lý vận chuyển chành theo tỉnh, công ty, nhà xe và bill.', endpoint: '/chanh-shipments', fields: fields(['province_code:Mã tỉnh', 'bill_count:Số bill:number', 'company_name:Tên CTY', 'goods_name:Mặt hàng', 'quantity:Số lượng:number', 'goods_type:Loại hàng', 'unit_price:Đơn giá:number', 'cost_type:Loại CP', 'note:Ghi chú', 'carrier_name:Nhà xe', 'license_plate:BSX', 'shipment_date:Ngày:date', 'bo_fee:Cước bo:number', 'bill:Bill']) },
+  carrierDirectory: { title: 'Nhà xe', description: 'Gán BKS theo khu vực; nhà xe chọn từ danh mục NCC.', endpoint: '/carrier-directory', fields: fields(['region:Khu vực', 'carrier_name:Nhà xe (NCC):vendor', 'license_plate:BKS']) },
+  chanhShipments: { title: 'Chành', description: 'Quản lý vận chuyển chành theo tỉnh, công ty, nhà xe và bill.', endpoint: '/chanh-shipments', fields: fields(['province_code:Mã tỉnh', 'bill_count:Số bill:number', 'company_name:Tên CTY', 'goods_name:Mặt hàng', 'quantity:Số lượng:number', 'goods_type:Loại hàng', 'unit_price:Đơn giá:number', 'cost_type:Loại CP', 'note:Ghi chú', 'carrier_name:Nhà xe (NCC):vendor', 'license_plate:BSX', 'shipment_date:Ngày:date', 'bo_fee:Cước bo:number', 'bill:Bill']) },
   customerDirectory: { title: 'Khách hàng', description: 'Danh mục khách hàng theo mã, số điện thoại và địa chỉ.', endpoint: '/customer-directory', fields: fields(['full_name:Họ và tên', 'phone:SĐT', 'address:Địa chỉ', 'customer_code:Mã KH']) },
   cashJournalEntries: { title: 'Nhật ký thu chi', description: 'Ghi nhận thu nhập và chi phí theo nguồn/phân loại.', endpoint: '/cash-journal-entries', fields: fields(['entry_date:Ngày tháng:date', 'voucher_type:Loại phiếu', 'source:Nguồn', 'cost_category:Phân loại chi phí', 'detail:Chi tiết', 'note:Ghi chú', 'content:Nội dung', 'income_amount:Thu nhập:number', 'expense_amount:Chi phí:number']) },
   warehouses: { title: 'Kho', description: 'Danh mục kho vận hành.', endpoint: '/warehouses', fields: fields(['warehouse_name:Tên kho']) },
@@ -56,12 +58,20 @@ export function BusinessCrudPage({ configKey }: { configKey: keyof typeof busine
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [vendorOptions, setVendorOptions] = useState<Array<{ value: string; label: string }>>([]);
   const limit = 20;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const tableFields = useMemo(() => config.fields.filter((field) => !field.hiddenInTable && field.type !== 'password').slice(0, 8), [config.fields]);
 
   useEffect(() => { void loadRows(); }, [config.endpoint, page]);
+
+  useEffect(() => {
+    if (!config.fields.some(field => field.type === 'vendor')) return;
+    void fetchVendorSelectOptions()
+      .then(options => setVendorOptions(options.map(option => ({ value: option.name || option.label, label: option.label }))))
+      .catch(() => setVendorOptions([]));
+  }, [config.fields]);
 
   async function loadRows(nextQ = q) {
     setIsLoading(true); setError('');
@@ -126,7 +136,7 @@ export function BusinessCrudPage({ configKey }: { configKey: keyof typeof busine
       <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-muted-foreground"><span>Tổng {total} bản ghi</span><div className="flex items-center gap-2"><button disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-lg border border-border px-3 py-1 disabled:opacity-50">Trước</button><span>Trang {page}/{totalPages}</span><button disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} className="rounded-lg border border-border px-3 py-1 disabled:opacity-50">Sau</button></div></div>
     </div>
 
-    {isFormOpen && <Modal title={editing ? `Sửa ${config.title}` : `Thêm ${config.title}`} onClose={() => setIsFormOpen(false)}><form onSubmit={submitForm} className="grid grid-cols-1 gap-4 sm:grid-cols-2">{config.fields.filter((field) => !(field.createOnly && editing)).map((field) => <label key={field.key} className="space-y-1 text-sm font-semibold text-foreground"><span>{field.label}{field.required !== false && <span className="text-red-500"> *</span>}</span><input type={field.type === 'password' ? 'password' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : field.type === 'number' ? 'number' : 'text'} step={field.type === 'number' ? '0.01' : undefined} value={form[field.key] ?? ''} onChange={(event) => setForm((prev) => ({ ...prev, [field.key]: event.target.value }))} className="w-full rounded-xl border border-border px-3 py-2 outline-none focus:border-primary" /></label>)}<div className="flex justify-end gap-3 sm:col-span-2"><button type="button" onClick={() => setIsFormOpen(false)} className="rounded-xl border border-border px-4 py-2 font-semibold">Hủy</button><button className="rounded-xl bg-primary px-4 py-2 font-bold text-white">Lưu</button></div></form></Modal>}
+    {isFormOpen && <Modal title={editing ? `Sửa ${config.title}` : `Thêm ${config.title}`} onClose={() => setIsFormOpen(false)}><form onSubmit={submitForm} className="grid grid-cols-1 gap-4 sm:grid-cols-2">{config.fields.filter((field) => !(field.createOnly && editing)).map((field) => <label key={field.key} className="space-y-1 text-sm font-semibold text-foreground"><span>{field.label}{field.required !== false && field.type !== 'vendor' && <span className="text-red-500"> *</span>}</span>{field.type === 'vendor' ? <SearchableSelect value={form[field.key] ?? ''} options={[{ value: '', label: 'Chọn NCC' }, ...vendorOptions]} onValueChange={(value) => setForm((prev) => ({ ...prev, [field.key]: value }))} placeholder="Chọn nhà xe từ NCC" searchPlaceholder="Tìm NCC..." /> : <input type={field.type === 'password' ? 'password' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : field.type === 'number' ? 'number' : 'text'} step={field.type === 'number' ? '0.01' : undefined} value={form[field.key] ?? ''} onChange={(event) => setForm((prev) => ({ ...prev, [field.key]: event.target.value }))} className="w-full rounded-xl border border-border px-3 py-2 outline-none focus:border-primary" />}</label>)}<div className="flex justify-end gap-3 sm:col-span-2"><button type="button" onClick={() => setIsFormOpen(false)} className="rounded-xl border border-border px-4 py-2 font-semibold">Hủy</button><button className="rounded-xl bg-primary px-4 py-2 font-bold text-white">Lưu</button></div></form></Modal>}
     {detail && <Modal title={`Chi tiết ${config.title}`} onClose={() => setDetail(null)}><div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{config.fields.filter((field) => !field.hiddenInDetail && field.type !== 'password').map((field) => <Info key={field.key} label={field.label} value={formatField(detail[field.key], field)} />)}<Info label="ID" value={formatValue(detail.id)} /></div></Modal>}
   </div>;
 }
@@ -134,7 +144,8 @@ export function BusinessCrudPage({ configKey }: { configKey: keyof typeof busine
 function fields(definitions: string[]): FieldConfig[] {
   return definitions.map((definition) => {
     const [key, label, type, marker] = definition.split(':');
-    return { key, label, type: type as FieldType | undefined, createOnly: marker === 'createOnly' };
+    const resolvedType = (type === 'vendor' ? 'vendor' : type) as FieldType | undefined;
+    return { key, label, type: resolvedType, createOnly: marker === 'createOnly' };
   });
 }
 
