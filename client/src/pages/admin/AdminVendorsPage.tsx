@@ -20,7 +20,6 @@ import {
   ServerOff,
   Tag,
   Trash2,
-  X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ApiError, apiRequest } from '../../lib/api';

@@ -28,7 +28,7 @@ import {
   khuVucValueFromColumnId,
 } from './trucks/data';
 import type { DriverSummary, FilterOption, Truck, TruckFilters, TruckFormState, TruckListResponse } from './trucks/types';
-import { fetchVendorSelectOptions, findVendorOption } from '../lib/vendorOptions';
+import { fetchVendorSelectOptions, findVendorOption, type VendorSelectOption } from '../lib/vendorOptions';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
 const DISPATCHER = 8;
@@ -104,7 +104,7 @@ export default function TrucksPage() {
   const [isFormClosing, setIsFormClosing] = useState(false);
   const [isDetailClosing, setIsDetailClosing] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
-  const [vendorOptions, setVendorOptions] = useState<FilterOption[]>([]);
+  const [vendorOptions, setVendorOptions] = useState<VendorSelectOption[]>([]);
 
   const user = useMemo(getStoredUser, []);
   const roleMask = user?.role_mask ?? 0;
@@ -138,7 +138,7 @@ export default function TrucksPage() {
   useEffect(() => {
     if (canView) {
       void fetchVendorSelectOptions()
-        .then(options => setVendorOptions(options.map(option => ({ value: option.value, label: option.label }))))
+        .then(options => setVendorOptions(options))
         .catch(() => setVendorOptions([]));
     }
   }, [canView]);

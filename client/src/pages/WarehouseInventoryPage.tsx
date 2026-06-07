@@ -82,7 +82,6 @@ const hasManagerAccess = (roleMask: number) => (roleMask & (MANAGER | DIRECTOR))
 const canEditWaybill = (roleMask: number) => (roleMask & (WAREHOUSE | MANAGER | DIRECTOR)) !== 0;
 const canMutateInventory = (roleMask: number) => (roleMask & (DISPATCHER | MANAGER | DIRECTOR)) !== 0;
 const normalizeList = (response: InventoryListResponse | WaybillInventoryItem[]) => Array.isArray(response) ? response : response.data || response.items || response.waybills || [];
-const normalizeTotal = (response: InventoryListResponse | WaybillInventoryItem[], fallback: number) => Array.isArray(response) ? fallback : response.meta?.total_waybills ?? response.total ?? response.meta?.total ?? fallback;
 const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString('vi-VN') : '—';
 const displayCode = (waybill: WaybillInventoryItem) => waybill.waybill_code || waybill.code || `#${waybill.id}`;
 const displayValue = (value: unknown, suffix = '') => value === null || value === undefined || value === '' ? '—' : `${value}${suffix}`;

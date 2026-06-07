@@ -1,10 +1,10 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Building2, Edit, ExternalLink, Loader2, Package, Printer, Truck, X } from 'lucide-react';
+import { Building2, Edit, ExternalLink, Loader2, Package, Truck, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useNavigate } from 'react-router-dom';
-import { apiRequest } from '../../../lib/api';
-import type { AuthUserProfile } from '../../login/types';
+import { apiRequest } from '../../../../lib/api';
+import type { AuthUserProfile } from '../../../login/types';
 import { VENDOR_DETAIL_TABS, type VendorDetailTabId } from '../vendorDetailTabs';
 import {
   formatContractType,
@@ -14,12 +14,12 @@ import {
   formatStatus,
 } from '../data';
 import type { Vendor } from '../types';
-import type { InventoryListResponse, WaybillInventoryItem } from '../../warehouse/inventory/types';
-import { resolveNoiDen } from '../../warehouse/inventory/inventoryColumns';
-import LoadPlanningTruckBoard from '../../warehouse/load-planning/LoadPlanningTruckBoard';
-import type { LoadPlanningBoardResponse } from '../../warehouse/load-planning/types';
-import CustomerBillsPanel from '../../warehouse/customers/panels/CustomerBillsPanel';
-import type { BillFilters } from '../../warehouse/customers/utils/customerFinanceUtils';
+import type { InventoryListResponse, WaybillInventoryItem } from '../../../warehouse/inventory/types';
+import { resolveNoiDen } from '../../../warehouse/inventory/inventoryColumns';
+import LoadPlanningTruckBoard from '../../../warehouse/load-planning/LoadPlanningTruckBoard';
+import type { LoadPlanningBoardResponse } from '../../../warehouse/load-planning/types';
+import CustomerBillsPanel from '../../../warehouse/customers/panels/CustomerBillsPanel';
+import type { BillFilters } from '../../../warehouse/customers/utils/customerFinanceUtils';
 import VendorPaymentsPanel, {
   type VendorLedgerBalance,
   type VendorLedgerEntry,
