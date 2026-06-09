@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, Eye, Loader2, Package, RefreshCcw, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Eye, Loader2, Package, RefreshCcw, Search } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
@@ -10,9 +10,11 @@ import type { BadgeConfig, WaybillListResponse, WaybillPriorityDetail, WaybillPr
 
 const PAGE_ROLES = 1 | 8 | 32 | 64;
 const UPDATE_ROLES = 8 | 32 | 64;
-const STATUSES = ['RECEIVED', 'MANIFEST_CLOSED', 'LOADED', 'IN_TRANSIT', 'AT_DEST_HUB', 'DELIVERED', 'RETURNED'];
+const BOARD_COLUMNS = ['DEPARTED', 'EXPECTED_ARRIVAL'] as const;
 
 const statusConfig: Record<string, BadgeConfig> = {
+  DEPARTED: { label: 'Xe đã khởi hành', className: 'bg-sky-50 text-sky-700 border-sky-200' },
+  EXPECTED_ARRIVAL: { label: 'Dự kiến đến', className: 'bg-violet-50 text-violet-700 border-violet-200' },
   RECEIVED: { label: 'Đã tạo đơn', className: 'bg-blue-50 text-blue-700 border-blue-200' },
   MANIFEST_CLOSED: { label: 'Chờ bốc', className: 'bg-slate-100 text-slate-700 border-slate-200' },
   LOADED: { label: 'Đã bốc', className: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -22,20 +24,9 @@ const statusConfig: Record<string, BadgeConfig> = {
   RETURNED: { label: 'Hoàn', className: 'bg-red-50 text-red-700 border-red-200' },
 };
 
-const WAYBILL_STATUS_NEXT: Record<string, string> = {
-  RECEIVED: 'MANIFEST_CLOSED',
-  IN_WAREHOUSE: 'MANIFEST_CLOSED',
-  MANIFEST_CLOSED: 'LOADED',
-  LOADED: 'IN_TRANSIT',
-  IN_TRANSIT: 'AT_DEST_HUB',
-  AT_DEST_HUB: 'DELIVERED',
-  OUT_FOR_DELIVERY: 'DELIVERED',
-};
-
 function boardColumnStatus(status: string) {
-  if (status === 'IN_WAREHOUSE') return 'RECEIVED';
-  if (status === 'OUT_FOR_DELIVERY' || status === 'DELIVERED') return 'DELIVERED';
-  return status;
+  if (['AT_DEST_HUB', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED'].includes(status)) return 'EXPECTED_ARRIVAL';
+  return 'DEPARTED';
 }
 
 const paymentConfig: Record<string, BadgeConfig> = {
@@ -77,14 +68,12 @@ export default function WarehousePriorityPage() {
   const canUpdate = hasRole(roleMask, UPDATE_ROLES);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, WaybillPriorityItem[]>(STATUSES.map((status) => [status, []]));
-    const fallback: WaybillPriorityItem[] = [];
+    const map = new Map<string, WaybillPriorityItem[]>(BOARD_COLUMNS.map((status) => [status, []]));
     for (const waybill of waybills) {
       const status = boardColumnStatus(normalizeStatus(waybill));
-      if (map.has(status)) map.get(status)?.push(waybill);
-      else fallback.push(waybill);
+      map.get(status)?.push(waybill);
     }
-    return { map, fallback };
+    return map;
   }, [waybills]);
 
   useEffect(() => {
@@ -137,12 +126,6 @@ export default function WarehousePriorityPage() {
     setWaybills((prev) => prev.map((waybill) => String(waybill.id) === String(id) ? { ...waybill, priority } : waybill));
   }
 
-  function updateLocalStatus(id: string | number, status: string) {
-    setWaybills((prev) =>
-      prev.map((waybill) => (String(waybill.id) === String(id) ? { ...waybill, current_state: status } : waybill)),
-    );
-  }
-
   if (!canView) {
     return (
       <div className="flex h-full items-center justify-center rounded-2xl border border-red-200 bg-red-50 p-6 text-[13px] font-semibold text-red-600">
@@ -184,27 +167,16 @@ export default function WarehousePriorityPage() {
           </div>
         ) : (
           <div className="custom-scrollbar flex h-full gap-3 overflow-x-auto p-3">
-            {STATUSES.map((status) => (
+            {BOARD_COLUMNS.map((status) => (
               <KanbanColumn
                 key={status}
                 status={status}
-                items={grouped.map.get(status) || []}
+                items={grouped.get(status) || []}
                 canUpdate={canUpdate}
                 onPriorityUpdated={updateLocalPriority}
-                onStatusUpdated={updateLocalStatus}
                 onDetail={openDetail}
               />
             ))}
-            {grouped.fallback.length > 0 && (
-              <KanbanColumn
-                status="OTHER"
-                items={grouped.fallback}
-                canUpdate={canUpdate}
-                onPriorityUpdated={updateLocalPriority}
-                onStatusUpdated={updateLocalStatus}
-                onDetail={openDetail}
-              />
-            )}
           </div>
         )}
       </div>
@@ -228,14 +200,12 @@ function KanbanColumn({
   items,
   canUpdate,
   onPriorityUpdated,
-  onStatusUpdated,
   onDetail,
 }: {
   status: string;
   items: WaybillPriorityItem[];
   canUpdate: boolean;
   onPriorityUpdated: (id: string | number, priority: string) => void;
-  onStatusUpdated: (id: string | number, status: string) => void;
   onDetail: (waybill: WaybillPriorityItem) => void;
 }) {
   const config = statusConfig[status] || { label: 'Khác', className: 'bg-muted text-muted-foreground border-border' };
@@ -252,7 +222,6 @@ function KanbanColumn({
             waybill={waybill}
             canUpdate={canUpdate}
             onPriorityUpdated={onPriorityUpdated}
-            onStatusUpdated={onStatusUpdated}
             onDetail={onDetail}
           />
         )) : (
@@ -270,40 +239,16 @@ function WaybillCard({
   waybill,
   canUpdate,
   onPriorityUpdated,
-  onStatusUpdated,
   onDetail,
 }: {
   waybill: WaybillPriorityItem;
   canUpdate: boolean;
   onPriorityUpdated: (id: string | number, priority: string) => void;
-  onStatusUpdated: (id: string | number, status: string) => void;
   onDetail: (waybill: WaybillPriorityItem) => void;
 }) {
   const priority = normalizePriority(waybill.priority);
   const priorityBadge = priorityConfig[priority] || priorityConfig.NORMAL;
   const paymentBadge = paymentConfig[String(waybill.payment_type || '')] || { label: waybill.payment_type || '—', className: 'bg-muted text-muted-foreground border-border' };
-  const rawStatus = normalizeStatus(waybill);
-  const nextStatus = WAYBILL_STATUS_NEXT[rawStatus];
-  const nextLabel = nextStatus ? statusConfig[nextStatus]?.label : null;
-  const [isAdvancing, setIsAdvancing] = useState(false);
-  const [advanceError, setAdvanceError] = useState('');
-
-  async function advanceStatus() {
-    if (!nextStatus || !canUpdate) return;
-    setIsAdvancing(true);
-    setAdvanceError('');
-    try {
-      const body: { status: string; delivery_photo_url?: string } = { status: nextStatus };
-      if (nextStatus === 'DELIVERED') body.delivery_photo_url = 'priority-board';
-      await apiRequest(`/waybills/${waybill.id}/status`, { method: 'PATCH', body });
-      onStatusUpdated(waybill.id, nextStatus);
-    } catch (err) {
-      setAdvanceError(err instanceof ApiError ? err.message : 'Không chuyển được trạng thái.');
-    } finally {
-      setIsAdvancing(false);
-    }
-  }
-
   return (
     <article className="rounded-xl border border-border bg-white p-3 shadow-sm transition-colors hover:border-primary/30">
       <div className="flex items-start justify-between gap-2">
@@ -324,18 +269,6 @@ function WaybillCard({
         <Info label="TL quy đổi" value={displayValue(waybill.volumetric_weight, ' kg')} />
       </div>
       <div className="mt-3 space-y-2 border-t border-border pt-3">
-        {nextLabel && canUpdate && (
-          <button
-            type="button"
-            disabled={isAdvancing}
-            onClick={() => void advanceStatus()}
-            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-primary/25 bg-primary/10 text-[12px] font-extrabold text-primary hover:bg-primary/15 disabled:opacity-60"
-          >
-            {isAdvancing ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-            {nextLabel}
-          </button>
-        )}
-        {advanceError && <p className="text-[11px] font-bold text-red-600">{advanceError}</p>}
         <WaybillPriorityControl
           waybillId={waybill.id}
           value={waybill.priority}

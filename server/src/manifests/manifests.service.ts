@@ -175,6 +175,31 @@ export class ManifestsService {
     return await this.manifestsRepository.save(manifest) as ManifestRecord;
   }
 
+  async updateDispatchRows(id: string, dto: { rows?: Array<{ waybill_id?: string | number; fields?: Record<string, unknown> }> }, currentUser: UserEntity): Promise<ManifestRecord> {
+    this.assertRole(currentUser, [Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR]);
+    const manifest = await this.findOne(id, currentUser);
+    const rowMap = new Map((dto.rows ?? []).map((row) => [String(row.waybill_id ?? ''), row.fields ?? {}]));
+    const links = manifest.manifest_waybills ?? [];
+
+    for (const link of links as Array<ManifestWaybillEntity & Record<string, any>>) {
+      const fields = rowMap.get(String(link.waybill_id));
+      if (!fields) continue;
+      link.dispatch_fields = this.sanitizeDispatchFields(fields);
+    }
+
+    await this.manifestWaybillsRepository.save(links as ManifestWaybillEntity[]);
+    return this.findOne(id, currentUser);
+  }
+
+  private sanitizeDispatchFields(fields: Record<string, unknown>) {
+    const allowed = ['ngay_boc', 'ma_tinh', 'ten_cty', 'dv', 'mat_hang', 'noi_tra', 'so_luong', 'loai', 'dia_chi', 'ghi_chu_1', 'ghi_chu_2', 'ke_hoach', 'lai_xe_thu_ho', 'bc_thu_ho', 'ma_bill', 'ghi_chu_bill', 'kg', 'm3', 'qd', 'du_kien_toi_hcm', 'trang_thai_giao'];
+    return allowed.reduce<Record<string, unknown>>((result, key) => {
+      const value = fields[key];
+      if (value !== undefined && value !== null) result[key] = typeof value === 'string' ? value.slice(0, 500) : value;
+      return result;
+    }, {});
+  }
+
   async getPrintableManifest(id: string, currentUser: UserEntity) {
     const manifest = await this.findOne(id, currentUser);
     const waybills = this.extractWaybills(manifest).map((waybill) => ({

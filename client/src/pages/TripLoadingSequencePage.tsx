@@ -91,6 +91,7 @@ export default function TripLoadingSequencePage() {
       });
       setMessage('Đã lưu vị trí xếp hàng và chốt cân/khối.');
       await load();
+      navigate(`/trips/${id}`, { replace: true });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Không lưu được.');
     } finally {

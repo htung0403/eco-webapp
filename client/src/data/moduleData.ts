@@ -65,7 +65,7 @@ export const moduleGroups: ModuleGroup[] = [
       { icon: Warehouse, title: 'Đơn tồn', description: 'Theo dõi vận đơn tồn kho chưa phân đủ kiện lên xe.', colorScheme: 'slate', path: '/warehouse/inventory', requiredRoleMask: WAREHOUSE_ROLES, isHidden: true },
       { icon: Building2, title: 'Danh sách Bưu cục', description: 'Tra cứu danh sách bưu cục HAN, HCM và thông tin vận hành.', colorScheme: 'blue', path: '/warehouse/hubs', requiredRoleMask: WAREHOUSE_ROLES },
       { icon: AlertTriangle, title: 'Thông báo hàng đến dự kiến', description: 'Theo dõi danh sách hàng sắp về bưu cục.', colorScheme: 'orange', path: '/warehouse/incoming', requiredRoleMask: WAREHOUSE_ROLES, isHidden: true },
-      { icon: FileText, title: 'Chi tiết bảng kê', description: 'Xem danh sách vận đơn theo ngày tới và xe.', colorScheme: 'slate', path: '/warehouse/priority', requiredRoleMask: WAREHOUSE_ROLES },
+      { icon: FileText, title: 'Chi tiết bảng kê', description: 'Xem danh sách bảng kê và mở bảng phát hàng ECO.', colorScheme: 'slate', path: '/warehouse/manifests', requiredRoleMask: WAREHOUSE_ROLES },
     ],
   },
   {
@@ -93,6 +93,7 @@ export const moduleGroups: ModuleGroup[] = [
     section: 'Quản lý xe vận tải',
     requiredRoleMask: DISPATCHER,
     items: [
+      { icon: TruckIcon, title: 'Bảng kê đơn đã đi', description: 'Theo dõi chuyến đã khởi hành/đã đến, in bảng kê và mở chi phí chuyến.', colorScheme: 'blue', path: '/trips/list', requiredRoleMask: DISPATCHER },
       { icon: Fuel, title: 'Chi phí phát sinh chuyến', description: 'Ghi nhận dầu và chi phí dọc đường.', colorScheme: 'orange', path: '/trips/expenses', requiredRoleMask: DISPATCHER },
       { icon: BadgeDollarSign, title: 'Lãi/lỗ tạm tính chuyến', description: 'Theo dõi hiệu quả chi phí chuyến xe.', colorScheme: 'purple', path: '/trips/profit', requiredRoleMask: MANAGER, isHidden: true },
       { icon: TruckIcon, title: 'Quản lý xe đường trục', description: 'Quản lý phương tiện chạy tuyến đường trục và trạng thái khai thác.', colorScheme: 'cyan', path: '/trips/trunk-vehicles', requiredRoleMask: DISPATCHER },

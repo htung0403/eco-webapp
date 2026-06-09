@@ -20,7 +20,13 @@ interface Props {
   isClosing: boolean;
   waybills: WaybillInventoryItem[];
   onClose: () => void;
-  onSaved?: () => void;
+  onSaved?: (result?: StackOntoTruckResult) => void;
+}
+
+interface StackOntoTruckResult {
+  saved_count?: number;
+  manifest_id?: string | number | null;
+  manifest_code?: string | null;
 }
 
 const normalizeTruckList = (response: TruckListResponse | TruckRecord[]) =>
@@ -116,8 +122,8 @@ export default function StackOntoTruckDialog({
 
     setIsSaving(true);
     try {
-      await apiRequest('/waybills/inventory/stack-onto-truck', { method: 'POST', body: payload });
-      onSaved?.();
+      const result = await apiRequest<StackOntoTruckResult>('/waybills/inventory/stack-onto-truck', { method: 'POST', body: payload });
+      onSaved?.(result);
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Không lưu được phân xếp hàng.');

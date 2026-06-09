@@ -76,6 +76,13 @@ export class ManifestsController {
     return this.manifestsService.assignTrip(id, dto, currentUser);
   }
 
+  @Patch(':id/dispatch-rows')
+  @RequireRoles(Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Save editable dispatch sheet fields for manifest rows' })
+  updateDispatchRows(@Param('id') id: string, @Body() dto: { rows?: Array<{ waybill_id?: string | number; fields?: Record<string, unknown> }> }, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.updateDispatchRows(id, dto, currentUser);
+  }
+
   @Get(':id/print')
   @RequireRoles(Roles.WAREHOUSE, Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
   @ApiOperation({ summary: 'Get printable manifest data without hidden financial fields' })

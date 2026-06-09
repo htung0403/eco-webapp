@@ -3,6 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, In, IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { HubEntity } from '../hubs/hub.entity';
 import { PaymentType } from '../common/enums';
+import { ManifestStatus } from '../manifests/dto/manifest.enums';
+import { ManifestWaybillEntity } from '../manifests/manifest-waybill.entity';
+import { ManifestEntity } from '../manifests/manifest.entity';
 import { clampPaginationLimit } from '../common/pagination';
 import { Roles, hasRole, isManager } from '../common/roles';
 import { UserEntity } from '../users/user.entity';
@@ -60,6 +63,8 @@ export class WaybillsService {
     @InjectRepository(WaybillSplitEntity) private readonly splitsRepository: Repository<WaybillSplitEntity>,
     @InjectRepository(TripEntity) private readonly tripsRepository: Repository<TripEntity>,
     @InjectRepository(TruckEntity) private readonly trucksRepository: Repository<TruckEntity>,
+    @InjectRepository(ManifestEntity) private readonly manifestsRepository: Repository<ManifestEntity>,
+    @InjectRepository(ManifestWaybillEntity) private readonly manifestWaybillsRepository: Repository<ManifestWaybillEntity>,
     @InjectRepository(WaybillCashVoucherEntity) private readonly cashVouchersRepository: Repository<WaybillCashVoucherEntity>,
     private readonly ordersService: OrdersService,
     private readonly vendorsService: VendorsService,
@@ -522,6 +527,7 @@ export class WaybillsService {
 
   async bulkStackOntoTruck(dto: BulkStackOntoTruckDto, currentUser: UserEntity) {
     const saved: Array<Record<string, unknown>> = [];
+    const manifestWaybills: Array<{ waybill: WaybillRecord; loading_position: number | null }> = [];
 
     for (const line of dto.items) {
       const waybill = await this.waybillsRepository.findOne({
@@ -598,9 +604,60 @@ export class WaybillsService {
         vendor_cost: vendorDebtAmount,
         allocated_freight: isManager(currentUser.role_mask) ? Math.round(totalFreight * ratio) : undefined,
       });
+      manifestWaybills.push({ waybill, loading_position: split.loading_position });
     }
 
-    return { saved_count: saved.length, items: saved };
+    const manifest = manifestWaybills.length ? await this.createClosedManifestForStack(manifestWaybills, currentUser) : null;
+
+    return { saved_count: saved.length, manifest_id: manifest?.id ?? null, manifest_code: manifest?.manifest_code ?? null, items: saved };
+  }
+
+  private async createClosedManifestForStack(rows: Array<{ waybill: WaybillRecord; loading_position: number | null }>, currentUser: UserEntity) {
+    const firstWaybill = rows[0]?.waybill;
+    if (!firstWaybill) return null;
+
+    const manifest = this.manifestsRepository.create({
+      manifest_code: await this.generateInventoryManifestCode(),
+      seal_code: `AUTO-${Date.now()}`,
+      origin_hub_id: String(firstWaybill.origin_hub_id),
+      dest_hub_id: String(firstWaybill.dest_hub_id),
+      status: ManifestStatus.CLOSED,
+    } as any) as unknown as ManifestEntity & Record<string, any>;
+
+    Object.assign(manifest, {
+      total_waybills: rows.length,
+      total_weight: rows.reduce((sum, row) => sum + Number(row.waybill.weight ?? 0), 0),
+      closed_at: new Date(),
+      closed_by: currentUser.id,
+      created_by: currentUser.id,
+      updated_by: currentUser.id,
+    });
+
+    const savedManifest = await this.manifestsRepository.save(manifest) as ManifestEntity & Record<string, any>;
+
+    await this.manifestWaybillsRepository.save(rows.map((row, index) => this.manifestWaybillsRepository.create({
+      manifest_id: String(savedManifest.id),
+      waybill_id: String(row.waybill.id),
+      loading_position: row.loading_position ?? index + 1,
+      loaded_at: new Date(),
+    })));
+
+    rows.forEach((row) => {
+      row.waybill.current_state = WaybillStatus.MANIFEST_CLOSED as any;
+      row.waybill.loaded_at = row.waybill.loaded_at ?? new Date();
+    });
+    await this.waybillsRepository.save(rows.map((row) => row.waybill as WaybillEntity));
+
+    return savedManifest;
+  }
+
+  private async generateInventoryManifestCode() {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const code = `BK-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const exists = await this.manifestsRepository.exist({ where: { manifest_code: code } });
+      if (!exists) return code;
+    }
+    return `BK-${Date.now()}`;
   }
 
   async updateSplitLoadStatus(splitId: string, dto: UpdateSplitLoadStatusDto, currentUser: UserEntity) {

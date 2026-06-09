@@ -16,6 +16,9 @@ export class ManifestWaybillEntity {
   @Column({ type: 'timestamp', nullable: true })
   loaded_at: Date | null;
 
+  @Column({ type: 'jsonb', nullable: true })
+  dispatch_fields: Record<string, unknown> | null;
+
   @ManyToOne(() => ManifestEntity, (manifest) => manifest.manifest_waybills, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'manifest_id' })
   manifest: ManifestEntity;

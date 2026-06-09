@@ -1,150 +1,242 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, Building2, ChevronLeft, ChevronRight, Edit, FilePlus2, FileSpreadsheet, Filter, Loader2, PackageCheck, Printer, Route, Search, Trash2, X } from 'lucide-react';
-import { clsx } from 'clsx';
+import { AlertTriangle, ArrowLeft, CalendarClock, Eye, Loader2, PackageCheck, Printer, RefreshCcw, Save, Search, Truck, X } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
-import { FilterSelect } from '../components/ui/FilterSelect';
-import { SearchableSelect } from '../components/ui/SearchableSelect';
-import { ConfirmDialog, type ConfirmDialogState } from '../components/ui/ConfirmDialog';
-import type { AuthUserProfile } from './login/types';
-import AddEditManifestDialog from './warehouse/manifests/dialogs/AddEditManifestDialog';
-import AddWaybillsToManifestDialog from './warehouse/manifests/dialogs/AddWaybillsToManifestDialog';
-import AssignManifestTripDialog from './warehouse/manifests/dialogs/AssignManifestTripDialog';
-import PrintManifestDialog from './warehouse/manifests/dialogs/PrintManifestDialog';
-import { downloadManifestDetailExcel } from './warehouse/manifests/manifestDetailExcelUtils';
-import type { AddWaybillsFormState, AssignTripFormState, BadgeConfig, FilterOption, HubSummary, LoadPlanningManifest, ManifestFormState, ManifestWaybill, TripListResponse, TripSummary } from './warehouse/manifests/types';
+import type { LoadPlanningManifest, ManifestDispatchFields, ManifestWaybill } from './warehouse/manifests/types';
 
-const USER_PROFILE_KEY = 'eco_user_profile';
-const DISPATCHER = 8, MANAGER = 32, DIRECTOR = 64;
-const emptyFilters = { keyword: '', statuses: [] as string[], origin_hub_id: [] as string[], dest_hub_id: [] as string[], payment_type: [] as string[], page: 1, limit: 10 };
-const statusOptions: FilterOption[] = [{ value: 'IN_WAREHOUSE', label: 'Trong kho' }, { value: 'MANIFEST_CLOSED', label: 'Đã đóng bảng kê' }];
-const paymentOptions: FilterOption[] = [{ value: 'PP', label: 'PP' }, { value: 'CC', label: 'CC' }, { value: 'COD', label: 'COD' }];
-const manifestStatusConfig: Record<string, BadgeConfig> = { DRAFT: { label: 'Nháp', className: 'bg-slate-100 text-slate-700' }, CLOSED: { label: 'Đã đóng', className: 'bg-emerald-50 text-emerald-700' }, ASSIGNED_TO_TRIP: { label: 'Đã gán chuyến', className: 'bg-indigo-50 text-indigo-700' }, IN_TRANSIT: { label: 'Đang vận chuyển', className: 'bg-amber-50 text-amber-700' }, COMPLETED: { label: 'Hoàn tất', className: 'bg-blue-50 text-blue-700' }, CANCELLED: { label: 'Đã hủy', className: 'bg-red-50 text-red-600' } };
-const waybillStatusConfig: Record<string, BadgeConfig> = { IN_WAREHOUSE: { label: 'Trong kho', className: 'bg-blue-50 text-blue-700' }, MANIFEST_CLOSED: { label: 'Đã đóng', className: 'bg-emerald-50 text-emerald-700' } };
-const paymentConfig: Record<string, BadgeConfig> = { PP: { label: 'PP', className: 'bg-slate-100 text-slate-700' }, CC: { label: 'CC', className: 'bg-amber-50 text-amber-700' }, COD: { label: 'COD', className: 'bg-purple-50 text-purple-700' } };
-const getUser = (): AuthUserProfile | null => { const raw = localStorage.getItem(USER_PROFILE_KEY) || sessionStorage.getItem(USER_PROFILE_KEY); if (!raw) return null; try { return JSON.parse(raw) as AuthUserProfile; } catch { return null; } };
-const canOperate = (mask: number) => (mask & (DISPATCHER | MANAGER | DIRECTOR)) !== 0;
-const display = (value?: string | number | null, fallback = '—') => value == null || value === '' ? fallback : String(value);
-const num = (value?: string | number | null, suffix = '') => value == null || value === '' ? '—' : `${Number(value).toLocaleString('vi-VN')}${suffix}`;
-const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
-const code = (manifest?: LoadPlanningManifest | null) => manifest?.manifest_code || manifest?.code || (manifest ? `MF-${manifest.id}` : '—');
-const hub = (hub?: HubSummary | null, id?: string | number | null) => hub?.code || hub?.name || (id ? `Hub #${id}` : '—');
-const waybillStatus = (waybill: ManifestWaybill) => waybill.current_state || waybill.status || '—';
-const normalizeWaybills = (manifest?: LoadPlanningManifest | null) => manifest?.waybills?.length ? manifest.waybills : (manifest?.manifest_waybills || []).map(link => link.waybill).filter(Boolean) as ManifestWaybill[];
+const editableColumns = [
+  { key: 'ngay_boc', label: 'Ngày bốc', className: 'min-w-[76px]' },
+  { key: 'ma_tinh', label: 'Mã Tỉnh', className: 'min-w-[86px]' },
+  { key: 'ten_cty', label: 'Tên CTY', className: 'min-w-[120px]' },
+  { key: 'dv', label: 'DV', className: 'min-w-[58px]' },
+  { key: 'mat_hang', label: 'Mặt Hàng', className: 'min-w-[180px]' },
+  { key: 'noi_tra', label: 'Nơi Trả', className: 'min-w-[130px]' },
+  { key: 'so_luong', label: 'Số Lượng', className: 'min-w-[76px]' },
+  { key: 'loai', label: '', className: 'min-w-[58px]' },
+  { key: 'dia_chi', label: '', className: 'min-w-[300px]' },
+  { key: 'ghi_chu_1', label: 'Ghi chú', className: 'min-w-[140px]' },
+  { key: 'ghi_chu_2', label: '', className: 'min-w-[160px]' },
+  { key: 'ke_hoach', label: 'kế hoạch', className: 'min-w-[150px]' },
+  { key: 'lai_xe_thu_ho', label: 'Lái xe thu hộ', className: 'min-w-[110px]' },
+  { key: 'bc_thu_ho', label: 'BC thu hộ', className: 'min-w-[92px]' },
+  { key: 'ma_bill', label: 'Mã Bill', className: 'min-w-[110px]' },
+  { key: 'ghi_chu_bill', label: 'Ghi chú', className: 'min-w-[140px]' },
+  { key: 'kg', label: 'kg', className: 'min-w-[72px]' },
+  { key: 'm3', label: 'm3', className: 'min-w-[72px]' },
+  { key: 'qd', label: 'QĐ', className: 'min-w-[72px]' },
+  { key: 'du_kien_toi_hcm', label: 'Dự kiến tới HCM:', className: 'min-w-[120px] bg-yellow-300' },
+  { key: 'trang_thai_giao', label: '', className: 'min-w-[120px] bg-green-200' },
+] as const;
+
+type EditableKey = (typeof editableColumns)[number]['key'];
+type RowLink = { waybill_id?: string | number | null; loading_position?: string | number | null; loaded_at?: string | null; dispatch_fields?: ManifestDispatchFields | null; waybill?: ManifestWaybill | null };
+type EditableRows = Record<string, ManifestDispatchFields>;
+
+const display = (value?: string | number | null, fallback = '—') => (value == null || value === '' ? fallback : String(value));
+const blank = (value?: string | number | null) => (value == null || value === '' ? '' : String(value));
+const manifestCode = (manifest?: LoadPlanningManifest | null) => manifest?.manifest_code || manifest?.code || (manifest ? `MF-${manifest.id}` : '—');
+const hubLabel = (hub?: { code?: string | null; name?: string | null } | null, id?: string | number | null) => hub?.code || hub?.name || (id ? `Hub #${id}` : '—');
+const tripLabel = (manifest: LoadPlanningManifest) => manifest.trip?.trip_code || manifest.trip?.code || (manifest.trip_id ? `Chuyến #${manifest.trip_id}` : 'Chưa gán chuyến');
+const truckLabel = (manifest: LoadPlanningManifest) => manifest.trip?.truck?.license_plate || 'Chưa có xe';
+const parseName = (info?: string | null) => (info || '').split('|')[0]?.trim() || '';
+const formatNumber = (value?: string | number | null, suffix = '') => value == null || value === '' ? '—' : `${Number(value).toLocaleString('vi-VN')}${suffix}`;
+const formatDateTime = (value?: string | null) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+};
+const formatShortDate = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(date);
+};
+
+function rowKey(link: RowLink) {
+  return String(link.waybill_id ?? link.waybill?.id ?? '');
+}
+
+function normalizeLinks(manifest: LoadPlanningManifest | null): RowLink[] {
+  if (!manifest) return [];
+  if (manifest.manifest_waybills?.length) return manifest.manifest_waybills as RowLink[];
+  return (manifest.waybills ?? []).map((waybill, index) => ({ waybill_id: waybill.id, loading_position: index + 1, dispatch_fields: waybill.dispatch_fields, waybill }));
+}
+
+function defaultField(link: RowLink, key: EditableKey) {
+  const waybill = link.waybill;
+  switch (key) {
+    case 'ngay_boc': return formatShortDate(link.loaded_at ?? null);
+    case 'ma_tinh': return blank(waybill?.noi_den || waybill?.dest_hub_id);
+    case 'ten_cty': return parseName(waybill?.sender_info);
+    case 'dv': return 'TC';
+    case 'mat_hang': return blank((waybill as { item_name?: string | null } | undefined)?.item_name || waybill?.waybill_code);
+    case 'noi_tra': return blank(waybill?.noi_den || waybill?.dest_hub_id);
+    case 'so_luong': return blank(waybill?.package_count) || '1';
+    case 'loai': return 'kiện';
+    case 'dia_chi': return blank(waybill?.receiver_address || waybill?.receiver_info);
+    case 'ma_bill': return blank(waybill?.waybill_code);
+    case 'kg': return blank(waybill?.weight);
+    case 'm3': return blank(waybill?.the_tich_m3 || waybill?.volumetric_weight);
+    default: return '';
+  }
+}
+
+function getCellValue(rows: EditableRows, link: RowLink, key: EditableKey) {
+  const saved = rows[rowKey(link)]?.[key];
+  return saved == null ? defaultField(link, key) : String(saved);
+}
+
+function isArrived(manifest: LoadPlanningManifest) {
+  return ['COMPLETED', 'ARRIVED', 'AT_DEST_HUB', 'Xe đã đến'].includes(String(manifest.trip?.status || manifest.status || ''));
+}
 
 export default function WarehouseManifestDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const canManage = canOperate(useMemo(getUser, [])?.role_mask ?? 0);
   const [manifest, setManifest] = useState<LoadPlanningManifest | null>(null);
-  const [hubs, setHubs] = useState<HubSummary[]>([]);
-  const [trips, setTrips] = useState<TripSummary[]>([]);
-  const [filters, setFilters] = useState(emptyFilters);
+  const [rows, setRows] = useState<EditableRows>({});
+  const [keyword, setKeyword] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [error, setError] = useState('');
-  const [actionError, setActionError] = useState('');
-  const [isExporting, setIsExporting] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isEditClosing, setIsEditClosing] = useState(false);
-  const [formState, setFormState] = useState<ManifestFormState>({ origin_hub_id: '', dest_hub_id: '', seal_code: '', note: '' });
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isAddClosing, setIsAddClosing] = useState(false);
-  const [waybillChoices, setWaybillChoices] = useState<ManifestWaybill[]>([]);
-  const [waybillTotal, setWaybillTotal] = useState(0);
-  const [isWaybillLoading, setIsWaybillLoading] = useState(false);
-  const [addForm, setAddForm] = useState<AddWaybillsFormState>({ keyword: '', selectedIds: [], page: 1, limit: 20 });
-  const [isAssignOpen, setIsAssignOpen] = useState(false);
-  const [isAssignClosing, setIsAssignClosing] = useState(false);
-  const [assignForm, setAssignForm] = useState<AssignTripFormState>({ trip_id: '' });
-  const [isPrintOpen, setIsPrintOpen] = useState(false);
-  const [isPrintClosing, setIsPrintClosing] = useState(false);
-  const [isPrintLoading, setIsPrintLoading] = useState(false);
-  const [printManifest, setPrintManifest] = useState<LoadPlanningManifest | null>(null);
-  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
-  const hubOptions = useMemo(() => hubs.map(item => ({ value: String(item.id), label: item.code ? `${item.code} · ${item.name || 'Bưu cục'}` : item.name || `Hub #${item.id}` })), [hubs]);
-  const allWaybills = useMemo(() => normalizeWaybills(manifest), [manifest]);
-  const filtered = useMemo(() => allWaybills.filter(item => {
-    const keyword = filters.keyword.trim().toLowerCase();
-    if (keyword && ![item.waybill_code, item.sender_info, item.receiver_info].some(value => String(value || '').toLowerCase().includes(keyword))) return false;
-    if (filters.statuses.length && !filters.statuses.includes(waybillStatus(item))) return false;
-    if (filters.origin_hub_id.length && !filters.origin_hub_id.includes(String(item.origin_hub_id || ''))) return false;
-    if (filters.dest_hub_id.length && !filters.dest_hub_id.includes(String(item.dest_hub_id || ''))) return false;
-    if (filters.payment_type.length && !filters.payment_type.includes(String(item.payment_type || ''))) return false;
-    return true;
-  }), [allWaybills, filters]);
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / filters.limit));
-  const page = Math.min(filters.page, totalPages);
-  const pageWaybills = filtered.slice((page - 1) * filters.limit, page * filters.limit);
-  const activeFilterCount = filters.statuses.length + filters.origin_hub_id.length + filters.dest_hub_id.length + filters.payment_type.length;
-  const isDraft = manifest?.status === 'DRAFT';
-  const canEdit = canManage && isDraft;
-  const canClose = canEdit && allWaybills.length > 0;
-  const canAssign = canManage && manifest?.status === 'CLOSED';
-  const rangeStart = total ? (page - 1) * filters.limit + 1 : 0;
-  const rangeEnd = Math.min(total, page * filters.limit);
+  const [message, setMessage] = useState('');
 
-  useEffect(() => { void fetchAll(); }, [id]);
-  useEffect(() => { if (isAddOpen && manifest) void fetchWaybillChoices(); }, [isAddOpen, manifest, addForm.keyword, addForm.page, addForm.limit]);
-
-  async function fetchAll() {
-    setIsLoading(true); setError('');
+  async function loadManifest() {
+    setIsLoading(true);
+    setError('');
     try {
-      const [manifestResponse, hubResponse, tripResponse] = await Promise.all([apiRequest<LoadPlanningManifest>(`/manifests/${id}`), apiRequest<HubSummary[]>('/hubs/active'), apiRequest<TripListResponse | TripSummary[]>(`/trips?${new URLSearchParams({ page: '1', limit: '100', status: 'PLANNED' }).toString()}`)]);
-      setManifest(manifestResponse); setHubs(Array.isArray(hubResponse) ? hubResponse : []); setTrips(Array.isArray(tripResponse) ? tripResponse : tripResponse.data || tripResponse.items || tripResponse.trips || []);
-    } catch (err) { setError(err instanceof ApiError ? err.message : 'Không thể tải chi tiết bảng kê.'); } finally { setIsLoading(false); }
+      const response = await apiRequest<LoadPlanningManifest>(`/manifests/${id}`);
+      setManifest(response);
+      const initial: EditableRows = {};
+      normalizeLinks(response).forEach((link) => {
+        const key = rowKey(link);
+        if (key) initial[key] = { ...(link.dispatch_fields ?? {}) };
+      });
+      setRows(initial);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Không tải được chi tiết bảng kê.');
+    } finally {
+      setIsLoading(false);
+    }
   }
-  async function refreshManifest() { try { setManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${id}`)); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể tải lại bảng kê.'); } }
-  const updateFilters = (patch: Partial<typeof emptyFilters>) => setFilters(prev => ({ ...prev, ...patch }));
-  const clearFilters = () => setFilters(prev => ({ ...emptyFilters, keyword: prev.keyword, limit: prev.limit }));
-  function openEdit() { if (!manifest || !canEdit) return; setFormState({ origin_hub_id: String(manifest.origin_hub_id || ''), dest_hub_id: String(manifest.dest_hub_id || ''), seal_code: manifest.seal_code || '', note: manifest.note || '' }); setIsEditOpen(true); }
-  function closeEdit() { setIsEditClosing(true); window.setTimeout(() => { setIsEditOpen(false); setIsEditClosing(false); }, 180); }
-  async function submitEdit() { if (!manifest) return; setIsSubmitting(true); try { await apiRequest(`/manifests/${manifest.id}`, { method: 'PATCH', body: { dest_hub_id: formState.dest_hub_id, seal_code: formState.seal_code || undefined, note: formState.note || undefined } }); closeEdit(); await refreshManifest(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể cập nhật bảng kê.'); } finally { setIsSubmitting(false); } }
-  function closeAdd() { setIsAddClosing(true); window.setTimeout(() => { setIsAddOpen(false); setIsAddClosing(false); }, 180); }
-  function openAdd() { if (!canEdit) return; setAddForm({ keyword: '', selectedIds: [], page: 1, limit: 20 }); setIsAddOpen(true); }
-  async function fetchWaybillChoices() { if (!manifest) return; setIsWaybillLoading(true); try { const params = new URLSearchParams({ status: 'IN_WAREHOUSE', current_hub_id: String(manifest.origin_hub_id || ''), dest_hub_id: String(manifest.dest_hub_id || ''), keyword: addForm.keyword, page: String(addForm.page), limit: String(addForm.limit) }); const response = await apiRequest<any>(`/waybills?${params.toString()}`); const list = Array.isArray(response) ? response : response.data || response.items || response.waybills || []; setWaybillChoices(list); setWaybillTotal(Array.isArray(response) ? list.length : response.total ?? response.meta?.total ?? list.length); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể tải vận đơn khả dụng.'); setWaybillChoices([]); setWaybillTotal(0); } finally { setIsWaybillLoading(false); } }
-  async function submitAddWaybills() { if (!manifest || !addForm.selectedIds.length) return; setIsSubmitting(true); try { await apiRequest(`/manifests/${manifest.id}/waybills`, { method: 'POST', body: { waybill_ids: addForm.selectedIds } }); closeAdd(); await refreshManifest(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể thêm vận đơn.'); } finally { setIsSubmitting(false); } }
-  function confirmRemove(waybill: ManifestWaybill) { if (!manifest || !canEdit) return; setConfirmDialog({ title: 'Gỡ vận đơn', message: `Gỡ vận đơn ${waybill.waybill_code || waybill.id} khỏi bảng kê?`, confirmLabel: 'Gỡ', danger: true, onConfirm: async () => { try { await apiRequest(`/manifests/${manifest.id}/waybills/${waybill.id}`, { method: 'DELETE' }); await refreshManifest(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể gỡ vận đơn.'); } } }); }
-  function confirmClose() { if (!manifest || !canClose) return; setConfirmDialog({ title: 'Đóng bảng kê', message: `Đóng ${code(manifest)} và chuyển vận đơn IN_WAREHOUSE sang MANIFEST_CLOSED?`, confirmLabel: 'Đóng bảng kê', onConfirm: async () => { try { await apiRequest(`/manifests/${manifest.id}/close`, { method: 'PATCH', body: { seal_code: manifest.seal_code || `SEAL-${manifest.id}` } }); await refreshManifest(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể đóng bảng kê.'); } } }); }
-  function closeAssign() { setIsAssignClosing(true); window.setTimeout(() => { setIsAssignOpen(false); setIsAssignClosing(false); }, 180); }
-  function openAssign() { if (!manifest || !canAssign) return; setAssignForm({ trip_id: manifest.trip_id ? String(manifest.trip_id) : '' }); setIsAssignOpen(true); }
-  function confirmAssign() { if (!manifest || !assignForm.trip_id) return; setConfirmDialog({ title: 'Gán chuyến', message: `Gán ${code(manifest)} vào chuyến xe đã chọn?`, confirmLabel: 'Gán chuyến', onConfirm: submitAssign }); }
-  async function submitAssign() { if (!manifest || !assignForm.trip_id) return; setIsSubmitting(true); try { await apiRequest(`/manifests/${manifest.id}/assign-trip`, { method: 'PATCH', body: { trip_id: assignForm.trip_id } }); closeAssign(); await refreshManifest(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể gán chuyến.'); } finally { setIsSubmitting(false); } }
-  function closePrint() { setIsPrintClosing(true); window.setTimeout(() => { setIsPrintOpen(false); setPrintManifest(null); setIsPrintClosing(false); }, 180); }
-  async function openPrint() { if (!manifest) return; setIsPrintOpen(true); setIsPrintLoading(true); setPrintManifest(manifest); try { setPrintManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}/print`)); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể tải dữ liệu in.'); } finally { setIsPrintLoading(false); } }
-  async function downloadExcel() { if (!manifest) return; setActionError(''); setIsExporting(true); try { const exportManifest = await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}/print`).catch(() => manifest); const exported = downloadManifestDetailExcel(exportManifest); if (!exported) setActionError('Bảng kê chưa có vận đơn để tải Excel.'); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể tải Excel chi tiết bảng kê.'); } finally { setIsExporting(false); } }
 
-  return <div className="h-full min-h-0 flex flex-col gap-2">
-    {actionError && <div className="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-medium text-amber-800 flex items-center gap-2"><AlertTriangle size={16} />{actionError}</div>}
-    <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-      <div className="p-3 border-b border-border shrink-0 space-y-3">
-        <div className="flex flex-wrap items-center gap-2"><button onClick={() => navigate(-1)} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground hover:bg-muted md:w-auto md:px-3"><ArrowLeft size={15} /><span className="hidden md:ml-2 md:inline text-[13px] font-bold">Quay lại</span></button><div className="relative min-w-0 flex-1 md:max-w-[460px]"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input value={filters.keyword} onChange={event => updateFilters({ keyword: event.target.value, page: 1 })} placeholder="Tìm mã vận đơn, người gửi, người nhận..." className="w-full h-10 rounded-lg border border-border bg-muted/10 pl-9 pr-3 text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/10" /></div><button title="Mở bộ lọc" onClick={() => setIsFilterOpen(true)} className="relative h-10 w-10 rounded-lg border border-primary/30 bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center md:hidden"><Filter size={16} />{activeFilterCount > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold text-white">{activeFilterCount}</span>}</button>{activeFilterCount > 0 && <div className="order-last basis-full md:order-none md:basis-auto"><button onClick={clearFilters} className="h-9 rounded-lg border border-red-200 bg-red-50 px-3 text-[13px] font-bold text-red-500 hover:bg-red-100 md:h-10">× Xóa {activeFilterCount} bộ lọc</button></div>}<div className="hidden flex-1 md:block" /><button disabled={!canEdit} onClick={openAdd} title="Thêm vận đơn" className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-extrabold text-white hover:bg-primary/90 disabled:opacity-45"><FilePlus2 size={16} /><span className="hidden sm:inline">Thêm</span></button></div>
-        <div className="hidden md:flex flex-wrap items-center gap-2"><FilterSelect multiple icon={PackageCheck} placeholder="Trạng thái vận đơn" options={statusOptions} value={filters.statuses} onValueChange={value => updateFilters({ statuses: value, page: 1 })} /><FilterSelect multiple icon={Building2} placeholder="Bưu cục đi" options={hubOptions} value={filters.origin_hub_id} onValueChange={value => updateFilters({ origin_hub_id: value, page: 1 })} /><FilterSelect multiple icon={Building2} placeholder="Bưu cục đến" options={hubOptions} value={filters.dest_hub_id} onValueChange={value => updateFilters({ dest_hub_id: value, page: 1 })} /><FilterSelect multiple icon={PackageCheck} placeholder="Loại thanh toán" options={paymentOptions} value={filters.payment_type} onValueChange={value => updateFilters({ payment_type: value, page: 1 })} /></div>
-        {manifest && <Summary manifest={manifest} count={allWaybills.length} weight={allWaybills.reduce((sum, item) => sum + Number(item.weight || 0), 0)} canEdit={canEdit} canClose={canClose} canAssign={canAssign} isExporting={isExporting} onEdit={openEdit} onCloseManifest={confirmClose} onAssign={openAssign} onPrint={openPrint} onDownloadExcel={() => void downloadExcel()} />}
+  useEffect(() => { void loadManifest(); }, [id]);
+
+  const links = useMemo(() => normalizeLinks(manifest).sort((a, b) => Number(a.loading_position ?? 9999) - Number(b.loading_position ?? 9999)), [manifest]);
+  const filteredLinks = useMemo(() => {
+    const search = keyword.trim().toLowerCase();
+    if (!search) return links;
+    return links.filter((link) => [link.waybill?.waybill_code, link.waybill?.sender_info, link.waybill?.receiver_info].some((value) => String(value || '').toLowerCase().includes(search)));
+  }, [links, keyword]);
+
+  function updateCell(waybillId: string, key: EditableKey, value: string) {
+    setRows((prev) => ({ ...prev, [waybillId]: { ...(prev[waybillId] ?? {}), [key]: value } }));
+  }
+
+  async function saveRows() {
+    if (!manifest) return;
+    setIsSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const payload = { rows: normalizeLinks(manifest).map((link) => ({ waybill_id: rowKey(link), fields: rows[rowKey(link)] ?? {} })) };
+      const response = await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}/dispatch-rows`, { method: 'PATCH', body: payload });
+      setManifest(response);
+      setMessage('Đã lưu thông tin bảng kê phát hàng.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Không lưu được thông tin bảng kê.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const kanbanColumns = useMemo(() => {
+    const departed = manifest && !isArrived(manifest) ? [manifest] : [];
+    const expected = manifest && isArrived(manifest) ? [manifest] : [];
+    return [
+      { key: 'departed', title: 'Xe đã khởi hành', icon: <Truck size={18} />, items: departed, tone: 'border-blue-200 bg-blue-50 text-blue-700' },
+      { key: 'expected', title: 'Dự kiến đến', icon: <CalendarClock size={18} />, items: expected, tone: 'border-amber-200 bg-amber-50 text-amber-700' },
+    ];
+  }, [manifest]);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4 md:p-6">
+      {(error || message) && <Alert message={error || message} tone={error ? 'red' : 'green'} />}
+      <div className="rounded-2xl border border-border bg-white shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
+          <button onClick={() => navigate(-1)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground hover:bg-muted"><ArrowLeft size={15} />Quay lại</button>
+          <div className="relative min-w-0 flex-1 md:max-w-[520px]"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Tìm mã bảng kê, seal, chuyến xe..." className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-[13px] font-medium outline-none focus:ring-2 focus:ring-primary/10" /></div>
+          <button onClick={() => void loadManifest()} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground hover:bg-muted"><RefreshCcw size={15} />Tải lại</button>
+        </div>
+        <div className="p-4">
+          {isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải bảng kê..." /> : !manifest ? <StateBlock icon={<AlertTriangle size={22} />} title="Không tìm thấy bảng kê." /> : (
+            <div className="grid min-h-[520px] gap-4 lg:grid-cols-2">
+              {kanbanColumns.map((column) => <KanbanColumn key={column.key} title={column.title} icon={column.icon} tone={column.tone} count={column.items.length}>{column.items.length ? column.items.map((item) => <ManifestKanbanCard key={item.id} manifest={item} waybillCount={links.length} onOpen={() => setIsDialogOpen(true)} />) : <EmptyColumn title="Chưa có bảng kê ở trạng thái này" />}</KanbanColumn>)}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">{isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải chi tiết bảng kê..." /> : error ? <StateBlock icon={<AlertTriangle size={22} />} title={error} /> : !pageWaybills.length ? <StateBlock icon={<PackageCheck size={22} />} title="Bảng kê chưa có vận đơn phù hợp." /> : <><table className="hidden md:table w-full min-w-[1280px] text-left border-collapse"><thead className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-600"><tr>{['Mã vận đơn','Người gửi','Người nhận','Hub đi','Hub đến','Trạng thái','Loại TT','Cân nặng','Kích thước','TL quy đổi','Thao tác'].map(header => <th key={header} className={clsx('border-r border-border px-4 py-3 font-bold last:border-r-0', header === 'Thao tác' && 'w-px whitespace-nowrap')}>{header}</th>)}</tr></thead><tbody>{pageWaybills.map(item => <WaybillRow key={item.id} waybill={item} canRemove={canEdit} onRemove={confirmRemove} />)}</tbody></table><div className="grid gap-3 p-3 md:hidden">{pageWaybills.map(item => <WaybillCard key={item.id} waybill={item} canRemove={canEdit} onRemove={confirmRemove} />)}</div></>}</div>
-      <div className="shrink-0 border-t border-border bg-card px-3 py-2"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[12px] font-bold text-muted-foreground">{`${rangeStart}-${rangeEnd}/Tổng:${total}`}</p><div className="flex items-center gap-2"><SearchableSelect value={String(filters.limit)} onValueChange={value => updateFilters({ limit: Number(value), page: 1 })} options={[{ value: '10', label: '10' }, { value: '20', label: '20' }, { value: '50', label: '50' }]} className="h-9 w-[88px] rounded-lg bg-white px-3 text-[13px] text-muted-foreground" /><span className="hidden text-[12px] text-muted-foreground sm:inline">/ trang</span><button disabled={page <= 1} onClick={() => updateFilters({ page: page - 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronLeft size={16} /></button><button disabled={page >= totalPages} onClick={() => updateFilters({ page: page + 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronRight size={16} /></button><span className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-primary px-2 text-[13px] font-bold text-white">{page}</span><span className="text-[13px] font-bold text-foreground">/ {totalPages}</span></div></div></div>
+      {manifest && isDialogOpen && <DispatchSheetDialog manifest={manifest} links={filteredLinks} rows={rows} keyword={keyword} isSaving={isSaving} onKeywordChange={setKeyword} onCellChange={updateCell} onSave={saveRows} onClose={() => setIsDialogOpen(false)} />}
     </div>
-    <FilterBottomSheet isOpen={isFilterOpen} filters={filters} setFilters={setFilters} hubOptions={hubOptions} onClose={() => setIsFilterOpen(false)} />
-    <AddEditManifestDialog isOpen={isEditOpen} isClosing={isEditClosing} isEditMode isSubmitting={isSubmitting} formState={formState} hubs={hubs} onChange={(key, value) => setFormState(prev => ({ ...prev, [key]: value }))} onClose={closeEdit} onSubmit={submitEdit} />
-    <AddWaybillsToManifestDialog isOpen={isAddOpen} isClosing={isAddClosing} isLoading={isWaybillLoading} isSubmitting={isSubmitting} manifest={manifest} waybills={waybillChoices} total={waybillTotal} formState={addForm} onChange={patch => setAddForm(prev => ({ ...prev, ...patch }))} onClose={closeAdd} onSubmit={submitAddWaybills} />
-    <AssignManifestTripDialog isOpen={isAssignOpen} isClosing={isAssignClosing} isSubmitting={isSubmitting} manifest={manifest} trips={trips} formState={assignForm} onChange={trip_id => setAssignForm({ trip_id })} onClose={closeAssign} onSubmit={confirmAssign} />
-    <PrintManifestDialog isOpen={isPrintOpen} isClosing={isPrintClosing} isLoading={isPrintLoading} manifest={printManifest} onClose={closePrint} />
-    <ConfirmDialog dialog={confirmDialog} isSubmitting={isSubmitting} onClose={() => setConfirmDialog(null)} />
+  );
+}
+
+function ManifestKanbanCard({ manifest, waybillCount, onOpen }: { manifest: LoadPlanningManifest; waybillCount: number; onOpen: () => void }) {
+  return <article className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+    <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">Bảng kê</p><h3 className="mt-1 text-lg font-black text-primary">{manifestCode(manifest)}</h3></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-black text-emerald-700">{display(manifest.status)}</span></div>
+    <div className="mt-4 grid gap-3 text-[13px] font-semibold text-foreground">
+      <Line label="Hub đi" value={hubLabel(manifest.origin_hub, manifest.origin_hub_id)} />
+      <Line label="Hub đến" value={hubLabel(manifest.dest_hub, manifest.dest_hub_id)} />
+      <Line label="Chuyến xe" value={tripLabel(manifest)} />
+      <Line label="Biển số" value={truckLabel(manifest)} />
+      <Line label="Tổng vận đơn" value={formatNumber(manifest.waybill_count ?? manifest.total_waybills ?? waybillCount)} />
+      <Line label="Tổng trọng lượng" value={formatNumber(manifest.total_weight ?? manifest.weight_total, ' kg')} />
+      <Line label="Thời gian đóng" value={formatDateTime(manifest.closed_at || manifest.created_at)} />
+    </div>
+    <button onClick={onOpen} className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-black text-white hover:bg-primary/90"><Eye size={16} />Xem chi tiết bảng kê</button>
+  </article>;
+}
+
+function DispatchSheetDialog(props: { manifest: LoadPlanningManifest; links: RowLink[]; rows: EditableRows; keyword: string; isSaving: boolean; onKeywordChange: (value: string) => void; onCellChange: (waybillId: string, key: EditableKey, value: string) => void; onSave: () => Promise<void>; onClose: () => void }) {
+  const { manifest, links, rows, keyword, isSaving, onKeywordChange, onCellChange, onSave, onClose } = props;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+    <div className="flex max-h-[92vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-3">
+        <button onClick={onClose} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground hover:bg-muted"><X size={15} />Đóng</button>
+        <div className="relative min-w-0 flex-1 md:max-w-[520px]"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input value={keyword} onChange={(event) => onKeywordChange(event.target.value)} placeholder="Tìm mã vận đơn, người gửi, người nhận..." className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-[13px] font-medium outline-none focus:ring-2 focus:ring-primary/10" /></div>
+        <button onClick={() => window.print()} className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100"><Printer size={15} />In</button>
+        <button disabled={isSaving} onClick={() => void onSave()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-extrabold text-white hover:bg-primary/90 disabled:opacity-50">{isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Lưu thay đổi</button>
+      </div>
+      <div className="shrink-0 border-b border-border px-4 py-3 text-center"><h2 className="text-[16px] font-black uppercase tracking-wide text-foreground">BẢNG KÊ PHÁT HÀNG ECO</h2><p className="mt-1 text-[12px] font-bold text-muted-foreground">{manifestCode(manifest)} · {links.length} dòng hàng</p></div>
+      <div className="min-h-0 flex-1 overflow-auto custom-scrollbar">
+        {!links.length ? <StateBlock icon={<PackageCheck size={22} />} title="Bảng kê chưa có dòng hàng phù hợp." /> : <table className="w-full min-w-[2100px] border-collapse text-center text-[12px] text-slate-950">
+          <thead><tr><th colSpan={editableColumns.length + 1} className="border border-slate-700 bg-white py-1 text-[14px] font-black">BẢNG KÊ PHÁT HÀNG ECO</th></tr><tr className="bg-green-50 text-[11px] font-black"><th className="w-14 border border-slate-700 bg-yellow-300 px-1 py-2">Vị trí hàng</th>{editableColumns.map((column) => <th key={column.key} className={`border border-slate-700 px-1 py-2 ${column.className}`}>{column.label}</th>)}</tr></thead>
+          <tbody>{links.map((link, index) => { const waybillId = rowKey(link); return <tr key={waybillId || index} className="align-middle odd:bg-white even:bg-slate-50"><td className="border border-slate-700 bg-yellow-300 px-1 py-2 font-black text-blue-900">{link.loading_position ?? index + 1}</td>{editableColumns.map((column) => <td key={column.key} className={`border border-slate-700 p-0 ${column.key === 'trang_thai_giao' ? 'bg-green-200' : column.key === 'du_kien_toi_hcm' ? 'bg-green-100' : ''}`}><textarea value={getCellValue(rows, link, column.key)} onChange={(event) => onCellChange(waybillId, column.key, event.target.value)} className="min-h-[50px] w-full resize-y border-0 bg-transparent px-1.5 py-2 text-center text-[12px] font-semibold outline-none focus:bg-white focus:ring-2 focus:ring-primary/30" /></td>)}</tr>; })}</tbody>
+        </table>}
+      </div>
+    </div>
   </div>;
 }
 
-function Summary({ manifest, count, weight, canEdit, canClose, canAssign, isExporting, onEdit, onCloseManifest, onAssign, onPrint, onDownloadExcel }: { manifest: LoadPlanningManifest; count: number; weight: number; canEdit: boolean; canClose: boolean; canAssign: boolean; isExporting: boolean; onEdit: () => void; onCloseManifest: () => void; onAssign: () => void; onPrint: () => void; onDownloadExcel: () => void }) { return <div className="grid gap-2 rounded-xl border border-border bg-muted/10 p-3 text-[13px] md:grid-cols-6"><Info label="Mã bảng kê" value={code(manifest)} /><Info label="Hub đi" value={<HubBadge label={hub(manifest.origin_hub, manifest.origin_hub_id)} />} /><Info label="Hub đến" value={<HubBadge label={hub(manifest.dest_hub, manifest.dest_hub_id)} />} /><Info label="Trạng thái" value={<Badge config={manifestStatusConfig[String(manifest.status || '')]} fallback={manifest.status} />} /><Info label="Tổng vận đơn" value={num(count)} /><Info label="Tổng trọng lượng" value={num(weight, ' kg')} /><Info label="Chuyến xe" value={manifest.trip?.trip_code || manifest.trip?.code || (manifest.trip_id ? `Chuyến #${manifest.trip_id}` : 'Chưa gán')} /><Info label="Thời gian đóng" value={formatDate(manifest.closed_at)} /><Info label="Người đóng" value={display(manifest.closed_by?.name || manifest.closed_by?.full_name || manifest.closed_by?.username)} /><Info label="Ghi chú" value={display(manifest.note)} /><div className="flex items-end gap-2 md:col-span-2"><IconAction label="Sửa" disabled={!canEdit} icon={<Edit size={15} />} onClick={onEdit} /><IconAction label="Đóng bảng kê" disabled={!canClose} icon={<PackageCheck size={15} />} onClick={onCloseManifest} /><IconAction label="Gán chuyến" disabled={!canAssign} icon={<Route size={15} />} onClick={onAssign} /><IconAction label="In" icon={<Printer size={15} />} onClick={onPrint} /><IconAction label="Tải Excel" disabled={isExporting || count === 0} icon={isExporting ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />} onClick={onDownloadExcel} /></div></div>; }
-function Info({ label, value }: { label: string; value: ReactNode }) { return <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p><div className="mt-1 truncate font-bold text-foreground">{value}</div></div>; }
-function WaybillRow({ waybill, canRemove, onRemove }: { waybill: ManifestWaybill; canRemove: boolean; onRemove: (waybill: ManifestWaybill) => void }) { return <tr className="border-b border-border hover:bg-muted/10"><td className="border-r border-border px-4 py-3 text-[13px] font-extrabold text-primary">{display(waybill.waybill_code)}</td><td className="border-r border-border px-4 py-3 text-[13px]">{display(waybill.sender_info)}</td><td className="border-r border-border px-4 py-3 text-[13px]">{display(waybill.receiver_info)}</td><td className="border-r border-border px-4 py-3"><HubBadge label={display(waybill.origin_hub_id)} /></td><td className="border-r border-border px-4 py-3"><HubBadge label={display(waybill.dest_hub_id)} /></td><td className="border-r border-border px-4 py-3"><Badge config={waybillStatusConfig[waybillStatus(waybill)]} fallback={waybillStatus(waybill)} /></td><td className="border-r border-border px-4 py-3"><Badge config={paymentConfig[String(waybill.payment_type || '')]} fallback={waybill.payment_type} /></td><td className="border-r border-border px-4 py-3 text-[13px] font-bold">{num(waybill.weight, ' kg')}</td><td className="border-r border-border px-4 py-3 text-[13px]">{[waybill.length, waybill.width, waybill.height].map(v => display(v, '0')).join(' × ')}</td><td className="border-r border-border px-4 py-3 text-[13px]">{num(waybill.volumetric_weight, ' kg')}</td><td className="w-px whitespace-nowrap px-4 py-3"><IconAction label="Gỡ vận đơn" danger disabled={!canRemove} icon={<Trash2 size={15} />} onClick={() => onRemove(waybill)} /></td></tr>; }
-function WaybillCard({ waybill, canRemove, onRemove }: { waybill: ManifestWaybill; canRemove: boolean; onRemove: (waybill: ManifestWaybill) => void }) { return <article className="rounded-2xl border border-border bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><h3 className="font-extrabold text-primary">{display(waybill.waybill_code)}</h3><Badge config={waybillStatusConfig[waybillStatus(waybill)]} fallback={waybillStatus(waybill)} /></div><div className="mt-3 grid gap-2 text-[13px]"><Line label="Người gửi" value={display(waybill.sender_info)} /><Line label="Người nhận" value={display(waybill.receiver_info)} /><Line label="Hub đi" value={display(waybill.origin_hub_id)} /><Line label="Hub đến" value={display(waybill.dest_hub_id)} /><Line label="Thanh toán" value={<Badge config={paymentConfig[String(waybill.payment_type || '')]} fallback={waybill.payment_type} />} /><Line label="Cân nặng" value={num(waybill.weight, ' kg')} /><Line label="Kích thước" value={[waybill.length, waybill.width, waybill.height].map(v => display(v, '0')).join(' × ')} /><Line label="TL quy đổi" value={num(waybill.volumetric_weight, ' kg')} /></div><div className="mt-4"><IconAction label="Gỡ vận đơn" danger disabled={!canRemove} icon={<Trash2 size={15} />} onClick={() => onRemove(waybill)} /></div></article>; }
-function Line({ label, value }: { label: string; value: ReactNode }) { return <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{label}</span><span className="text-right font-bold text-foreground">{value}</span></div>; }
-function Badge({ config, fallback }: { config?: BadgeConfig; fallback?: string | null }) { return <span className={`inline-flex h-7 items-center rounded-full px-3 text-[12px] font-bold ${config?.className || 'bg-slate-100 text-slate-600'}`}>{config?.label || fallback || '—'}</span>; }
-function HubBadge({ label }: { label: string }) { return <span className="inline-flex h-7 items-center rounded-full bg-violet-50 px-3 text-[12px] font-bold text-violet-700">{label}</span>; }
-function IconAction({ label, icon, disabled, danger, onClick }: { label: string; icon: ReactNode; disabled?: boolean; danger?: boolean; onClick: () => void }) { return <button type="button" title={label} aria-label={label} disabled={disabled} onClick={onClick} className={clsx('inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45', danger && 'text-red-500 hover:bg-red-50')}>{icon}</button>; }
-function StateBlock({ icon, title }: { icon: ReactNode; title: string }) { return <div className="flex-1 min-h-[360px] flex items-center justify-center"><div className="flex flex-col items-center gap-3 text-center text-muted-foreground"><div className="text-primary">{icon}</div><p className="text-[13px] font-bold">{title}</p></div></div>; }
-function FilterBottomSheet({ isOpen, filters, setFilters, hubOptions, onClose }: { isOpen: boolean; filters: typeof emptyFilters; setFilters: React.Dispatch<React.SetStateAction<typeof emptyFilters>>; hubOptions: FilterOption[]; onClose: () => void }) { if (!isOpen) return null; const groups = [{ title: 'Trạng thái vận đơn', key: 'statuses' as const, options: statusOptions }, { title: 'Bưu cục đi', key: 'origin_hub_id' as const, options: hubOptions }, { title: 'Bưu cục đến', key: 'dest_hub_id' as const, options: hubOptions }, { title: 'Loại thanh toán', key: 'payment_type' as const, options: paymentOptions }]; const setArray = (key: 'statuses' | 'origin_hub_id' | 'dest_hub_id' | 'payment_type', value: string[]) => setFilters(prev => ({ ...prev, [key]: value, page: 1 })); return <div className="fixed inset-0 z-50 flex items-end justify-center md:hidden"><div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} /><div className="relative z-10 flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-border bg-background shadow-2xl"><div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="text-[11px] font-bold uppercase tracking-wider text-primary">Bộ lọc</p><h2 className="text-lg font-extrabold text-foreground">Vận đơn bảng kê</h2></div><button onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground"><X size={18} /></button></div><div className="flex-1 overflow-auto p-4 custom-scrollbar">{groups.map(group => <MobileGroup key={group.key} title={group.title} options={group.options} value={filters[group.key]} onChange={value => setArray(group.key, value)} />)}</div><div className="border-t border-border bg-white p-4"><button onClick={onClose} className="h-11 w-full rounded-xl bg-primary text-[13px] font-extrabold text-white">Áp dụng</button></div></div></div>; }
-function MobileGroup({ title, options, value, onChange }: { title: string; options: FilterOption[]; value: string[]; onChange: (value: string[]) => void }) { const [search, setSearch] = useState(''); const filtered = options.filter(option => option.label.toLowerCase().includes(search.toLowerCase())); return <details open className="mb-3 rounded-2xl border border-border bg-white"><summary className="cursor-pointer px-4 py-3 text-[13px] font-extrabold text-foreground">{title}</summary><div className="border-t border-border p-3"><div className="relative mb-3"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder={`Tìm ${title.toLowerCase()}`} className="h-10 w-full rounded-xl border border-border pl-9 pr-3 text-[13px] outline-none" /></div><div className="mb-2 flex items-center gap-2"><button onClick={() => onChange(options.map(option => option.value))} className="text-[12px] font-bold text-primary">Chọn tất cả</button><button onClick={() => onChange([])} className="text-[12px] font-bold text-red-500">Xóa chọn</button></div>{filtered.map(option => <label key={option.value} className="flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] font-medium hover:bg-muted/60"><input type="checkbox" checked={value.includes(option.value)} onChange={() => onChange(value.includes(option.value) ? value.filter(item => item !== option.value) : [...value, option.value])} className="h-4 w-4 rounded border-border" /><span>{option.label}</span></label>)}</div></details>; }
+function KanbanColumn({ title, icon, tone, count, children }: { title: string; icon: ReactNode; tone: string; count: number; children: ReactNode }) {
+  return <section className="flex min-h-[480px] flex-col rounded-2xl border border-border bg-slate-50/80"><div className={`flex items-center justify-between rounded-t-2xl border-b px-4 py-3 ${tone}`}><div className="flex items-center gap-2 text-[14px] font-black">{icon}<span>{title}</span></div><span className="rounded-full bg-white px-2.5 py-1 text-[12px] font-black text-foreground">{count}</span></div><div className="flex-1 space-y-3 overflow-auto p-3 custom-scrollbar">{children}</div></section>;
+}
+
+function EmptyColumn({ title }: { title: string }) {
+  return <div className="flex min-h-[260px] items-center justify-center rounded-2xl border border-dashed border-border bg-white text-center text-[13px] font-bold text-muted-foreground">{title}</div>;
+}
+
+function Line({ label, value }: { label: string; value: ReactNode }) {
+  return <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"><span className="text-muted-foreground">{label}</span><span className="text-right font-black">{value}</span></div>;
+}
+
+function Alert({ message, tone }: { message: string; tone: 'red' | 'green' }) {
+  return <div className={`shrink-0 rounded-xl border px-4 py-3 text-[13px] font-bold ${tone === 'red' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{message}</div>;
+}
+
+function StateBlock({ icon, title }: { icon: ReactNode; title: string }) {
+  return <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center text-muted-foreground"><div className="text-primary">{icon}</div><p className="text-[13px] font-bold">{title}</p></div>;
+}

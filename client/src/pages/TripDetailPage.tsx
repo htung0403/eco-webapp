@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Eye, Filter, Fuel, Loader2, Package, Search, Tag, Truck as TruckIcon } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, Eye, Filter, Fuel, Loader2, Package, Printer, Search, Tag, Truck as TruckIcon } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { ApiError, apiRequest } from '../lib/api';
@@ -20,9 +20,10 @@ const ACCOUNTANT = 16;
 const MANAGER = 32;
 const DIRECTOR = 64;
 
-type WaybillColumnId = 'waybill_code' | 'sender_info' | 'receiver_info' | 'origin_hub_id' | 'dest_hub_id' | 'current_state' | 'payment_type' | 'weight' | 'dimensions' | 'volumetric_weight' | 'actions';
+type WaybillColumnId = 'loading_position' | 'waybill_code' | 'sender_info' | 'receiver_info' | 'origin_hub_id' | 'dest_hub_id' | 'current_state' | 'payment_type' | 'weight' | 'dimensions' | 'volumetric_weight' | 'actions';
 
 const waybillHeaders: Array<{ id: WaybillColumnId; label: string; className?: string }> = [
+  { id: 'loading_position', label: 'Vị trí', className: 'w-[82px] text-center' },
   { id: 'waybill_code', label: 'Mã vận đơn' },
   { id: 'sender_info', label: 'Người gửi' },
   { id: 'receiver_info', label: 'Người nhận' },
@@ -51,8 +52,8 @@ const getAvailableTripActions = (status?: string | null): TripAction[] => {
 
 const tripStatusOptions: FilterOption[] = [
   { value: 'PLANNED', label: 'Đang lập kế hoạch' },
-  { value: 'IN_TRANSIT', label: 'Đang chạy' },
-  { value: 'ARRIVED', label: 'Đã đến hub đích' },
+  { value: 'IN_TRANSIT', label: 'Xe đã khởi hành' },
+  { value: 'ARRIVED', label: 'Xe đã đến' },
   { value: 'COMPLETED', label: 'Hoàn tất' },
   { value: 'CANCELLED', label: 'Đã hủy' },
 ];
@@ -116,7 +117,7 @@ export default function TripDetailPage() {
   useEffect(() => { void loadTrip(); }, [id]);
 
   const waybills = useMemo(() => {
-    const raw = manifest?.waybills || manifest?.manifest_waybills?.map(item => item.waybill).filter(Boolean) as WaybillSummary[] | undefined || [];
+    const raw = manifest?.waybills || manifest?.manifest_waybills?.map(item => (item.waybill ? { ...item.waybill, loading_position: item.loading_position } : null)).filter(Boolean) as WaybillSummary[] | undefined || [];
     const keyword = filters.keyword.trim().toLowerCase();
     return raw.filter(waybill => {
       const textMatch = !keyword || [waybill.waybill_code, waybill.sender_info, waybill.receiver_info].some(value => String(value || '').toLowerCase().includes(keyword));
@@ -143,6 +144,7 @@ export default function TripDetailPage() {
   function openAction(nextAction: TripAction) { if (!trip || isFinal || !canOperateTrip) return; setActionTrip(trip); setAction(nextAction); setActionError(''); }
   async function confirmAction() { if (!actionTrip || !action) return; setIsSubmitting(true); setActionError(''); try { await apiRequest<Trip>(`/trips/${actionTrip.id}/${action}`, { method: 'PATCH' }); setActionTrip(null); setAction(null); await loadTrip(); } catch (submitError) { setActionError(submitError instanceof ApiError ? submitError.message : 'Không cập nhật được trạng thái chuyến.'); } finally { setIsSubmitting(false); } }
   async function submitCosts() { if (!trip || isFinal || !canUpdateCosts) return; setIsSubmitting(true); setActionError(''); try { await apiRequest<Trip>(`/trips/${trip.id}/costs`, { method: 'PATCH', body: { fuel_actual: Number(costForm.fuel_actual || 0), fuel_cost: Number(costForm.fuel_cost || 0), other_costs: Number(costForm.other_costs || 0) } }); setCostDialogOpen(false); await loadTrip(); } catch (submitError) { setActionError(submitError instanceof ApiError ? submitError.message : 'Không cập nhật được chi phí chuyến.'); } finally { setIsSubmitting(false); } }
+  async function printManifest() { if (!trip?.manifest_id) return; try { await apiRequest(`/manifests/${trip.manifest_id}/print`); window.open(`/warehouse/manifests/${trip.manifest_id}?print=1`, '_blank', 'noopener'); } catch (submitError) { setActionError(submitError instanceof ApiError ? submitError.message : 'Không tải được dữ liệu in bảng kê.'); } }
 
   return (
     <div className="h-full min-h-0 flex flex-col gap-2">
@@ -162,7 +164,7 @@ export default function TripDetailPage() {
             <FilterSelect multiple icon={Package} placeholder="Bưu cục đến" options={hubOptions} value={filters.dest_hub_id} onValueChange={value => updateFilter('dest_hub_id', value)} />
             <FilterSelect multiple icon={Tag} placeholder="Loại thanh toán" options={paymentOptions} value={filters.payment_type} onValueChange={value => updateFilter('payment_type', value)} />
           </div>
-          {trip && <TripInfo trip={trip} manifest={manifest} truck={truck} hubs={hubs} canOperateTrip={canOperateTrip} isFinal={isFinal} openAction={openAction} openManifest={() => manifest && setDetailManifest(manifest)} openTruck={() => truck && setDetailTruck(truck)} />}
+          {trip && <TripInfo trip={trip} manifest={manifest} truck={truck} hubs={hubs} canOperateTrip={canOperateTrip} isFinal={isFinal} openAction={openAction} openManifest={() => manifest && setDetailManifest(manifest)} openTruck={() => truck && setDetailTruck(truck)} printManifest={printManifest} />}
         </div>
 
         {isLoading ? <StateBlock icon={<Loader2 className="animate-spin" size={28} />} title="Đang tải chi tiết chuyến xe" description="Hệ thống đang lấy dữ liệu thật từ API." /> : error ? <StateBlock icon={<AlertTriangle size={28} />} title="Không tải được dữ liệu" description={error} /> : !trip ? <StateBlock icon={<TruckIcon size={28} />} title="Không tìm thấy chuyến xe" description="Kiểm tra lại mã chuyến hoặc quyền truy cập." /> : !paginatedWaybills.length ? <StateBlock icon={<Package size={28} />} title="Chưa có vận đơn phù hợp" description="Bảng kê chưa có vận đơn hoặc bộ lọc không có kết quả." /> : (
@@ -183,7 +185,7 @@ export default function TripDetailPage() {
   );
 }
 
-function TripInfo({ trip, manifest, truck, hubs, canOperateTrip, isFinal, openAction, openManifest, openTruck }: { trip: Trip; manifest: ManifestDetail | null; truck: TruckSummary | null; hubs: HubSummary[]; canOperateTrip: boolean; isFinal: boolean; openAction: (action: TripAction) => void; openManifest: () => void; openTruck: () => void }) {
+function TripInfo({ trip, manifest, truck, hubs, canOperateTrip, isFinal, openAction, openManifest, openTruck, printManifest }: { trip: Trip; manifest: ManifestDetail | null; truck: TruckSummary | null; hubs: HubSummary[]; canOperateTrip: boolean; isFinal: boolean; openAction: (action: TripAction) => void; openManifest: () => void; openTruck: () => void; printManifest: () => void }) {
   const navigate = useNavigate();
   return (
     <div className="grid gap-2 rounded-xl border border-border bg-muted/5 p-3 text-[12px] md:grid-cols-4">
@@ -202,7 +204,8 @@ function TripInfo({ trip, manifest, truck, hubs, canOperateTrip, isFinal, openAc
             {action === 'start' ? 'Khởi hành' : action === 'arrive' ? 'Đến hub' : action === 'complete' ? 'Hoàn tất' : 'Hủy'}
           </button>
         ))}
-        {!isFinal && trip.status === 'IN_TRANSIT' && (
+        {trip.manifest_id && <button type="button" onClick={() => void printManifest()} className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[11px] font-bold text-slate-800"><Printer size={13} className="mr-1 inline" />In bảng kê</button>}
+        {!isFinal && (trip.status === 'IN_TRANSIT' || trip.status === 'ARRIVED') && (
           <>
             <button type="button" onClick={() => navigate(`/trips/${trip.id}/loading-sequence`)} className="h-8 rounded-lg border border-amber-200 bg-amber-50 px-2 text-[11px] font-bold text-amber-800">Vị trí xếp hàng</button>
             <button type="button" onClick={() => navigate(`/trips/${trip.id}/expenses`)} className="h-8 rounded-lg border border-orange-200 bg-orange-50 px-2 text-[11px] font-bold text-orange-800">Chi phí phát sinh</button>
@@ -213,8 +216,8 @@ function TripInfo({ trip, manifest, truck, hubs, canOperateTrip, isFinal, openAc
   );
 }
 
-function renderWaybillCell(column: WaybillColumnId, waybill: WaybillSummary, hubs: HubSummary[]) { const content: Record<WaybillColumnId, ReactNode> = { waybill_code: <span className="font-extrabold text-primary">{waybill.waybill_code || '—'}</span>, sender_info: waybill.sender_info || '—', receiver_info: waybill.receiver_info || '—', origin_hub_id: <HubBadge hubs={hubs} id={waybill.origin_hub_id} />, dest_hub_id: <HubBadge hubs={hubs} id={waybill.dest_hub_id} />, current_state: <WaybillStatusBadge status={waybill.current_state} />, payment_type: <PaymentBadge value={waybill.payment_type} />, weight: formatNumber(waybill.weight, ' kg'), dimensions: `${formatNumber(waybill.length)} × ${formatNumber(waybill.width)} × ${formatNumber(waybill.height)}`, volumetric_weight: formatNumber(waybill.volumetric_weight, ' kg'), actions: <IconButton icon={<Eye size={15} />} title="Xem" /> }; return <td key={column} className="px-4 py-3 border-r border-border last:border-r-0 text-[13px] align-top">{content[column]}</td>; }
-function WaybillMobileCard({ waybill, hubs }: { waybill: WaybillSummary; hubs: HubSummary[] }) { return <article className="rounded-2xl border border-border bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Vận đơn</p><h3 className="text-base font-extrabold text-primary">{waybill.waybill_code || '—'}</h3></div><WaybillStatusBadge status={waybill.current_state} /></div><div className="mt-4 grid gap-2 text-[13px]"><Line label="Người gửi" value={waybill.sender_info || '—'} /><Line label="Người nhận" value={waybill.receiver_info || '—'} /><Line label="Hub đi" value={<HubBadge hubs={hubs} id={waybill.origin_hub_id} />} /><Line label="Hub đến" value={<HubBadge hubs={hubs} id={waybill.dest_hub_id} />} /><Line label="Thanh toán" value={<PaymentBadge value={waybill.payment_type} />} /><Line label="Cân nặng" value={formatNumber(waybill.weight, ' kg')} /><Line label="Kích thước" value={`${formatNumber(waybill.length)} × ${formatNumber(waybill.width)} × ${formatNumber(waybill.height)}`} /><Line label="TL quy đổi" value={formatNumber(waybill.volumetric_weight, ' kg')} /></div><div className="mt-4"><IconButton icon={<Eye size={15} />} title="Xem" /></div></article>; }
+function renderWaybillCell(column: WaybillColumnId, waybill: WaybillSummary, hubs: HubSummary[]) { const content: Record<WaybillColumnId, ReactNode> = { loading_position: <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-yellow-200 px-2 text-[12px] font-extrabold text-slate-900">{waybill.loading_position || '—'}</span>, waybill_code: <span className="font-extrabold text-primary">{waybill.waybill_code || '—'}</span>, sender_info: waybill.sender_info || '—', receiver_info: waybill.receiver_info || '—', origin_hub_id: <HubBadge hubs={hubs} id={waybill.origin_hub_id} />, dest_hub_id: <HubBadge hubs={hubs} id={waybill.dest_hub_id} />, current_state: <WaybillStatusBadge status={waybill.current_state} />, payment_type: <PaymentBadge value={waybill.payment_type} />, weight: formatNumber(waybill.weight, ' kg'), dimensions: `${formatNumber(waybill.length)} × ${formatNumber(waybill.width)} × ${formatNumber(waybill.height)}`, volumetric_weight: formatNumber(waybill.volumetric_weight, ' kg'), actions: <IconButton icon={<Eye size={15} />} title="Xem" /> }; return <td key={column} className="px-4 py-3 border-r border-border last:border-r-0 text-[13px] align-top">{content[column]}</td>; }
+function WaybillMobileCard({ waybill, hubs }: { waybill: WaybillSummary; hubs: HubSummary[] }) { return <article className="rounded-2xl border border-border bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Vận đơn</p><h3 className="text-base font-extrabold text-primary">{waybill.waybill_code || '—'}</h3></div><WaybillStatusBadge status={waybill.current_state} /></div><div className="mt-4 grid gap-2 text-[13px]"><Line label="Vị trí xếp" value={<span className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-yellow-200 px-2 text-[12px] font-extrabold text-slate-900">{waybill.loading_position || '—'}</span>} /><Line label="Người gửi" value={waybill.sender_info || '—'} /><Line label="Người nhận" value={waybill.receiver_info || '—'} /><Line label="Hub đi" value={<HubBadge hubs={hubs} id={waybill.origin_hub_id} />} /><Line label="Hub đến" value={<HubBadge hubs={hubs} id={waybill.dest_hub_id} />} /><Line label="Thanh toán" value={<PaymentBadge value={waybill.payment_type} />} /><Line label="Cân nặng" value={formatNumber(waybill.weight, ' kg')} /><Line label="Kích thước" value={`${formatNumber(waybill.length)} × ${formatNumber(waybill.width)} × ${formatNumber(waybill.height)}`} /><Line label="TL quy đổi" value={formatNumber(waybill.volumetric_weight, ' kg')} /></div><div className="mt-4"><IconButton icon={<Eye size={15} />} title="Xem" /></div></article>; }
 function Info({ label, value }: { label: string; value: ReactNode }) { return <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p><div className="mt-1 truncate font-bold text-foreground">{value}</div></div>; }
 function Line({ label, value }: { label: string; value: ReactNode }) { return <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/5 px-3 py-2"><span className="text-muted-foreground">{label}</span><span className="text-right font-bold text-foreground">{value}</span></div>; }
 function IconButton({ icon, title }: { icon: ReactNode; title: string }) { return <button title={title} className="rounded-lg border border-border bg-white p-2 text-muted-foreground hover:bg-muted hover:text-primary">{icon}</button>; }

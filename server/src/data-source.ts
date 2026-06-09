@@ -12,6 +12,7 @@ import { HubEntity } from './hubs/hub.entity';
 import { ManifestEntity } from './manifests/manifest.entity';
 import { ManifestWaybillEntity } from './manifests/manifest-waybill.entity';
 import { NorthSouthShipmentEntity } from './north-south-shipments/north-south-shipment.entity';
+import { OrderEntity } from './orders/order.entity';
 import { ReconciliationEntity } from './reconciliations/reconciliation.entity';
 import { StaffMemberEntity } from './staff-members/staff-member.entity';
 import { TripEntity } from './trips/trip.entity';
@@ -55,6 +56,7 @@ export default new DataSource({
     VehicleCostEntity,
     CashTransactionDetailEntity,
     NorthSouthShipmentEntity,
+    OrderEntity,
     StaffMemberEntity,
     CarrierDirectoryEntity,
     ChanhShipmentEntity,

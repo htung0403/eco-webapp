@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HubEntity } from '../hubs/hub.entity';
 import { OrdersModule } from '../orders/orders.module';
 import { VendorsModule } from '../vendors/vendors.module';
+import { ManifestWaybillEntity } from '../manifests/manifest-waybill.entity';
+import { ManifestEntity } from '../manifests/manifest.entity';
 import { TripEntity } from '../trips/trip.entity';
 import { TruckEntity } from '../trucks/truck.entity';
 import { WaybillSplitEntity } from './waybill-split.entity';
@@ -13,7 +15,7 @@ import { WaybillsService } from './waybills.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([WaybillEntity, WaybillSplitEntity, WaybillCashVoucherEntity, HubEntity, TripEntity, TruckEntity]),
+    TypeOrmModule.forFeature([WaybillEntity, WaybillSplitEntity, WaybillCashVoucherEntity, HubEntity, TripEntity, TruckEntity, ManifestEntity, ManifestWaybillEntity]),
     OrdersModule,
     VendorsModule,
   ],

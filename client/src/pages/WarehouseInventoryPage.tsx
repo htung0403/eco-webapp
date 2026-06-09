@@ -618,8 +618,12 @@ export default function WarehouseInventoryPage({ variant = 'split-pending' }: { 
         isClosing={isStackClosing}
         waybills={selectedWaybills}
         onClose={closeStackDialog}
-        onSaved={() => {
+        onSaved={(result) => {
           setSelectedWaybillIds([]);
+          if (result?.manifest_id) {
+            navigate(`/warehouse/manifests/${result.manifest_id}`);
+            return;
+          }
           void loadInventory();
         }}
       />
