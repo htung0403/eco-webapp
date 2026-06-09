@@ -42,10 +42,20 @@ export function calcM3(length: string, width: string, height: string): string {
   return formatDisplayNumber((l * w * h) / 1_000_000, 3);
 }
 
-/** Số lượng tính cước theo ĐVT: Kg | m3 | Trọn gói | Chuyến | Lô */
+export function isWeightBillingUnit(unit: string) {
+  const normalized = unit.trim().toLowerCase();
+  return normalized === 'cân' || normalized === 'can' || normalized === 'kg';
+}
+
+export function isVolumeBillingUnit(unit: string) {
+  const normalized = unit.trim().toLowerCase();
+  return normalized === 'khối' || normalized === 'khoi' || normalized === 'm3' || normalized === 'm³';
+}
+
+/** Số lượng tính cước theo ĐVT: Cân/Kg | Khối/m3 | Trọn gói | Chuyến | Lô */
 export function getBillingQuantity(form: NewOrderFormState): number {
-  const unit = (form.donGiaDonVi || 'Kg').trim().toLowerCase();
-  if (unit === 'm3' || unit === 'm³') return parseNumber(form.m3);
+  const unit = (form.donGiaDonVi || 'Cân').trim().toLowerCase();
+  if (isVolumeBillingUnit(unit)) return parseNumber(form.m3);
   if (unit === 'trọn gói' || unit === 'tron goi' || unit === 'chuyến' || unit === 'chuyen' || unit === 'lô' || unit === 'lo') return 1;
   const kg = parseNumber(form.klKg);
   const volKg = parseNumber(form.klQuyDoi);
@@ -55,30 +65,38 @@ export function getBillingQuantity(form: NewOrderFormState): number {
 /** Cước chính = đơn giá × số lượng (theo ĐVT) */
 export function calcCuocChinhAmount(form: NewOrderFormState): number {
   const qty = getBillingQuantity(form);
-  const unitPrice = parseNumber(form.donGia);
+  const unitPrice = parseMoneyAmount(form.donGia);
   if (!qty || !unitPrice) return 0;
   return Math.round(qty * unitPrice);
 }
 
 export function calcOrderPricing(form: NewOrderFormState) {
-  const donGia = parseMoneyAmount(form.donGia);
+  const cuocChinhAmount = calcCuocChinhAmount(form);
   const cod = parseMoneyAmount(form.cod);
   const giamGia = parseMoneyAmount(form.giamGia);
-  const tongCuoc = donGia + cod;
+  const tongCuoc = cuocChinhAmount + cod;
   const thanhToan = Math.max(0, tongCuoc - giamGia);
 
   return {
-    cuocChinh: formatDisplayNumber(donGia, 0),
+    cuocChinh: formatDisplayNumber(cuocChinhAmount, 0),
     tongCuoc: formatDisplayNumber(tongCuoc, 0),
     vat: '0',
     thanhToan: formatDisplayNumber(thanhToan, 0),
   };
 }
 
-const PRICING_FIELDS: (keyof NewOrderFormState)[] = ['donGia', 'cod', 'giamGia'];
+const PRICING_TRIGGER_FIELDS: (keyof NewOrderFormState)[] = [
+  'donGia',
+  'cod',
+  'giamGia',
+  'klKg',
+  'klQuyDoi',
+  'm3',
+  'donGiaDonVi',
+];
 
 export function isPricingField(key: keyof NewOrderFormState) {
-  return PRICING_FIELDS.includes(key);
+  return PRICING_TRIGGER_FIELDS.includes(key);
 }
 
 export function applyPricingToForm(form: NewOrderFormState): NewOrderFormState {
@@ -159,7 +177,7 @@ function waybillToOrderFormBase(waybill: WaybillDetail, hubs: HubSummary[]): New
           '',
       ),
     ),
-    donGiaDonVi: String((waybill as { don_gia_don_vi?: string }).don_gia_don_vi ?? 'Kg'),
+    donGiaDonVi: String((waybill as { don_gia_don_vi?: string }).don_gia_don_vi ?? 'Cân'),
     dvdb: formatDisplayNumber((waybill as { dvdb?: number }).dvdb, 0) || '0',
     cod: formatDonGia(String(waybill.cod_amount ?? '0')),
     giamGia: '0',
@@ -222,7 +240,7 @@ function phuongThucFromWaybill(waybill: WaybillDetail): string {
 
 export function buildCreatePayload(form: NewOrderFormState, volumetricWeight: number) {
   const paymentType = paymentTypeFromForm(form);
-  const freight = parseMoneyAmount(form.donGia);
+  const freight = calcCuocChinhAmount(form);
   const cod = parseMoneyAmount(form.cod);
 
   return {

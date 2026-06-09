@@ -107,6 +107,9 @@ export interface LoadPlanningBoardItem {
   weight?: number | null;
   the_tich_m3?: number | null;
   allocated_freight?: number;
+  allocated_cod?: number | null;
+  receiver_phone?: string | null;
+  split_note?: string | null;
   load_status?: string | null;
 }
 

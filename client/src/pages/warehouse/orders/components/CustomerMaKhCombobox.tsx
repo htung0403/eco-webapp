@@ -17,13 +17,13 @@ import type { NewOrderFormState } from '../orderFormTypes';
 interface Props {
   value: string;
   onValueChange: (code: string) => void;
-  onCustomerSelect: (patch: Partial<NewOrderFormState>) => void;
+  onCustomerSelect: (patch: Partial<NewOrderFormState>, customer: CustomerRecord) => void;
   hubs?: HubSummary[];
   disabled?: boolean;
 }
 
 const inputClass =
-  'h-10 w-full min-w-0 rounded-md border border-slate-300 bg-white pr-9 pl-3 text-[14px] font-medium text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
+  'h-9 w-full min-w-0 rounded-md border border-slate-300 bg-white pr-9 pl-3 text-[13px] font-medium text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
 
 const normalizeList = (payload: CustomerListResponse | CustomerListItem[]) =>
   Array.isArray(payload) ? payload : payload.items || [];
@@ -99,9 +99,11 @@ export default function CustomerMaKhCombobox({
       onValueChange(customer.code);
       try {
         const full = await apiRequest<CustomerRecord>(`/customers/${customer.id}`);
-        onCustomerSelect(customerToOrderPatch({ ...customer, ...full }, hubs));
+        const record = { ...customer, ...full };
+        onCustomerSelect(customerToOrderPatch(record, hubs), record);
       } catch {
-        onCustomerSelect(customerToOrderPatch(customer, hubs));
+        const record = customer as CustomerRecord;
+        onCustomerSelect(customerToOrderPatch(record, hubs), record);
       }
       setOpen(false);
     },
@@ -302,10 +304,10 @@ export default function CustomerMaKhCombobox({
           title="Thêm khách hàng mới"
           disabled={disabled || isSubmitting}
           onClick={openCreateModal}
-          className="inline-flex h-10 shrink-0 items-center gap-1 rounded-md border border-primary bg-primary px-2.5 text-[13px] font-bold text-white shadow-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-primary bg-primary text-white shadow-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 xl:w-auto xl:gap-1 xl:px-2.5"
         >
           <Plus size={15} strokeWidth={2.5} />
-          <span className="whitespace-nowrap">Thêm mới</span>
+          <span className="hidden whitespace-nowrap text-[12px] font-bold xl:inline">Thêm</span>
         </button>
       </div>
 

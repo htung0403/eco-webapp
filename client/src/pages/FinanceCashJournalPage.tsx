@@ -8,6 +8,7 @@ import {
   Loader2,
   Receipt,
   ShieldAlert,
+  Trash2,
   Truck,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -41,6 +42,7 @@ export interface FinanceCashJournalPageProps {
   tripId?: string;
   netSummaryLabel?: string;
   accessMode?: AccessMode;
+  enableVendorBulkDelete?: boolean;
 }
 
 interface CashVoucherRow extends WaybillCashVoucher {
@@ -162,6 +164,7 @@ export default function FinanceCashJournalPage({
   tripId,
   netSummaryLabel = 'Chênh lệch',
   accessMode = 'both',
+  enableVendorBulkDelete = false,
 }: FinanceCashJournalPageProps = {}) {
   const navigate = useNavigate();
   const user = useMemo(getStoredUser, []);
@@ -191,6 +194,12 @@ export default function FinanceCashJournalPage({
   const [vendorFilters, setVendorFilters] = useState<VendorPaymentFilters>(defaultVendorFilters);
   const [vendorLoading, setVendorLoading] = useState(false);
   const [vendorError, setVendorError] = useState('');
+  const [vendorReloadKey, setVendorReloadKey] = useState(0);
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<Set<string>>(new Set());
+  const [isDeletingPayments, setIsDeletingPayments] = useState(false);
+  const [deletePaymentError, setDeletePaymentError] = useState('');
+
+  const canDeleteVendorPayments = enableVendorBulkDelete && canViewVendor(roleMask);
 
   useEffect(() => {
     if (!canView || !showBillTab || activeTab !== 'bill') return;
@@ -258,7 +267,11 @@ export default function FinanceCashJournalPage({
     return () => {
       cancelled = true;
     };
-  }, [canView, showVendorTab, activeTab, vendorFilters, tripId]);
+  }, [canView, showVendorTab, activeTab, vendorFilters, tripId, vendorReloadKey]);
+
+  useEffect(() => {
+    setSelectedPaymentIds(new Set());
+  }, [vendorFilters, tripId, vendorReloadKey]);
 
   const filteredBillVouchers = useMemo(
     () => filterCashVouchers(billVouchers, billFilters),
@@ -296,6 +309,48 @@ export default function FinanceCashJournalPage({
     }
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredVendorPayments]);
+
+  const visiblePaymentIds = useMemo(
+    () => filteredVendorPayments.map((payment) => String(payment.id)),
+    [filteredVendorPayments],
+  );
+
+  const allVisibleSelected =
+    visiblePaymentIds.length > 0 && visiblePaymentIds.every((id) => selectedPaymentIds.has(id));
+
+  const togglePaymentSelection = (paymentId: string) => {
+    setSelectedPaymentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(paymentId)) next.delete(paymentId);
+      else next.add(paymentId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisible = () => {
+    setSelectedPaymentIds((prev) => {
+      if (allVisibleSelected) return new Set();
+      return new Set(visiblePaymentIds);
+    });
+  };
+
+  const deleteSelectedPayments = async () => {
+    const ids = [...selectedPaymentIds];
+    if (!ids.length) return;
+    if (!window.confirm(`Xóa ${ids.length} phiếu chi đã chọn?`)) return;
+
+    setIsDeletingPayments(true);
+    setDeletePaymentError('');
+    try {
+      await apiRequest('/vendors/payments/bulk-delete', { method: 'POST', body: { ids } });
+      setSelectedPaymentIds(new Set());
+      setVendorReloadKey((value) => value + 1);
+    } catch (err) {
+      setDeletePaymentError(err instanceof ApiError ? err.message : 'Không xóa được phiếu chi đã chọn.');
+    } finally {
+      setIsDeletingPayments(false);
+    }
+  };
 
   if (!canView) {
     return (
@@ -431,7 +486,48 @@ export default function FinanceCashJournalPage({
             ) : vendorGrouped.length === 0 ? (
               <StateBlock icon={<Building2 size={24} />} title="Chưa có phiếu" description="Chưa có phiếu chi NCC phù hợp bộ lọc." />
             ) : (
-              <GroupedVendorList grouped={vendorGrouped} />
+              <>
+                {canDeleteVendorPayments && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white px-4 py-3 shadow-sm">
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] font-bold text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                      />
+                      Chọn tất cả ({visiblePaymentIds.length})
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedPaymentIds.size > 0 && (
+                        <span className="text-[12px] font-bold text-muted-foreground">
+                          Đã chọn {selectedPaymentIds.size} phiếu
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        disabled={selectedPaymentIds.size === 0 || isDeletingPayments}
+                        onClick={() => void deleteSelectedPayments()}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 text-[13px] font-extrabold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isDeletingPayments ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        Xóa đã chọn
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {deletePaymentError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] font-bold text-red-700">
+                    {deletePaymentError}
+                  </div>
+                )}
+                <GroupedVendorList
+                  grouped={vendorGrouped}
+                  selectable={canDeleteVendorPayments}
+                  selectedIds={selectedPaymentIds}
+                  onToggleSelect={togglePaymentSelection}
+                />
+              </>
             )}
           </div>
         ) : null}
@@ -531,7 +627,17 @@ function GroupedBillList({ grouped }: { grouped: Array<[string, { label: string;
   );
 }
 
-function GroupedVendorList({ grouped }: { grouped: Array<[string, { label: string; items: VendorPaymentRow[] }]> }) {
+function GroupedVendorList({
+  grouped,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
+}: {
+  grouped: Array<[string, { label: string; items: VendorPaymentRow[] }]>;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (paymentId: string) => void;
+}) {
   return (
     <div className="space-y-4">
       {grouped.map(([key, group]) => {
@@ -546,8 +652,22 @@ function GroupedVendorList({ grouped }: { grouped: Array<[string, { label: strin
               {group.items.map((payment) => {
                 const creator = payment.creator?.full_name || payment.creator?.name || payment.creator?.username || '—';
                 const tripCount = payment.trips?.length ?? 0;
+                const paymentId = String(payment.id);
+                const isSelected = selectedIds?.has(paymentId) ?? false;
                 return (
-                  <div key={String(payment.id)} className="px-4 py-3">
+                  <div key={paymentId} className={clsx('px-4 py-3', isSelected && 'bg-primary/5')}>
+                    <div className="flex flex-wrap items-start gap-3">
+                      {selectable && onToggleSelect && (
+                        <label className="mt-1 inline-flex shrink-0 cursor-pointer items-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => onToggleSelect(paymentId)}
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                          />
+                        </label>
+                      )}
+                      <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -569,6 +689,8 @@ function GroupedVendorList({ grouped }: { grouped: Array<[string, { label: strin
                     {payment.description?.trim() && (
                       <p className="mt-2 text-[12px] text-foreground"><span className="font-bold text-muted-foreground">Ghi chú: </span>{payment.description}</p>
                     )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}

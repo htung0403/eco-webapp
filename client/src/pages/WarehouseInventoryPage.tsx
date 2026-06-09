@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Eye, FileSpreadsheet, Filter, Flag, HandCoins, Layers, Loader2, MoreHorizontal, Package, Pencil, Printer, RefreshCcw, Search, ShieldAlert, Tag, SlidersHorizontal, Trash2, Truck, X } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -51,9 +51,10 @@ export type InventoryPageVariant = 'split-pending' | 'all-orders';
 const statusConfig: Record<string, BadgeConfig> = {
   RECEIVED: { label: 'Đã tạo đơn', className: 'bg-blue-50 text-blue-700 border-blue-200' },
   IN_WAREHOUSE: { label: 'Trong kho', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  MANIFEST_CLOSED: { label: 'Chờ xuất chuyến', className: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  MANIFEST_CLOSED: { label: 'Chờ bốc', className: 'bg-slate-100 text-slate-700 border-slate-200' },
+  LOADED: { label: 'Đã bốc', className: 'bg-blue-50 text-blue-700 border-blue-200' },
   AT_DEST_HUB: { label: 'Tới hub đích', className: 'bg-violet-50 text-violet-700 border-violet-200' },
-  OUT_FOR_DELIVERY: { label: 'Chờ giao', className: 'bg-orange-50 text-orange-700 border-orange-200' },
+  OUT_FOR_DELIVERY: { label: 'Đã giao', className: 'bg-green-50 text-green-700 border-green-200' },
 };
 
 const paymentConfig: Record<string, BadgeConfig> = {
@@ -88,6 +89,7 @@ const displayCode = (waybill: WaybillInventoryItem) => waybill.waybill_code || w
 const displayValue = (value: unknown, suffix = '') => value === null || value === undefined || value === '' ? '—' : `${value}${suffix}`;
 const normalizeStatus = (waybill: WaybillInventoryItem) => String(waybill.current_state || waybill.status || '').toUpperCase();
 const isMutableWaybill = (waybill: WaybillInventoryItem) => MUTABLE_WAYBILL_STATUSES.includes(normalizeStatus(waybill));
+const actionMenuId = (waybill: WaybillInventoryItem) => `${waybill.id}-${waybill.split_id ?? 'base'}`;
 const formatHub = (hub: HubSummary | null | undefined, fallback?: string | number | null) => hub ? [hub.code?.toUpperCase(), hub.name].filter(Boolean).join(' · ') || `Hub #${hub.id}` : fallback ? `Hub #${fallback}` : '—';
 
 const isIncompleteSplitRow = (item: WaybillInventoryItem) => {
@@ -161,6 +163,7 @@ export default function WarehouseInventoryPage({ variant = 'split-pending' }: { 
   const [selectedWaybillIds, setSelectedWaybillIds] = useState<string[]>([]);
   const [isStackOpen, setIsStackOpen] = useState(false);
   const [isStackClosing, setIsStackClosing] = useState(false);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
 
   const user = useMemo(getStoredUser, []);
   const canViewPricing = hasManagerAccess(user?.role_mask ?? 0);
@@ -193,6 +196,9 @@ export default function WarehouseInventoryPage({ variant = 'split-pending' }: { 
   const toggleSelectRow = (waybillId: string | number) => {
     const id = String(waybillId);
     setSelectedWaybillIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  };
+  const toggleActionMenu = (id: string) => {
+    setOpenActionMenuId((prev) => (prev === id ? null : id));
   };
   const openStackDialog = () => {
     if (!selectedWaybills.length) return;
@@ -408,7 +414,7 @@ export default function WarehouseInventoryPage({ variant = 'split-pending' }: { 
         </div>
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-2.5 text-[13px] text-amber-900">
-          <span className="font-bold">Chỉ hiển thị đơn chưa chia hết</span>
+          <span className="font-bold">Chỉ hiển thị đơn tồn</span>
           {' — '}
           Các dòng đã phân đủ kiện lên xe sẽ không xuất hiện trong danh sách này.
         </div>
@@ -534,6 +540,9 @@ export default function WarehouseInventoryPage({ variant = 'split-pending' }: { 
                       showSelection={!isAllOrders && canUpdate}
                       selected={selectedWaybillIds.includes(String(waybill.id))}
                       onToggleSelect={toggleSelectRow}
+                      openActionMenuId={openActionMenuId}
+                      onToggleActionMenu={toggleActionMenu}
+                      onCloseActionMenu={() => setOpenActionMenuId(null)}
                       onDetail={openDetail}
                       onEdit={openEdit}
                       onDelete={confirmDeleteWaybill}
@@ -557,7 +566,7 @@ export default function WarehouseInventoryPage({ variant = 'split-pending' }: { 
                   </tr>
                 </tfoot>
               </table>
-              <div className="grid gap-3 p-3 md:hidden">{waybills.map(waybill => <InventoryCard key={`${waybill.id}-${waybill.split_id ?? 'base'}`} waybill={waybill} canUpdate={canUpdate} canEdit={canEdit} canDelete={canDelete} onDetail={openDetail} onEdit={openEdit} onDelete={confirmDeleteWaybill} onSplit={openSplit} onCashVoucher={openCashVoucher} />)}</div>
+              <div className="grid gap-3 p-3 md:hidden">{waybills.map(waybill => <InventoryCard key={`${waybill.id}-${waybill.split_id ?? 'base'}`} waybill={waybill} canUpdate={canUpdate} canEdit={canEdit} canDelete={canDelete} openActionMenuId={openActionMenuId} onToggleActionMenu={toggleActionMenu} onCloseActionMenu={() => setOpenActionMenuId(null)} onDetail={openDetail} onEdit={openEdit} onDelete={confirmDeleteWaybill} onSplit={openSplit} onCashVoucher={openCashVoucher} />)}</div>
             </>
           )}
         </div>
@@ -625,6 +634,9 @@ function InventoryRow({
   canUpdate,
   canEdit,
   canDelete,
+  openActionMenuId,
+  onToggleActionMenu,
+  onCloseActionMenu,
   showSelection,
   selected,
   onToggleSelect,
@@ -739,6 +751,9 @@ function InventoryRow({
               canEdit={canEdit}
               canDelete={canDelete}
               isMutable={isMutableWaybill(waybill)}
+              isOpen={openActionMenuId === actionMenuId(waybill)}
+              onToggle={() => onToggleActionMenu(actionMenuId(waybill))}
+              onClose={onCloseActionMenu}
               onDetail={onDetail}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -770,7 +785,7 @@ function InventoryRow({
   );
 }
 
-function InventoryCard({ waybill, canUpdate, canEdit, canDelete, onDetail, onEdit, onDelete, onSplit, onCashVoucher }: InventoryItemProps) {
+function InventoryCard({ waybill, canUpdate, canEdit, canDelete, openActionMenuId, onToggleActionMenu, onCloseActionMenu, onDetail, onEdit, onDelete, onSplit, onCashVoucher }: InventoryItemProps) {
   return (
     <article className="rounded-2xl border border-border bg-white p-4 shadow-sm">
       <div className="flex items-start gap-3">
@@ -826,6 +841,9 @@ function InventoryCard({ waybill, canUpdate, canEdit, canDelete, onDetail, onEdi
           canEdit={canEdit}
           canDelete={canDelete}
           isMutable={isMutableWaybill(waybill)}
+          isOpen={openActionMenuId === actionMenuId(waybill)}
+          onToggle={() => onToggleActionMenu(actionMenuId(waybill))}
+          onClose={onCloseActionMenu}
           onDetail={onDetail}
           onEdit={onEdit}
           onDelete={onDelete}
@@ -842,6 +860,9 @@ interface InventoryItemProps {
   canUpdate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  openActionMenuId: string | null;
+  onToggleActionMenu: (id: string) => void;
+  onCloseActionMenu: () => void;
   onDetail: (waybill: WaybillInventoryItem) => void;
   onEdit: (waybill: WaybillInventoryItem) => void;
   onDelete: (waybill: WaybillInventoryItem) => void;
@@ -854,47 +875,75 @@ function Actions({
   canEdit,
   canDelete,
   isMutable,
+  isOpen,
+  onToggle,
+  onClose,
   onDetail,
   onEdit,
   onDelete,
   onSplit,
   onCashVoucher,
-}: Pick<InventoryItemProps, 'waybill' | 'canEdit' | 'canDelete' | 'onDetail' | 'onEdit' | 'onDelete' | 'onSplit' | 'onCashVoucher'> & { isMutable: boolean }) {
+}: Pick<InventoryItemProps, 'waybill' | 'canEdit' | 'canDelete' | 'onDetail' | 'onEdit' | 'onDelete' | 'onSplit' | 'onCashVoucher'> & { isMutable: boolean; isOpen: boolean; onToggle: () => void; onClose: () => void }) {
+  const menuRef = useRef<HTMLDivElement>(null);
   const editDisabled = !canEdit || !isMutable;
   const deleteDisabled = !canDelete || !isMutable;
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      onClose();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  const runAction = (action: () => void) => {
+    onClose();
+    action();
+  };
   const lockedTitle = 'Chỉ sửa/xóa được đơn ở trạng thái «Đã tạo đơn» hoặc «Trong kho»';
 
   return (
-    <details className="group relative inline-block text-left">
-      <summary
+    <div ref={menuRef} className="relative inline-block text-left">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        onClick={onToggle}
         aria-label="Mở thao tác"
         className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg border border-border bg-white text-foreground shadow-sm hover:bg-muted [&::-webkit-details-marker]:hidden"
       >
         <MoreHorizontal size={17} />
-      </summary>
-      <div className="absolute right-0 z-30 mt-2 w-44 overflow-hidden rounded-xl border border-border bg-white p-1.5 shadow-xl shadow-slate-900/10">
-        <MenuAction icon={<Eye size={14} />} label="Xem" onClick={() => onDetail(waybill)} />
+      </button>
+      {isOpen && <div className="absolute right-0 z-30 mt-2 w-44 overflow-hidden rounded-xl border border-border bg-white p-1.5 shadow-xl shadow-slate-900/10">
+        <MenuAction icon={<Eye size={14} />} label="Xem" onClick={() => runAction(() => onDetail(waybill))} />
         {canCollectCashPayment(waybill.payment_type) && (
-          <MenuAction icon={<HandCoins size={14} />} label="Thu chi" onClick={() => onCashVoucher(waybill)} tone="teal" />
+          <MenuAction icon={<HandCoins size={14} />} label="Thu chi" onClick={() => runAction(() => onCashVoucher(waybill))} tone="teal" />
         )}
-        <MenuAction icon={<Layers size={14} />} label="Chia đơn" onClick={() => onSplit(waybill)} tone="violet" />
+        <MenuAction icon={<Layers size={14} />} label="Chia đơn" onClick={() => runAction(() => onSplit(waybill))} tone="violet" />
         <MenuAction
           icon={<Pencil size={14} />}
           label="Sửa"
           disabled={editDisabled}
           title={editDisabled ? (canEdit ? lockedTitle : 'Cần quyền WAREHOUSE trở lên') : 'Sửa thông tin đơn'}
-          onClick={() => onEdit(waybill)}
+          onClick={() => runAction(() => onEdit(waybill))}
         />
         <MenuAction
           icon={<Trash2 size={14} />}
           label="Xóa"
           disabled={deleteDisabled}
           title={deleteDisabled ? (canDelete ? lockedTitle : 'Chỉ MANAGER/DIRECTOR được xóa') : 'Xóa vận đơn'}
-          onClick={() => onDelete(waybill)}
+          onClick={() => runAction(() => onDelete(waybill))}
           tone="danger"
         />
-      </div>
-    </details>
+      </div>}
+    </div>
   );
 }
 

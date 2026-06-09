@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/roles';
 import { UserEntity } from '../users/user.entity';
 import { CreateVendorPaymentDto } from './dto/create-vendor-payment.dto';
+import { BulkDeleteVendorPaymentsDto } from './dto/bulk-delete-vendor-payments.dto';
 import { QueryVendorDebtDto } from './dto/query-vendor-debt.dto';
 import { QueryVendorPaymentsDto } from './dto/query-vendor-payments.dto';
 import { QueryVendorsDto } from './dto/query-vendors.dto';
@@ -53,6 +54,20 @@ export class VendorsController {
   @ApiOperation({ summary: 'Danh sách phiếu chi NCC (toàn hệ thống)' })
   listAllPayments(@Query() query: QueryVendorPaymentsDto) {
     return this.vendorsService.listAllPayments(query);
+  }
+
+  @Post('payments/bulk-delete')
+  @RequireRoles(Roles.DISPATCHER, Roles.ACCOUNTANT, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Xóa nhiều phiếu chi NCC' })
+  bulkDeletePayments(@Body() dto: BulkDeleteVendorPaymentsDto, @CurrentUser() currentUser: UserEntity) {
+    return this.vendorsService.deletePayments(dto.ids, currentUser);
+  }
+
+  @Delete('payments/:paymentId')
+  @RequireRoles(Roles.DISPATCHER, Roles.ACCOUNTANT, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Xóa một phiếu chi NCC' })
+  deletePayment(@Param('paymentId') paymentId: string, @CurrentUser() currentUser: UserEntity) {
+    return this.vendorsService.deletePayments([paymentId], currentUser);
   }
 
   @Get(':id/debt-dashboard')

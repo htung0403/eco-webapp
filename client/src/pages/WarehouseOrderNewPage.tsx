@@ -6,7 +6,8 @@ import { getLoginDisplayName, getStoredAuthUser } from '../lib/authUser';
 import CreateWaybillSuccessDialog from './warehouse/orders/dialogs/CreateWaybillSuccessDialog';
 import NewOrderWorkbench from './warehouse/orders/components/NewOrderWorkbench';
 import { emptyOrderForm } from './warehouse/orders/orderFormData';
-import { customerToOrderPatch } from './warehouse/customers/customerOrderPatch';
+import { applyReceiverByDestination, customerToOrderPatch } from './warehouse/customers/customerOrderPatch';
+import type { CustomerRecord } from './warehouse/customers/customerFormTypes';
 import {
   applyPricingToForm,
   buildCreatePayload,
@@ -17,11 +18,13 @@ import {
   waybillToOrderForm,
 } from './warehouse/orders/orderFormUtils';
 import type { CustomerListItem, CustomerListResponse } from './warehouse/customers/types';
-import type { BillListItem, NewOrderFormState, OrderWorkbenchTab } from './warehouse/orders/orderFormTypes';
+import type { BillListItem, NewOrderFormState } from './warehouse/orders/orderFormTypes';
+import { nextEcoBillCodeFromCodes } from './warehouse/orders/waybillCodeUtils';
 import type { BadgeConfig, CreatedWaybill, HubSummary, PaymentType, UserSummary, WaybillDetail } from './warehouse/orders/types';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
 const CREATE_ROLES = 1 | 32 | 64;
+type NextWaybillCodeResponse = { waybill_code?: string; code?: string };
 
 const statusConfig: Record<string, BadgeConfig> = {
   RECEIVED: { label: 'Đã tạo đơn', className: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -61,14 +64,6 @@ const formatHub = (hub: HubSummary) =>
 
 const hasCreateRole = (roleMask: number) => (roleMask & CREATE_ROLES) !== 0;
 
-const nextEcoBillCode = (items: BillListItem[]) => {
-  const maxEcoSequence = items.reduce((max, item) => {
-    const match = item.waybill_code.match(/^ECO-(\d+)$/i);
-    return match ? Math.max(max, Number(match[1])) : max;
-  }, 0);
-  return `ECO-${Math.max(maxEcoSequence + 1, items.length + 1)}`;
-};
-
 export default function WarehouseOrderNewPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -77,7 +72,6 @@ export default function WarehouseOrderNewPage() {
   const [bills, setBills] = useState<BillListItem[]>([]);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [form, setForm] = useState<NewOrderFormState>(() => emptyOrderForm());
-  const [activeTab, setActiveTab] = useState<OrderWorkbenchTab>('khach-hang');
   const [isLoading, setIsLoading] = useState(true);
   const [hubError, setHubError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -85,6 +79,7 @@ export default function WarehouseOrderNewPage() {
   const [createdWaybill, setCreatedWaybill] = useState<CreatedWaybill | null>(null);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isSuccessClosing, setIsSuccessClosing] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
 
   const canCreate = hasCreateRole(user?.role_mask ?? 0);
   const loginName = getLoginDisplayName(user as Parameters<typeof getLoginDisplayName>[0]);
@@ -104,9 +99,21 @@ export default function WarehouseOrderNewPage() {
         '/waybills?limit=50&page=1',
       );
       const list = extractList(response);
-      setBills(list.map(waybillToBillItem));
+      const billItems = list.map(waybillToBillItem);
+      setBills(billItems);
+      return billItems;
     } catch {
       setBills([]);
+      return [];
+    }
+  }, []);
+
+  const loadNextWaybillCode = useCallback(async () => {
+    try {
+      const response = await apiRequest<NextWaybillCodeResponse>('/waybills/next-code');
+      return (response.waybill_code || response.code || '').trim().toUpperCase();
+    } catch {
+      return '';
     }
   }, []);
 
@@ -120,16 +127,18 @@ export default function WarehouseOrderNewPage() {
         setHubs(activeHubs);
         const defaultOrigin = user?.hub_id ? String(user.hub_id) : String(activeHubs[0]?.id || '');
         const defaultDest = String(activeHubs.find((h) => h.code?.toUpperCase() === 'HCM')?.id || activeHubs[1]?.id || '');
+        const billItems = await loadBills();
+        const nextCode = await loadNextWaybillCode();
         setForm(() =>
           applyPricingToForm({
             ...emptyOrderForm(),
+            soBill: nextCode || nextEcoBillCodeFromCodes(billItems.map((item) => item.waybill_code)),
             originHubId: defaultOrigin,
             destHubId: defaultDest,
             noiDen: 'HCM',
             nvgn: loginName !== 'bạn' ? loginName : 'ADMIN',
           }),
         );
-        await loadBills();
       } catch (error) {
         setHubError(error instanceof ApiError ? error.message : 'Không thể tải danh sách bưu cục.');
       } finally {
@@ -137,12 +146,7 @@ export default function WarehouseOrderNewPage() {
       }
     };
     void load();
-  }, [loadBills, loginName, user?.hub_id]);
-
-  useEffect(() => {
-    if (selectedBillId || form.soBill.trim()) return;
-    setForm((prev) => ({ ...prev, soBill: nextEcoBillCode(bills) }));
-  }, [bills, form.soBill, selectedBillId]);
+  }, [loadBills, loadNextWaybillCode, loginName, user?.hub_id]);
 
   useEffect(() => {
     const state = location.state as { maKh?: string; nguoiGui?: string; waybillId?: string } | null;
@@ -172,7 +176,9 @@ export default function WarehouseOrderNewPage() {
         const match = items.find((c) => c.code.toUpperCase() === code);
         if (match) {
           const full = await apiRequest<Partial<CustomerListItem>>(`/customers/${match.id}`);
-          setForm((prev) => applyPricingToForm({ ...prev, ...customerToOrderPatch({ ...match, ...full }, hubs) }));
+          const record = { ...match, ...full } as CustomerRecord;
+          setSelectedCustomer(record);
+          setForm((prev) => applyPricingToForm({ ...prev, ...customerToOrderPatch(record, hubs) }));
           return;
         }
       } catch {
@@ -210,6 +216,24 @@ export default function WarehouseOrderNewPage() {
     setActionError('');
   };
 
+  const handleCustomerSelect = (patch: Partial<NewOrderFormState>, customer: CustomerRecord) => {
+    setSelectedCustomer(customer);
+    patchForm(patch);
+  };
+
+  const handleDestinationChange = (destHubId: string, noiDen: string, huyen: string) => {
+    setForm((prev) => {
+      let next: NewOrderFormState = { ...prev, destHubId, noiDen, huyen };
+      if (selectedCustomer) {
+        next = { ...next, ...applyReceiverByDestination(selectedCustomer, noiDen, huyen) };
+      } else {
+        next = { ...next, diaChiNhan: '', dienThoaiNhan: '' };
+      }
+      return applyPricingToForm(next);
+    });
+    setActionError('');
+  };
+
   const validate = () => {
     if (!form.soBill.trim()) return 'Số bill là bắt buộc.';
     if (!form.nguoiGui.trim()) return 'Người gửi là bắt buộc.';
@@ -236,14 +260,16 @@ export default function WarehouseOrderNewPage() {
     }
   };
 
-  const handleNew = () => {
+  const handleNew = async () => {
     const defaultOrigin = user?.hub_id ? String(user.hub_id) : String(hubs[0]?.id || '');
     const defaultDest = String(hubs.find((h) => h.code?.toUpperCase() === 'HCM')?.id || hubs[1]?.id || '');
+    const nextCode = await loadNextWaybillCode();
     setSelectedBillId(null);
+    setSelectedCustomer(null);
     setForm(
       applyPricingToForm({
         ...emptyOrderForm(),
-        soBill: nextEcoBillCode(bills),
+        soBill: nextCode || nextEcoBillCodeFromCodes(bills.map((item) => item.waybill_code)),
         originHubId: defaultOrigin,
         destHubId: defaultDest,
         noiDen: 'HCM',
@@ -297,7 +323,7 @@ export default function WarehouseOrderNewPage() {
     setActionError('');
     try {
       await apiRequest(`/waybills/${bill.id}`, { method: 'DELETE' });
-      if (selectedBillId === bill.id) handleNew();
+      if (selectedBillId === bill.id) void handleNew();
       await loadBills();
     } catch (error) {
       setActionError(error instanceof ApiError ? error.message : 'Không thể xóa vận đơn.');
@@ -377,16 +403,15 @@ export default function WarehouseOrderNewPage() {
           <NewOrderWorkbench
             form={form}
             setField={setField}
-            patchForm={patchForm}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
+            onCustomerSelect={handleCustomerSelect}
+            onDestinationChange={handleDestinationChange}
             bills={bills}
             selectedBillId={selectedBillId}
             onSelectBill={(bill) => void handleSelectBill(bill)}
             hubOptions={hubOptions}
             hubs={hubs}
             onSave={() => void handleSave()}
-            onNew={handleNew}
+            onNew={() => void handleNew()}
             onDelete={handleDelete}
             onDeleteBill={(bill) => void handleDeleteBill(bill)}
             onPreviewA5={() => openPrintBill()}
@@ -407,7 +432,7 @@ export default function WarehouseOrderNewPage() {
         statusConfig={statusConfig}
         paymentConfig={paymentConfig}
         onClose={closeSuccess}
-        onCreateAnother={handleNew}
+        onCreateAnother={() => void handleNew()}
         onPrint={() => createdId && navigate(`/print/waybill/${createdId}`)}
       />
     </div>

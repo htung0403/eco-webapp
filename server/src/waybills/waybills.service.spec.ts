@@ -58,13 +58,16 @@ describe('WaybillsService', () => {
     const ordersService = {
       createFromWaybillEntry: jest.fn().mockResolvedValue({ id: 'o1', order_code: 'DH20260101-001' }),
     };
+    const vendorsService = {} as any;
     service = new WaybillsService(
       waybillsRepository,
       hubsRepository,
       { find: jest.fn(), delete: jest.fn(), save: jest.fn(), create: jest.fn() } as any,
       { findOne: jest.fn() } as any,
       { findOne: jest.fn() } as any,
+      { find: jest.fn(), save: jest.fn(), create: jest.fn() } as any,
       ordersService as any,
+      vendorsService,
     );
     jest.spyOn(Date, 'now').mockReturnValue(1770000000000);
     jest.spyOn(Math, 'random').mockReturnValue(0.123);

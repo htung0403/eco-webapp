@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { PaymentType, WaybillState } from '../common/enums';
 import { HubEntity } from '../hubs/hub.entity';
 import { ManifestWaybillEntity } from '../manifests/manifest-waybill.entity';
@@ -6,11 +6,12 @@ import { OrderEntity } from '../orders/order.entity';
 import { UserEntity } from '../users/user.entity';
 
 @Entity('waybills')
+@Index('UQ_waybills_waybill_code_active', ['waybill_code'], { unique: true, where: '"deleted_at" IS NULL' })
 export class WaybillEntity {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: string;
 
-  @Column({ type: 'varchar', unique: true })
+  @Column({ type: 'varchar' })
   waybill_code: string;
 
   @Column({ type: 'varchar' })

@@ -1,6 +1,6 @@
-/* BẢNG KÊ PHÁT HÀNG ECO — A4 cho điều phối */
+/* BẢNG KÊ PHÁT HÀNG ECO — mẫu Excel điều phối, A4 ngang */
 @page {
-  size: A4 portrait;
+  size: A4 landscape;
   margin: 8mm;
 }
 
@@ -8,7 +8,7 @@
   body {
     margin: 0;
     background: #fff !important;
-    font-family: 'Times New Roman', Times, serif;
+    font-family: Arial, Helvetica, sans-serif;
   }
   .inventory-print-toolbar {
     display: none !important;
@@ -17,67 +17,88 @@
     padding: 0 !important;
     background: #fff !important;
   }
+  .dispatch-print-page-break {
+    break-after: page;
+    page-break-after: always;
+  }
 }
 
 .inventory-stock-wrap {
   min-height: 100vh;
   background: #e8eef5;
   padding: 12px;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 .inventory-stock-sheet {
   background: #fff;
-  border: 1px solid #333;
-  padding: 6px 7px 8px;
+  border: 1px solid #000;
+  padding: 4px 5px 6px;
   max-width: 297mm;
   margin: 0 auto;
 }
 
 .inventory-stock-title {
   text-align: center;
-  font-size: 13pt;
+  font-size: 14pt;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.25px;
-  margin: 0 0 5px;
+  letter-spacing: 0.3px;
+  margin: 0 0 4px;
+  color: #000;
+}
+
+.dispatch-print-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 0 0 4px;
+  padding: 0 2px;
+  font-size: 8.5pt;
+  font-weight: 700;
+  color: #000;
+}
+
+.dispatch-print-info strong {
+  font-weight: 700;
 }
 
 .inventory-stock-meta {
-  font-size: 8pt;
-  margin: 0 0 5px;
-  color: #333;
+  font-size: 7.5pt;
+  margin: 6px 2px 0;
+  color: #444;
 }
 
 .inventory-stock-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 6.6pt;
-  line-height: 1.12;
+  font-size: 7pt;
+  line-height: 1.15;
+  color: #000;
 }
 
 .inventory-stock-table th,
 .inventory-stock-table td {
-  border: 1px solid #333;
-  padding: 1.5px 2px;
+  border: 1px solid #000;
+  padding: 2px 3px;
   vertical-align: top;
   overflow-wrap: break-word;
   word-break: normal;
-  overflow: hidden;
 }
 
 .inventory-stock-table thead th {
   background: #c6efce;
   font-weight: 700;
   text-align: center;
-  font-size: 6.3pt;
-  line-height: 1.08;
+  font-size: 6.8pt;
+  line-height: 1.1;
   vertical-align: middle;
+  padding: 3px 2px;
 }
 
-.inventory-stock-table tbody tr:nth-child(even) td {
-  background: #f9f9f9;
+.inventory-stock-table tbody tr:nth-child(even) td:not(.col-location) {
+  background: #fff;
 }
 
 .inventory-stock-table .col-center {
@@ -99,43 +120,95 @@
 }
 
 .inventory-stock-table .recipient-cell {
-  font-size: 6.3pt;
+  font-size: 6.8pt;
+  line-height: 1.2;
 }
 
-.inventory-stock-table .col-date,
-.inventory-stock-table .col-qty,
-.inventory-stock-table .col-unit,
-.inventory-stock-table .col-money,
-.inventory-stock-table .col-fee,
-.inventory-stock-table .col-kg,
-.inventory-stock-table .col-m3 {
+.inventory-stock-table tbody .col-date,
+.inventory-stock-table tbody .col-qty,
+.inventory-stock-table tbody .col-fee,
+.inventory-stock-table tbody .col-surcharge,
+.inventory-stock-table tbody .col-bill {
   white-space: nowrap;
+}
+
+.inventory-stock-table thead th.col-surcharge,
+.inventory-stock-table thead th.col-fee,
+.inventory-stock-table thead th.col-delivery-status,
+.inventory-stock-table thead th.col-completion-date,
+.inventory-stock-table thead th.col-driver,
+.inventory-stock-table thead th.col-plan,
+.inventory-stock-table thead th.col-post {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.05;
+  padding: 2px 1px;
 }
 
 .inventory-stock-table .col-bill {
   overflow-wrap: anywhere;
+  white-space: normal;
 }
 
-.inventory-stock-table .col-stack_position { width: 6%; min-width: 52px; }
-.inventory-stock-table .col-location { width: 5.2%; }
-.inventory-stock-table .col-date { width: 4.6%; }
-.inventory-stock-table .col-province { width: 5.6%; }
-.inventory-stock-table .col-company { width: 6.5%; }
-.inventory-stock-table .col-service { width: 4.4%; }
-.inventory-stock-table .col-item { width: 6.5%; }
-.inventory-stock-table .col-place { width: 6%; }
-.inventory-stock-table .col-qty { width: 3.8%; }
-.inventory-stock-table .col-unit { width: 4%; }
-.inventory-stock-table .col-recipient { width: 11.2%; }
-.inventory-stock-table .col-plan { width: 5.2%; }
-.inventory-stock-table .col-money { width: 5.5%; }
-.inventory-stock-table .col-fee { width: 5.2%; }
-.inventory-stock-table .col-driver { width: 5.2%; }
-.inventory-stock-table .col-post { width: 5.2%; }
+.dispatch-print-group + .dispatch-print-group {
+  margin-top: 12px;
+}
+
+.inventory-stock-table .col-location {
+  width: 3.8%;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.inventory-stock-table tbody .col-location {
+  background: #ffff00 !important;
+}
+
+.inventory-stock-table .col-date { width: 4.5%; }
+.inventory-stock-table .col-province { width: 4.8%; }
+.inventory-stock-table .col-company { width: 6.2%; }
+.inventory-stock-table .col-service { width: 3%; }
+.inventory-stock-table .col-item { width: 8.5%; }
+.inventory-stock-table .col-place { width: 7.5%; }
+.inventory-stock-table .col-qty { width: 5.2%; }
+.inventory-stock-table .col-recipient { width: 14%; }
+.inventory-stock-table .col-delivery-status { width: 6%; }
+.inventory-stock-table .col-completion-date { width: 5%; }
+.inventory-stock-table .col-plan { width: 4.5%; }
+.inventory-stock-table .col-surcharge { width: 6.2%; }
+.inventory-stock-table .col-fee { width: 4.8%; }
+.inventory-stock-table .col-driver { width: 5%; }
+.inventory-stock-table .col-post { width: 4.8%; }
 .inventory-stock-table .col-bill { width: 5.5%; }
-.inventory-stock-table .col-note { width: 6%; }
-.inventory-stock-table .col-kg { width: 3.5%; }
-.inventory-stock-table .col-m3 { width: 3.2%; }
+.inventory-stock-table .col-note { width: 5.4%; }
+
+.inventory-stock-table .item-note,
+.inventory-stock-table .qty-highlight {
+  color: #c00000;
+  font-weight: 700;
+}
+
+.inventory-stock-table .dispatch-empty-row td:not(.col-location) {
+  min-height: 18px;
+}
+
+.inventory-stock-table .dispatch-empty-row .col-location {
+  background: #ffff00 !important;
+}
+
+.dispatch-payments-print {
+  max-width: 297mm;
+  margin: 0 auto;
+}
+
+.dispatch-payments-title {
+  margin: 0 0 4px;
+  font-size: 9pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #000;
+}
 
 @media screen {
   .inventory-stock-sheet {

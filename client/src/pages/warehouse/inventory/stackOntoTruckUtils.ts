@@ -6,10 +6,13 @@ export interface StackOntoTruckFormRow {
   package_count: string;
   max_package_count: number;
   loading_position: string;
+  expected_arrival_label: string;
+}
+
+export interface StackOntoTruckSharedFields {
   truck_id: string;
   nha_xe: string;
   vendor_cost: string;
-  expected_arrival_label: string;
 }
 
 export function computeExpectedArrivalDate(base?: string | null): Date {
@@ -33,10 +36,16 @@ export function buildStackFormRows(waybills: WaybillInventoryItem[]): StackOntoT
       package_count: String(Math.max(1, Number(waybill.remaining_packages ?? waybill.package_count ?? 1))),
       max_package_count: Math.max(1, Number(waybill.remaining_packages ?? waybill.package_count ?? 1)),
       loading_position: waybill.loading_position ? String(waybill.loading_position) : '',
-      truck_id: waybill.truck_id ? String(waybill.truck_id) : '',
-      nha_xe: waybill.trip_nha_xe || '',
-      vendor_cost: '',
       expected_arrival_label: formatExpectedArrivalLabel(orderDate),
     };
   });
+}
+
+export function buildInitialSharedFields(waybills: WaybillInventoryItem[]): StackOntoTruckSharedFields {
+  const preset = waybills.find((waybill) => waybill.truck_id);
+  return {
+    truck_id: preset?.truck_id ? String(preset.truck_id) : '',
+    nha_xe: preset?.trip_nha_xe || '',
+    vendor_cost: '',
+  };
 }

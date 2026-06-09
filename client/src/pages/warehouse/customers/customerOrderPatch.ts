@@ -63,6 +63,7 @@ function mapGiaoHang(addressHcm: string | null | undefined): string | undefined 
   return undefined;
 }
 
+/** SĐT khách hàng — ưu tiên phone_hcm, mobile, điện thoại bàn */
 export function customerPhone(customer: CustomerRecord) {
   return str(customer.phone_hcm) || str(customer.mobile) || str(customer.phone_landline);
 }
@@ -96,23 +97,65 @@ function buildGhiChu(customer: CustomerRecord): string {
     .join(' | ');
 }
 
-/** Điền form nhập đơn từ bản ghi bảng customers */
+/** Tỉnh đến là Hồ Chí Minh (HCM) */
+export function isHcmProvince(noiDen: string, huyen = ''): boolean {
+  const code = noiDen.trim().toUpperCase();
+  if (code === 'HCM') return true;
+  const blob = `${noiDen} ${huyen}`.trim().toLowerCase();
+  return /hồ chí minh|ho chi minh|tp\.?hcm|tphcm|sài gòn|sai gon/.test(blob);
+}
+
+function isDngProvince(noiDen: string, huyen = ''): boolean {
+  const code = noiDen.trim().toUpperCase();
+  if (code === 'DNG') return true;
+  const blob = `${noiDen} ${huyen}`.trim().toLowerCase();
+  return /đà nẵng|da nang/.test(blob);
+}
+
+/**
+ * Chỉ điền thông tin người nhận theo tỉnh đến.
+ * ĐC kho HCM + SĐT nhận HCM chỉ áp dụng khi tỉnh đến là HCM; tỉnh khác → xóa trắng.
+ */
+export function applyReceiverByDestination(
+  customer: CustomerRecord,
+  noiDen: string,
+  huyen = '',
+): Partial<NewOrderFormState> {
+  const patch: Partial<NewOrderFormState> = {
+    nguoiNhan: str(customer.contact_person) || customer.name,
+  };
+
+  if (isHcmProvince(noiDen, huyen)) {
+    patch.diaChiNhan = str(customer.address_hcm);
+    patch.dienThoaiNhan = str(customer.phone_hcm);
+    if (str(customer.receiver_hcm)) patch.nguoiNhan = str(customer.receiver_hcm);
+    return patch;
+  }
+
+  if (isDngProvince(noiDen, huyen)) {
+    patch.diaChiNhan = str(customer.address_dng);
+    patch.dienThoaiNhan = str(customer.phone_dng);
+    if (str(customer.receiver_dng)) patch.nguoiNhan = str(customer.receiver_dng);
+    return patch;
+  }
+
+  patch.diaChiNhan = '';
+  patch.dienThoaiNhan = '';
+  return patch;
+}
+
+/** Điền form nhập đơn từ bản ghi bảng customers — không tự điền người gửi */
 export function customerToOrderPatch(customer: CustomerRecord, hubs: HubSummary[] = []): Partial<NewOrderFormState> {
   const noiDen = inferNoiDen(customer);
   const destHubId = noiDen ? hubIdFromCode(hubs, noiDen) : '';
+  const huyen = str(customer.destination_province) || str(customer.region);
 
-  const hasDngReceiver = Boolean(str(customer.address_dng) || str(customer.phone_dng) || str(customer.receiver_dng));
-
-  const phone = customerPhone(customer);
+  const phoneKh = customerPhone(customer);
 
   const patch: Partial<NewOrderFormState> = {
     maKh: customer.code,
-    nguoiGui: customer.name,
-    dienThoaiKh: phone,
-    diaChiGui: customerSenderAddress(customer),
-    dienThoaiNhan: phone,
-    diaChiNhan: customerReceiverAddress(customer),
-    huyen: str(customer.destination_province) || str(customer.region),
+    dienThoaiKh: phoneKh || undefined,
+    huyen,
     nvgn: str(customer.delivery_handler) || undefined,
     buuTaLay: str(customer.manager_name) || undefined,
     giamGia: customer.discount_percent != null ? String(customer.discount_percent) : undefined,
@@ -140,15 +183,7 @@ export function customerToOrderPatch(customer: CustomerRecord, hubs: HubSummary[
     if (destHubId) patch.destHubId = destHubId;
   }
 
-  if (hasDngReceiver) {
-    patch.nguoiNhan = str(customer.receiver_dng) || str(customer.contact_person) || customer.name;
-    if (str(customer.address_dng)) patch.diaChiNhan = str(customer.address_dng);
-    if (str(customer.phone_dng)) patch.dienThoaiNhan = str(customer.phone_dng);
-  } else if (str(customer.contact_person)) {
-    patch.nguoiNhan = str(customer.contact_person);
-  } else {
-    patch.nguoiNhan = customer.name;
-  }
+  Object.assign(patch, applyReceiverByDestination(customer, noiDen || 'HCM', huyen));
 
   return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined && v !== '')) as Partial<NewOrderFormState>;
 }

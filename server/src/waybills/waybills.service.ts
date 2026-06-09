@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, In, IsNull, Like, Repository, SelectQueryBuilder } from 'typeorm';
+import { Brackets, In, IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { HubEntity } from '../hubs/hub.entity';
 import { PaymentType } from '../common/enums';
 import { clampPaginationLimit } from '../common/pagination';
@@ -27,7 +27,7 @@ import { BulkStackOntoTruckDto } from './dto/bulk-stack-onto-truck.dto';
 import { SaveWaybillSplitsDto } from './dto/save-waybill-splits.dto';
 import { QueryLoadPlanningBoardDto } from './dto/query-load-planning-board.dto';
 import { UpdateSplitLoadStatusDto } from './dto/update-split-load-status.dto';
-import { WaybillSplitLoadStatus } from './dto/waybill-split-load-status.enum';
+import { assertSplitLoadStatusTransition, WaybillSplitLoadStatus } from './dto/waybill-split-load-status.enum';
 import { OrdersService } from '../orders/orders.service';
 import { VendorsService } from '../vendors/vendors.service';
 
@@ -43,11 +43,12 @@ const parseNoteField = (note: string | null | undefined, key: string) => {
 };
 
 const STATE_TRANSITIONS: Record<string, WaybillStatus[]> = {
-  [WaybillStatus.RECEIVED]: [WaybillStatus.IN_WAREHOUSE],
+  [WaybillStatus.RECEIVED]: [WaybillStatus.IN_WAREHOUSE, WaybillStatus.MANIFEST_CLOSED],
   [WaybillStatus.IN_WAREHOUSE]: [WaybillStatus.MANIFEST_CLOSED],
-  [WaybillStatus.MANIFEST_CLOSED]: [WaybillStatus.IN_TRANSIT],
+  [WaybillStatus.MANIFEST_CLOSED]: [WaybillStatus.LOADED],
+  [WaybillStatus.LOADED]: [WaybillStatus.IN_TRANSIT],
   [WaybillStatus.IN_TRANSIT]: [WaybillStatus.AT_DEST_HUB],
-  [WaybillStatus.AT_DEST_HUB]: [WaybillStatus.OUT_FOR_DELIVERY],
+  [WaybillStatus.AT_DEST_HUB]: [WaybillStatus.OUT_FOR_DELIVERY, WaybillStatus.DELIVERED],
   [WaybillStatus.OUT_FOR_DELIVERY]: [WaybillStatus.DELIVERED, WaybillStatus.RETURNED],
 };
 
@@ -607,6 +608,12 @@ export class WaybillsService {
     if (!split?.waybill) throw new NotFoundException('Split line not found');
     this.assertWaybillAccess(split.waybill as WaybillRecord, currentUser);
 
+    const currentLoadStatus = (split.load_status ?? WaybillSplitLoadStatus.WAITING_LOAD) as WaybillSplitLoadStatus;
+    try {
+      assertSplitLoadStatusTransition(currentLoadStatus, dto.load_status);
+    } catch {
+      throw new BadRequestException('Chỉ được chuyển trạng thái từng bước một.');
+    }
     split.load_status = dto.load_status;
     split.updated_at = new Date();
     await this.splitsRepository.save(split);
@@ -790,7 +797,9 @@ export class WaybillsService {
     const truckLabel = String(split.carrier_label ?? wbExtra.xe_phat ?? truck?.nha_xe ?? truck?.ten_lai_xe ?? '').trim();
     const totalPackages = Math.max(1, Number(waybill.package_count ?? 1));
     const totalFreight = Number(waybill.freight_amount ?? waybill.cost_amount ?? 0);
+    const totalCod = Number(waybill.cod_amount ?? 0);
     const ratio = quantity / totalPackages;
+    const receiverPhone = waybill.receiver_phone?.trim() || this.parseContactPhone(waybill.receiver_info);
 
     return {
       split_id: split.id,
@@ -816,8 +825,17 @@ export class WaybillsService {
       origin_hub: waybill.origin_hub,
       dest_hub: waybill.dest_hub,
       allocated_freight: Math.round(totalFreight * ratio),
+      allocated_cod: Math.round(totalCod * ratio),
+      receiver_phone: receiverPhone || null,
+      split_note: split.note?.trim() || null,
       load_status: split.load_status ?? WaybillSplitLoadStatus.WAITING_LOAD,
     };
+  }
+
+  private parseContactPhone(info?: string | null): string {
+    if (!info) return '';
+    const parts = info.split('|').map((part) => part.trim());
+    return parts[1] ?? '';
   }
 
   private computeExpectedArrivalAt(waybill: WaybillRecord): Date {
@@ -1019,19 +1037,39 @@ export class WaybillsService {
     }
   }
 
+  private async getMaxEcoBillSequence(): Promise<number> {
+    const row = await this.waybillsRepository
+      .createQueryBuilder('waybill')
+      .select(
+        `MAX(
+          CASE
+            WHEN waybill.waybill_code ~* '^ECO-?[0-9]+$'
+            THEN CAST(REGEXP_REPLACE(waybill.waybill_code, '^ECO-?', '', 'i') AS BIGINT)
+            ELSE NULL
+          END
+        )`,
+        'maxSeq',
+      )
+      .where('waybill.deleted_at IS NULL')
+      .getRawOne<{ maxSeq: string | null }>();
+
+    return Number(row?.maxSeq ?? 0) || 0;
+  }
+
+  private formatEcoBillCode(sequence: number): string {
+    return `ECO-${Math.max(1, Math.floor(sequence))}`;
+  }
+
+  /** STT liên tục: ECO-1 → ECO-2 → … */
   private async generateUniqueCode(): Promise<string> {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const prefix = `ECO${year}${month}${day}-`;
-    let sequence = await this.waybillsRepository.count({ where: { waybill_code: Like(`${prefix}%`) } }) + 1;
+    let sequence = (await this.getMaxEcoBillSequence()) + 1;
 
     for (let attempt = 0; attempt < 1000; attempt += 1) {
-      const code = `${prefix}${String(sequence).padStart(3, '0')}`;
-      const existing = await this.waybillsRepository.findOne({ where: { waybill_code: code } });
+      const code = this.formatEcoBillCode(sequence + attempt);
+      const existing = await this.waybillsRepository.findOne({
+        where: { waybill_code: code, deleted_at: IsNull() } as any,
+      });
       if (!existing) return code;
-      sequence += 1;
     }
     throw new ConflictException('Unable to generate unique waybill code');
   }

@@ -7,7 +7,12 @@ import TruckSearchSelect from '../../components/TruckSearchSelect';
 import type { Truck as TruckRecord, TruckListResponse } from '../../../trucks/types';
 import type { TruckPickOption } from '../types';
 import type { WaybillInventoryItem } from '../types';
-import { buildStackFormRows, type StackOntoTruckFormRow } from '../stackOntoTruckUtils';
+import {
+  buildInitialSharedFields,
+  buildStackFormRows,
+  type StackOntoTruckFormRow,
+  type StackOntoTruckSharedFields,
+} from '../stackOntoTruckUtils';
 import { formatDonGia, parseMoneyAmount } from '../../orders/orderFormUtils';
 
 interface Props {
@@ -40,6 +45,7 @@ export default function StackOntoTruckDialog({
   onSaved,
 }: Props) {
   const [rows, setRows] = useState<StackOntoTruckFormRow[]>([]);
+  const [shared, setShared] = useState<StackOntoTruckSharedFields>({ truck_id: '', nha_xe: '', vendor_cost: '' });
   const [truckOptions, setTruckOptions] = useState<TruckPickOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -64,6 +70,7 @@ export default function StackOntoTruckDialog({
   useEffect(() => {
     if (!isOpen) return;
     setRows(buildStackFormRows(waybills));
+    setShared(buildInitialSharedFields(waybills));
     void loadTrucks();
   }, [isOpen, waybills, loadTrucks]);
 
@@ -71,19 +78,19 @@ export default function StackOntoTruckDialog({
     setRows((prev) => prev.map((row) => (row.waybill_id === waybillId ? { ...row, ...patch } : row)));
   };
 
-  const handleTruckChange = (waybillId: string, truckId: string) => {
+  const handleTruckChange = (truckId: string) => {
     const truck = truckOptions.find((item) => item.id === truckId);
-    updateRow(waybillId, {
+    setShared((prev) => ({
+      ...prev,
       truck_id: truckId,
       nha_xe: truck?.nha_xe || '',
-    });
+    }));
   };
 
   async function handleSubmit() {
     setError('');
-    const missingTruck = rows.find((row) => !row.truck_id);
-    if (missingTruck) {
-      setError(`Chọn biển số xe cho đơn ${missingTruck.waybill_code}.`);
+    if (!shared.truck_id) {
+      setError('Chọn biển số xe trước khi xếp hàng.');
       return;
     }
 
@@ -96,15 +103,14 @@ export default function StackOntoTruckDialog({
       return;
     }
 
+    const vendorCost = shared.vendor_cost.trim() ? parseMoneyAmount(shared.vendor_cost) : undefined;
     const payload = {
-      items: rows.map((row) => ({
+      items: rows.map((row, index) => ({
         waybill_id: row.waybill_id,
-        truck_id: row.truck_id,
+        truck_id: shared.truck_id,
         loading_position: row.loading_position ? Number(row.loading_position) : undefined,
         package_count: Number(row.package_count),
-        ...(row.vendor_cost.trim()
-          ? { vendor_cost: parseMoneyAmount(row.vendor_cost) }
-          : {}),
+        ...(vendorCost != null && vendorCost > 0 && index === 0 ? { vendor_cost: vendorCost } : {}),
       })),
     };
 
@@ -147,73 +153,86 @@ export default function StackOntoTruckDialog({
           {isLoading ? (
             <div className="flex min-h-[160px] items-center justify-center text-primary"><Loader2 className="animate-spin" size={24} /></div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full min-w-[1100px] border-collapse text-[14px]">
-                <thead>
-                  <tr className="bg-slate-100 text-[12px] font-bold uppercase tracking-wide text-slate-700">
-                    <th className="border-b border-r border-border px-4 py-3 text-left">Mã vận đơn</th>
-                    <th className="border-b border-r border-border px-4 py-3 text-center">Số kiện</th>
-                    <th className="border-b border-r border-border px-4 py-3 text-center">Vị trí xếp hàng</th>
-                    <th className="border-b border-r border-border px-4 py-3 text-left">Biển số xe</th>
-                    <th className="border-b border-r border-border px-4 py-3 text-left">NCC</th>
-                    <th className="border-b border-r border-border px-4 py-3 text-right">Cước NCC</th>
-                    <th className="border-b border-border px-4 py-3 text-center">Ngày tới</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.waybill_id} className="border-b border-border align-top">
-                      <td className="border-r border-border px-4 py-3 text-[15px] font-extrabold text-primary">{row.waybill_code}</td>
-                      <td className="border-r border-border px-4 py-3">
-                        <input
-                          type="number"
-                          min={1}
-                          max={row.max_package_count}
-                          value={row.package_count}
-                          onChange={(e) => updateRow(row.waybill_id, { package_count: e.target.value })}
-                          title={`Tối đa ${row.max_package_count} kiện`}
-                          className="h-11 w-full min-w-[88px] rounded-lg border border-violet-300 bg-violet-50 px-2 text-center text-[15px] font-extrabold outline-none focus:border-primary"
-                        />
-                        <p className="mt-1 text-center text-[11px] font-medium text-muted-foreground">/ {row.max_package_count}</p>
-                      </td>
-                      <td className="border-r border-border px-4 py-3">
-                        <input
-                          type="number"
-                          min={1}
-                          value={row.loading_position}
-                          onChange={(e) => updateRow(row.waybill_id, { loading_position: e.target.value })}
-                          placeholder="VT"
-                          className="h-11 w-full min-w-[88px] rounded-lg border border-yellow-300 bg-yellow-50 px-2 text-center text-[15px] font-bold outline-none focus:border-primary"
-                        />
-                      </td>
-                      <td className="border-r border-border px-4 py-3 min-w-[220px]">
-                        <TruckSearchSelect
-                          options={truckOptions}
-                          value={row.truck_id}
-                          onChange={(truckId) => handleTruckChange(row.waybill_id, truckId)}
-                          placeholder="Chọn xe..."
-                          searchPlaceholder="Tìm biển số..."
-                          className="h-11 text-[14px]"
-                        />
-                      </td>
-                      <td className="border-r border-border px-4 py-3 text-[14px] font-bold text-muted-foreground">
-                        {row.nha_xe || '—'}
-                      </td>
-                      <td className="border-r border-border px-4 py-3">
-                        <input
-                          value={row.vendor_cost}
-                          onChange={(e) => updateRow(row.waybill_id, { vendor_cost: formatDonGia(e.target.value) })}
-                          placeholder="Nhập sau..."
-                          className="h-11 w-full min-w-[130px] rounded-lg border border-amber-300 bg-amber-50/40 px-3 text-right text-[15px] font-bold outline-none focus:border-primary"
-                        />
-                        <p className="mt-1 text-right text-[10px] font-medium text-muted-foreground">Ghi công nợ NCC khi có số</p>
-                      </td>
-                      <td className="px-4 py-3 text-center text-[15px] font-bold text-emerald-800">{row.expected_arrival_label}</td>
+            <>
+              <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
+                <div className="grid grid-cols-12 items-start gap-x-3 gap-y-3">
+                  <div className="col-span-12 flex min-w-0 flex-col gap-1 md:col-span-5">
+                    <label className="min-h-[18px] text-[12px] font-bold uppercase leading-tight tracking-wide text-slate-700">Biển số xe</label>
+                    <div className="min-h-11">
+                      <TruckSearchSelect
+                        options={truckOptions}
+                        value={shared.truck_id}
+                        onChange={handleTruckChange}
+                        placeholder="Chọn xe..."
+                        searchPlaceholder="Tìm biển số..."
+                        className="h-11 text-[14px]"
+                      />
+                    </div>
+                  </div>
+                  <div className="col-span-6 flex min-w-0 flex-col gap-1 md:col-span-3">
+                    <label className="min-h-[18px] text-[12px] font-bold uppercase leading-tight tracking-wide text-slate-700">NCC</label>
+                    <div className="flex h-11 min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 text-[14px] font-bold text-muted-foreground">
+                      {shared.nha_xe || '—'}
+                    </div>
+                  </div>
+                  <div className="col-span-6 flex min-w-0 flex-col gap-1 md:col-span-4">
+                    <label className="min-h-[18px] text-[12px] font-bold uppercase leading-tight tracking-wide text-slate-700">Cước NCC</label>
+                    <input
+                      value={shared.vendor_cost}
+                      onChange={(e) => setShared((prev) => ({ ...prev, vendor_cost: formatDonGia(e.target.value) }))}
+                      placeholder="Nhập sau..."
+                      className="h-11 w-full rounded-lg border border-amber-300 bg-amber-50/40 px-3 text-right text-[15px] font-bold outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-right text-[10px] font-medium text-muted-foreground">
+                  Cước chuyến xe · ghi công nợ NCC một lần cho toàn bộ danh sách
+                </p>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <table className="w-full min-w-[720px] border-collapse text-[14px]">
+                  <thead>
+                    <tr className="bg-slate-100 text-[12px] font-bold uppercase tracking-wide text-slate-700">
+                      <th className="border-b border-r border-border px-4 py-3 text-left">Mã vận đơn</th>
+                      <th className="border-b border-r border-border px-4 py-3 text-center">Số kiện</th>
+                      <th className="border-b border-r border-border px-4 py-3 text-center">Vị trí xếp hàng</th>
+                      <th className="border-b border-border px-4 py-3 text-center">Ngày tới</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.waybill_id} className="border-b border-border align-top">
+                        <td className="border-r border-border px-4 py-3 text-[15px] font-extrabold text-primary">{row.waybill_code}</td>
+                        <td className="border-r border-border px-4 py-3">
+                          <input
+                            type="number"
+                            min={1}
+                            max={row.max_package_count}
+                            value={row.package_count}
+                            onChange={(e) => updateRow(row.waybill_id, { package_count: e.target.value })}
+                            title={`Tối đa ${row.max_package_count} kiện`}
+                            className="h-11 w-full min-w-[88px] rounded-lg border border-violet-300 bg-violet-50 px-2 text-center text-[15px] font-extrabold outline-none focus:border-primary"
+                          />
+                          <p className="mt-1 text-center text-[11px] font-medium text-muted-foreground">/ {row.max_package_count}</p>
+                        </td>
+                        <td className="border-r border-border px-4 py-3">
+                          <input
+                            type="number"
+                            min={1}
+                            value={row.loading_position}
+                            onChange={(e) => updateRow(row.waybill_id, { loading_position: e.target.value })}
+                            placeholder="VT"
+                            className="h-11 w-full min-w-[88px] rounded-lg border border-yellow-300 bg-yellow-50 px-2 text-center text-[15px] font-bold outline-none focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center text-[15px] font-bold text-emerald-800">{row.expected_arrival_label}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
 

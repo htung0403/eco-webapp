@@ -1,6 +1,6 @@
 import { clsx } from 'clsx';
 import { ArrowRight, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ApiError, apiRequest } from '../../../lib/api';
 import {
   getNextSplitLoadStatus,
@@ -11,14 +11,14 @@ import {
 } from './splitLoadStatus';
 
 interface Props {
-  splitId?: string | number | null;
+  splitIds: Array<string | number>;
   value?: string | null;
   disabled?: boolean;
-  compact?: boolean;
   onUpdated?: (status: SplitLoadStatus) => void;
 }
 
-export default function SplitLoadStatusControl({ splitId, value, disabled, compact, onUpdated }: Props) {
+export default function BulkSplitLoadStatusControl({ splitIds, value, disabled, onUpdated }: Props) {
+  const ids = useMemo(() => splitIds.map((id) => String(id)).filter(Boolean), [splitIds]);
   const [current, setCurrent] = useState(() => normalizeSplitLoadStatus(value));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -28,17 +28,21 @@ export default function SplitLoadStatusControl({ splitId, value, disabled, compa
   }, [value]);
 
   const nextStatus = getNextSplitLoadStatus(current === 'ARRIVED' ? 'ARRIVED' : current);
-  const canChange = Boolean(splitId) && !disabled && Boolean(nextStatus);
+  const canChange = ids.length > 0 && !disabled && Boolean(nextStatus);
 
   async function advanceStatus() {
-    if (!splitId || !nextStatus) return;
+    if (!nextStatus || !ids.length) return;
     setIsSaving(true);
     setError('');
     try {
-      await apiRequest(`/waybills/splits/${splitId}/load-status`, {
-        method: 'PATCH',
-        body: { load_status: nextStatus },
-      });
+      await Promise.all(
+        ids.map((splitId) =>
+          apiRequest(`/waybills/splits/${splitId}/load-status`, {
+            method: 'PATCH',
+            body: { load_status: nextStatus },
+          }),
+        ),
+      );
       setCurrent(nextStatus);
       onUpdated?.(nextStatus);
     } catch (err) {
@@ -50,12 +54,11 @@ export default function SplitLoadStatusControl({ splitId, value, disabled, compa
 
   return (
     <div className="inline-flex flex-col items-start gap-1">
-      <div className={clsx('flex flex-wrap items-center gap-1.5', compact && 'justify-center')}>
+      <div className="flex flex-wrap items-center gap-2">
         <span
           className={clsx(
-            'inline-flex items-center rounded-full border font-bold uppercase tracking-wide',
+            'inline-flex h-10 items-center rounded-xl border px-3 text-[12px] font-extrabold uppercase tracking-wide',
             splitLoadStatusClass(current === 'ARRIVED' ? 'ARRIVED' : current),
-            compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]',
           )}
         >
           {splitLoadStatusLabel(current === 'ARRIVED' ? 'ARRIVED' : current)}
@@ -65,14 +68,10 @@ export default function SplitLoadStatusControl({ splitId, value, disabled, compa
             type="button"
             disabled={isSaving}
             onClick={() => void advanceStatus()}
-            title={`Chuyển sang ${splitLoadStatusLabel(nextStatus)}`}
-            className={clsx(
-              'inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 font-extrabold text-primary hover:bg-primary/15 disabled:opacity-60',
-              compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]',
-            )}
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-primary/25 bg-primary/10 px-3 text-[12px] font-extrabold text-primary hover:bg-primary/15 disabled:opacity-60"
           >
-            {isSaving ? <Loader2 size={11} className="animate-spin" /> : <ArrowRight size={11} />}
-            {!compact && splitLoadStatusLabel(nextStatus)}
+            {isSaving ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+            {splitLoadStatusLabel(nextStatus)}
           </button>
         )}
       </div>

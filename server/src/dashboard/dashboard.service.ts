@@ -19,7 +19,7 @@ type Scope = { hubId?: string; canViewSystem: boolean; canViewFinance: boolean; 
 type Paginated<T> = { items: T[]; meta: { total: number; page: number; limit: number; total_pages: number } };
 type RawCount = { key?: string; count?: string; total?: string; amount?: string; revenue?: string; cod?: string; cc?: string; remitted?: string; fuel?: string; other?: string };
 
-const WAYBILL_STATUSES = [WaybillState.RECEIVED, WaybillState.IN_WAREHOUSE, WaybillState.MANIFEST_CLOSED, WaybillState.IN_TRANSIT, WaybillState.AT_DEST_HUB, WaybillState.OUT_FOR_DELIVERY, WaybillState.DELIVERED, WaybillState.RETURNED];
+const WAYBILL_STATUSES = [WaybillState.RECEIVED, WaybillState.IN_WAREHOUSE, WaybillState.MANIFEST_CLOSED, WaybillState.LOADED, WaybillState.IN_TRANSIT, WaybillState.AT_DEST_HUB, WaybillState.OUT_FOR_DELIVERY, WaybillState.DELIVERED, WaybillState.RETURNED];
 const TRIP_STATUSES = ['PLANNED', 'LOADING', 'IN_TRANSIT', 'ARRIVED_PENDING_CONFIRM', 'COMPLETED', 'CANCELLED'];
 
 @Injectable()

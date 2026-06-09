@@ -279,6 +279,32 @@ export class VendorsService {
     });
   }
 
+  async deletePayments(paymentIds: string[], currentUser: UserEntity) {
+    this.assertRole(currentUser, [Roles.DISPATCHER, Roles.ACCOUNTANT, Roles.MANAGER, Roles.DIRECTOR]);
+    const ids = [...new Set(paymentIds.map((id) => String(id).trim()).filter(Boolean))];
+    if (!ids.length) throw new BadRequestException('Payment ids are required');
+
+    const payments = await this.paymentsRepository.find({
+      where: { id: In(ids) },
+      relations: ['trips'],
+    });
+    if (payments.length !== ids.length) {
+      throw new NotFoundException('One or more vendor payments not found');
+    }
+
+    const vendorIds = [...new Set(payments.map((payment) => String(payment.vendor_id)))];
+    await this.paymentsRepository.remove(payments);
+
+    for (const vendorId of vendorIds) {
+      const vendor = await this.findOne(vendorId);
+      const balance = (await this.computeBalancesForVendors([vendorId])).get(vendorId)!;
+      vendor.payable_balance = String(Math.max(0, balance.remaining));
+      await this.vendorsRepository.save(vendor);
+    }
+
+    return { deleted_count: payments.length, deleted_ids: ids };
+  }
+
   async resolveDefaultVendorId(): Promise<string> {
     let vendor = await this.vendorsRepository.findOne({
       where: [{ code: DEFAULT_VENDOR_CODE }, { name: DEFAULT_VENDOR_NAME }],

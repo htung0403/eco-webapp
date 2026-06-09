@@ -8,12 +8,27 @@ interface Props {
   canViewCost?: boolean;
   onStatusUpdated?: () => void;
   showHeader?: boolean;
+  /** Một nút trạng thái ở header dialog — ẩn cột trạng thái từng dòng. */
+  bulkStatusMode?: boolean;
 }
 
 const formatNumber = (value?: number | string | null, suffix = '') =>
   value == null || value === '' ? '—' : `${Number(value).toLocaleString('vi-VN')}${suffix}`;
 
-export default function LoadPlanningTruckBoard({ truck, canViewCost, onStatusUpdated, showHeader = true }: Props) {
+const isCarrierRowNote = (note: string, item: LoadPlanningBoardItem) => {
+  const normalized = note.trim().toLowerCase();
+  if (/^xe\s/.test(normalized)) return true;
+  const carrier = String(item.xe_phat ?? '').trim().toLowerCase();
+  return Boolean(carrier && (normalized === carrier || normalized === `xe ${carrier}`));
+};
+
+export default function LoadPlanningTruckBoard({
+  truck,
+  canViewCost,
+  onStatusUpdated,
+  showHeader = true,
+  bulkStatusMode = false,
+}: Props) {
   const truckLabel = [truck.license_plate, truck.nha_xe ? `xe ${truck.nha_xe}` : null].filter(Boolean).join(' · ');
 
   return (
@@ -43,7 +58,9 @@ export default function LoadPlanningTruckBoard({ truck, canViewCost, onStatusUpd
           <thead>
             <tr className="border-b border-border bg-white text-[11px] font-bold uppercase tracking-wide text-slate-700">
               <th className="w-[4%] border-r border-border bg-yellow-300 px-2 py-2 text-center">Vị trí</th>
-              <th className="w-[9%] border-r border-border px-2 py-2 text-center">Trạng thái</th>
+              {!bulkStatusMode && (
+                <th className="w-[9%] border-r border-border px-2 py-2 text-center">Trạng thái</th>
+              )}
               <th className="w-[5%] border-r border-border px-2 py-2 text-center">Ngày bốc</th>
               <th className="w-[5%] border-r border-border px-2 py-2 text-center">Ngày tới</th>
               <th className="w-[5%] border-r border-border px-2 py-2 text-center">Mã Tỉnh</th>
@@ -56,7 +73,7 @@ export default function LoadPlanningTruckBoard({ truck, canViewCost, onStatusUpd
               {canViewCost && (
                 <th className="w-[8%] border-r border-border px-2 py-2 text-right">Cước phí</th>
               )}
-              <th className={clsx('px-2 py-2', canViewCost ? 'w-[21%]' : 'w-[29%]')}>Địa chỉ</th>
+              <th className={clsx('px-2 py-2', canViewCost ? (bulkStatusMode ? 'w-[30%]' : 'w-[21%]') : (bulkStatusMode ? 'w-[38%]' : 'w-[29%]'))}>Địa chỉ</th>
             </tr>
           </thead>
           <tbody>
@@ -66,6 +83,7 @@ export default function LoadPlanningTruckBoard({ truck, canViewCost, onStatusUpd
                 item={item}
                 canViewCost={canViewCost}
                 onStatusUpdated={onStatusUpdated}
+                bulkStatusMode={bulkStatusMode}
               />
             ))}
           </tbody>
@@ -79,10 +97,12 @@ function DispatchRow({
   item,
   canViewCost,
   onStatusUpdated,
+  bulkStatusMode,
 }: {
   item: LoadPlanningBoardItem;
   canViewCost?: boolean;
   onStatusUpdated?: () => void;
+  bulkStatusMode?: boolean;
 }) {
   const noteInRed = item.mat_hang_note && item.mat_hang !== item.mat_hang_note;
 
@@ -91,14 +111,16 @@ function DispatchRow({
       <td className="border-r border-border bg-yellow-200 px-2 py-2 text-center text-[14px] font-extrabold text-foreground">
         {item.vi_tri_hang ?? item.loading_position ?? '—'}
       </td>
-      <td className="overflow-visible border-r border-border px-2 py-2 text-center">
-        <SplitLoadStatusControl
-          splitId={item.split_id}
-          value={item.load_status ?? 'WAITING_LOAD'}
-          compact
-          onUpdated={() => onStatusUpdated?.()}
-        />
-      </td>
+      {!bulkStatusMode && (
+        <td className="overflow-visible border-r border-border px-2 py-2 text-center">
+          <SplitLoadStatusControl
+            splitId={item.split_id}
+            value={item.load_status ?? 'WAITING_LOAD'}
+            compact
+            onUpdated={() => onStatusUpdated?.()}
+          />
+        </td>
+      )}
       <td className="border-r border-border px-2 py-2 text-center font-medium">{item.ngay_boc || '—'}</td>
       <td className="border-r border-border px-2 py-2 text-center font-bold text-emerald-800">{item.ngay_toi || '—'}</td>
       <td className="border-r border-border px-2 py-2 text-center font-bold">{item.ma_tinh || item.noi_den || '—'}</td>
@@ -106,8 +128,9 @@ function DispatchRow({
       <td className="border-r border-border px-2 py-2 text-center font-bold">{item.dv || 'TC'}</td>
       <td className="border-r border-border px-2 py-2 break-words">
         <div className="font-medium leading-snug">{item.mat_hang || item.waybill_code || '—'}</div>
-        {noteInRed && <div className="mt-0.5 text-[11px] font-bold leading-snug text-red-600">{item.mat_hang_note}</div>}
-        {item.xe_phat && !noteInRed && <div className="mt-0.5 text-[11px] font-bold text-red-600">xe {item.xe_phat}</div>}
+        {noteInRed && !isCarrierRowNote(String(item.mat_hang_note), item) && (
+          <div className="mt-0.5 text-[11px] font-bold leading-snug text-red-600">{item.mat_hang_note}</div>
+        )}
       </td>
       <td className="border-r border-border px-2 py-2 text-[11px] font-medium leading-snug break-words">{item.noi_tra || '—'}</td>
       <td className={clsx('border-r border-border px-2 py-2 text-center font-extrabold')}>{item.so_luong ?? '—'}</td>

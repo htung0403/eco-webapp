@@ -51,7 +51,8 @@ const vendorExpenseTypes = [
 const statusLabel: Record<string, string> = {
   RECEIVED: 'Đã tạo đơn',
   IN_WAREHOUSE: 'Trong kho',
-  MANIFEST_CLOSED: 'Chờ xuất chuyến',
+  MANIFEST_CLOSED: 'Chờ bốc',
+  LOADED: 'Đã bốc',
   IN_TRANSIT: 'Đang vận chuyển',
   AT_DEST_HUB: 'Tới hub đích',
   OUT_FOR_DELIVERY: 'Chờ giao',

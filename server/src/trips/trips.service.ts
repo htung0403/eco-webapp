@@ -196,7 +196,10 @@ export class TripsService {
       await this.manifestsRepository.save(manifest);
     }
     await this.setTruckStatus(trip.truck_id, TruckStatus.IN_TRIP);
-    if (trip.manifest_id) await this.moveManifestWaybills(trip.manifest_id, WaybillState.MANIFEST_CLOSED, WaybillState.IN_TRANSIT);
+    if (trip.manifest_id) {
+      await this.moveManifestWaybills(trip.manifest_id, WaybillState.LOADED, WaybillState.IN_TRANSIT);
+      await this.moveManifestWaybills(trip.manifest_id, WaybillState.MANIFEST_CLOSED, WaybillState.IN_TRANSIT);
+    }
     return this.tripsRepository.save(trip);
   }
 

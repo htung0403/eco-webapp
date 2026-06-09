@@ -10,6 +10,7 @@ export default function TripExpensesPage() {
       defaultTab="vendor"
       hideTabs
       accessMode="vendor"
+      enableVendorBulkDelete
       tripId={tripId}
       pageTitle="Chi phí phát sinh chuyến"
       pageSubtitle="Ghi nhận dầu và chi phí dọc đường từ phiếu chi NCC."
