@@ -144,7 +144,10 @@ export default function TripDetailPage() {
   function openAction(nextAction: TripAction) { if (!trip || isFinal || !canOperateTrip) return; setActionTrip(trip); setAction(nextAction); setActionError(''); }
   async function confirmAction() { if (!actionTrip || !action) return; setIsSubmitting(true); setActionError(''); try { await apiRequest<Trip>(`/trips/${actionTrip.id}/${action}`, { method: 'PATCH' }); setActionTrip(null); setAction(null); await loadTrip(); } catch (submitError) { setActionError(submitError instanceof ApiError ? submitError.message : 'Không cập nhật được trạng thái chuyến.'); } finally { setIsSubmitting(false); } }
   async function submitCosts() { if (!trip || isFinal || !canUpdateCosts) return; setIsSubmitting(true); setActionError(''); try { await apiRequest<Trip>(`/trips/${trip.id}/costs`, { method: 'PATCH', body: { fuel_actual: Number(costForm.fuel_actual || 0), fuel_cost: Number(costForm.fuel_cost || 0), other_costs: Number(costForm.other_costs || 0) } }); setCostDialogOpen(false); await loadTrip(); } catch (submitError) { setActionError(submitError instanceof ApiError ? submitError.message : 'Không cập nhật được chi phí chuyến.'); } finally { setIsSubmitting(false); } }
-  async function printManifest() { if (!trip?.manifest_id) return; try { await apiRequest(`/manifests/${trip.manifest_id}/print`); window.open(`/warehouse/manifests/${trip.manifest_id}?print=1`, '_blank', 'noopener'); } catch (submitError) { setActionError(submitError instanceof ApiError ? submitError.message : 'Không tải được dữ liệu in bảng kê.'); } }
+  function printManifest() {
+    if (!trip?.manifest_id) return;
+    window.open(`/print/manifest/${trip.manifest_id}`, '_blank', 'noopener');
+  }
 
   return (
     <div className="h-full min-h-0 flex flex-col gap-2">

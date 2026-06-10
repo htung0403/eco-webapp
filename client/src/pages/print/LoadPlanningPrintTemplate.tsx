@@ -60,13 +60,6 @@ function renderDispatchCell(id: DispatchPrintColumnId, row: DispatchPrintRow): R
         </td>
       );
     }
-    case 'nguoiNhan':
-      return (
-        <td className={`${def.cssClass} recipient-cell`}>
-          {row.nguoiNhanPhone ? <div className="phone">{row.nguoiNhanPhone}</div> : null}
-          <div>{row.nguoiNhanDiaChi}</div>
-        </td>
-      );
     case 'tinhTrangGiaoHang':
       return <td className={`${def.cssClass} col-center`}>{row.tinhTrangGiaoHang}</td>;
     case 'ngayHoanThanh':

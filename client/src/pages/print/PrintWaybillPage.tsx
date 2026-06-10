@@ -115,6 +115,9 @@ export default function PrintWaybillPage() {
         {preview && (
           <span className="text-[12px] text-muted-foreground">Chế độ xem trước A5 — kiểm tra nội dung trước khi in.</span>
         )}
+        <span className="text-[12px] text-muted-foreground">
+          Khi in: chọn khổ <strong>A5 ngang</strong>, tắt header/footer trình duyệt để khớp preview.
+        </span>
         {!showPricing && (
           <span className="text-[12px] text-muted-foreground">Cước phí ẩn theo quyền — chỉ in thông tin vận chuyển.</span>
         )}

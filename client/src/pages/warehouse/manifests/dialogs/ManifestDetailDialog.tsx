@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { CalendarDays, Check, Edit3, Loader2, Package, X } from 'lucide-react';
+import { CalendarDays, Check, Edit3, Loader2, Package, Printer, X } from 'lucide-react';
 import { DateTimePicker } from '../../../../components/ui/DateTimePicker';
 import type { BadgeConfig, LoadPlanningManifest, ManifestWaybill } from '../types';
 
@@ -38,15 +38,19 @@ export default function ManifestDetailDialog({ isOpen, isClosing, isLoading, isS
   if (!isOpen) return null;
   const waybills = extractWaybills(manifest);
 
-  return <div className="fixed inset-0 z-[9999] flex justify-end">
-    <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-sm transition-all duration-300" onClick={onClose} />
-    <div className={`relative flex h-screen w-full max-w-[min(1280px,98vw)] flex-col border-l border-border bg-[#f8fafc] shadow-2xl ${isClosing ? 'dialog-slide-out' : 'dialog-slide-in'}`}>
-      <header className="flex shrink-0 items-center justify-between border-b border-border bg-white px-6 py-4">
+  return <div className="manifest-detail-print-root fixed inset-0 z-[9999] flex justify-end print:static print:block print:bg-white">
+    <style>{`@media print { body > *:not(.manifest-detail-print-root) { display: none !important; } .manifest-detail-print-root { display: block !important; position: static !important; inset: auto !important; background: #fff !important; } .manifest-detail-print-panel { display: block !important; width: 100% !important; max-width: none !important; height: auto !important; min-height: 0 !important; border: 0 !important; box-shadow: none !important; } .manifest-detail-print-toolbar { display: none !important; } .manifest-detail-print-main { display: block !important; overflow: visible !important; padding: 0 !important; } }`}</style>
+    <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-sm transition-all duration-300 print:hidden" onClick={onClose} />
+    <div className={`manifest-detail-print-panel relative flex h-screen w-full max-w-[min(1280px,98vw)] flex-col border-l border-border bg-[#f8fafc] shadow-2xl ${isClosing ? 'dialog-slide-out' : 'dialog-slide-in'}`}>
+      <header className="manifest-detail-print-toolbar flex shrink-0 items-center justify-between border-b border-border bg-white px-6 py-4">
         <div className="min-w-0"><p className="text-[11px] font-black uppercase tracking-[0.16em] text-primary">Chi tiết bảng kê</p><h2 className="mt-1 truncate text-2xl font-black text-foreground">{manifest ? code(manifest) : 'Đang tải'}</h2></div>
-        <button onClick={onClose} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-white text-muted-foreground shadow-sm hover:bg-muted"><X size={20} /></button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => manifest && window.open(`/print/manifest/${manifest.id}`, '_blank', 'noopener')} disabled={isLoading || !manifest} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-[13px] font-black text-emerald-700 shadow-sm hover:bg-emerald-100 disabled:opacity-50"><Printer size={18} />In bảng kê</button>
+          <button type="button" onClick={onClose} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-white text-muted-foreground shadow-sm hover:bg-muted"><X size={20} /></button>
+        </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-auto p-5 custom-scrollbar">
+      <main className="manifest-detail-print-main min-h-0 flex-1 overflow-auto p-5 custom-scrollbar">
         {isLoading ? <State label="Đang tải chi tiết bảng kê..." /> : !manifest ? <State label="Không tìm thấy bảng kê." /> : <div className="space-y-4">
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Info label="Trạng thái" value={badge(manifest.status, statusConfig[String(manifest.status || '')])} />

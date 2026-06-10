@@ -15,8 +15,12 @@ export interface CustomerListItem {
   email: string | null;
   region: string | null;
   destination_province: string | null;
+  receiver_hcm?: string | null;
+  receiver_dng?: string | null;
   address_hcm: string | null;
   phone_hcm: string | null;
+  address_dng?: string | null;
+  phone_dng?: string | null;
   credit_type: string | null;
   price_table: string | null;
   discount_percent: number | string;

@@ -33,28 +33,28 @@
 .inventory-stock-sheet {
   background: #fff;
   border: 1px solid #000;
-  padding: 4px 5px 6px;
+  padding: 3px 4px 4px;
   max-width: 297mm;
   margin: 0 auto;
 }
 
 .inventory-stock-title {
   text-align: center;
-  font-size: 14pt;
+  font-size: 12pt;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  margin: 0 0 4px;
+  letter-spacing: 0.2px;
+  margin: 0 0 3px;
   color: #000;
 }
 
 .dispatch-print-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 24px;
-  margin: 0 0 4px;
+  gap: 6px 18px;
+  margin: 0 0 3px;
   padding: 0 2px;
-  font-size: 8.5pt;
+  font-size: 8pt;
   font-weight: 700;
   color: #000;
 }
@@ -81,8 +81,8 @@
 .inventory-stock-table th,
 .inventory-stock-table td {
   border: 1px solid #000;
-  padding: 2px 3px;
-  vertical-align: top;
+  padding: 1px 2px;
+  vertical-align: middle;
   overflow-wrap: break-word;
   word-break: normal;
 }
@@ -91,10 +91,38 @@
   background: #c6efce;
   font-weight: 700;
   text-align: center;
-  font-size: 6.8pt;
-  line-height: 1.1;
+  font-size: 6.5pt;
+  line-height: 1.05;
   vertical-align: middle;
-  padding: 3px 2px;
+  padding: 2px 1px;
+}
+
+.inventory-stock-table--dispatch {
+  font-size: 6.8pt;
+  line-height: 1.08;
+}
+
+.inventory-stock-table--dispatch tbody td {
+  padding: 1px 2px;
+}
+
+.inventory-stock-table--dispatch tbody td.col-company,
+.inventory-stock-table--dispatch tbody td.col-item,
+.inventory-stock-table--dispatch tbody td.col-place,
+.inventory-stock-table--dispatch tbody td.col-note,
+.inventory-stock-table--dispatch tbody td.col-driver,
+.inventory-stock-table--dispatch tbody td.col-post {
+  vertical-align: top;
+  text-align: left;
+}
+
+.inventory-stock-table--dispatch td > div {
+  margin: 0;
+  line-height: 1.08;
+}
+
+.inventory-stock-table--dispatch td > div + div {
+  margin-top: 1px;
 }
 
 .inventory-stock-table tbody tr:nth-child(even) td:not(.col-location) {
@@ -117,6 +145,8 @@
 .inventory-stock-table tfoot td {
   font-weight: 700;
   background: #e2efda;
+  padding: 2px 2px;
+  line-height: 1.08;
 }
 
 .inventory-stock-table .recipient-cell {
@@ -165,36 +195,27 @@
   background: #ffff00 !important;
 }
 
-.inventory-stock-table .col-date { width: 4.5%; }
-.inventory-stock-table .col-province { width: 4.8%; }
-.inventory-stock-table .col-company { width: 6.2%; }
-.inventory-stock-table .col-service { width: 3%; }
-.inventory-stock-table .col-item { width: 8.5%; }
-.inventory-stock-table .col-place { width: 7.5%; }
-.inventory-stock-table .col-qty { width: 5.2%; }
-.inventory-stock-table .col-recipient { width: 14%; }
-.inventory-stock-table .col-delivery-status { width: 6%; }
-.inventory-stock-table .col-completion-date { width: 5%; }
-.inventory-stock-table .col-plan { width: 4.5%; }
-.inventory-stock-table .col-surcharge { width: 6.2%; }
-.inventory-stock-table .col-fee { width: 4.8%; }
-.inventory-stock-table .col-driver { width: 5%; }
-.inventory-stock-table .col-post { width: 4.8%; }
-.inventory-stock-table .col-bill { width: 5.5%; }
-.inventory-stock-table .col-note { width: 5.4%; }
+.inventory-stock-table .col-date { width: 4.2%; }
+.inventory-stock-table .col-province { width: 5%; }
+.inventory-stock-table .col-company { width: 9.5%; }
+.inventory-stock-table .col-service { width: 2.8%; }
+.inventory-stock-table .col-item { width: 10%; }
+.inventory-stock-table .col-place { width: 9%; }
+.inventory-stock-table .col-qty { width: 5%; }
+.inventory-stock-table .col-delivery-status { width: 6.5%; }
+.inventory-stock-table .col-completion-date { width: 5.2%; }
+.inventory-stock-table .col-plan { width: 4.8%; }
+.inventory-stock-table .col-surcharge { width: 6.5%; }
+.inventory-stock-table .col-fee { width: 5.5%; }
+.inventory-stock-table .col-driver { width: 5.2%; }
+.inventory-stock-table .col-post { width: 5%; }
+.inventory-stock-table .col-bill { width: 6%; }
+.inventory-stock-table .col-note { width: 7%; }
 
 .inventory-stock-table .item-note,
 .inventory-stock-table .qty-highlight {
   color: #c00000;
   font-weight: 700;
-}
-
-.inventory-stock-table .dispatch-empty-row td:not(.col-location) {
-  min-height: 18px;
-}
-
-.inventory-stock-table .dispatch-empty-row .col-location {
-  background: #ffff00 !important;
 }
 
 .dispatch-payments-print {

@@ -1,7 +1,118 @@
+import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, Printer, X } from 'lucide-react';
+import DispatchPrintColumnDropdown from '../../../print/DispatchPrintColumnDropdown';
+import type { DispatchPrintColumnId } from '../../../print/dispatchPrintColumns';
+import { loadVisibleDispatchColumnIds, saveVisibleDispatchColumnIds } from '../../../print/dispatchPrintColumns';
+import LoadPlanningPrintTemplate from '../../../print/LoadPlanningPrintTemplate';
+import { buildManifestPrintPayload } from '../../../print/manifestPrintUtils';
+import '../../../print/inventory-stock-list.css';
 import type { LoadPlanningManifest } from '../types';
-interface Props { isOpen: boolean; isClosing: boolean; isLoading: boolean; manifest: LoadPlanningManifest | null; onClose: () => void; }
-const display = (v?: string | number | null) => v == null || v === '' ? '—' : String(v);
-const code = (m?: LoadPlanningManifest | null) => m?.manifest_code || m?.code || (m ? `MF-${m.id}` : '—');
-export default function PrintManifestDialog({ isOpen, isClosing, isLoading, manifest, onClose }: Props) { if (!isOpen) return null; return <div className="fixed inset-0 z-[9999] flex justify-end"><div className="fixed inset-0 bg-black/40 backdrop-blur-md transition-all duration-350 ease-out" onClick={onClose} /><div className={`relative w-full max-w-[860px] bg-[#f8fafc] shadow-2xl flex flex-col h-screen border-l border-border ${isClosing ? 'dialog-slide-out' : 'dialog-slide-in'}`}><div className="flex items-center justify-between border-b border-border px-5 py-4"><div><p className="text-[11px] font-bold uppercase tracking-wider text-primary">Dữ liệu in bảng kê</p><h2 className="text-lg font-extrabold text-foreground">{code(manifest)}</h2></div><button onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground hover:bg-muted"><X size={18}/></button></div><div className="flex-1 overflow-auto p-5 custom-scrollbar">{isLoading ? <div className="flex min-h-[320px] items-center justify-center gap-2 text-[13px] font-bold text-muted-foreground"><Loader2 className="animate-spin" size={18}/>Đang tải dữ liệu in...</div> : <div className="space-y-4"><div className="rounded-2xl border border-border p-4"><div className="flex items-center gap-2 text-primary"><Printer size={18}/><span className="font-extrabold">{code(manifest)}</span></div><div className="mt-3 grid gap-2 text-[13px] md:grid-cols-3"><p>Hub đi: <b>{display(manifest?.origin_hub?.code || manifest?.origin_hub_id)}</b></p><p>Hub đến: <b>{display(manifest?.dest_hub?.code || manifest?.dest_hub_id)}</b></p><p>Seal: <b>{display(manifest?.seal_code)}</b></p></div></div><div className="rounded-2xl border border-border overflow-hidden"><table className="w-full min-w-[760px] text-left text-[13px]"><thead className="bg-slate-100 text-[11px] uppercase text-slate-600"><tr>{['Mã vận đơn','Người gửi','Người nhận','Trọng lượng','Thanh toán'].map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody>{(manifest?.waybills || []).map(w=><tr key={w.id} className="border-t border-border"><td className="px-4 py-3 font-bold text-primary">{display(w.waybill_code)}</td><td className="px-4 py-3">{display(w.sender_info)}</td><td className="px-4 py-3">{display(w.receiver_info)}</td><td className="px-4 py-3">{display(w.weight)} kg</td><td className="px-4 py-3">{display(w.payment_type)}</td></tr>)}</tbody></table></div></div>}</div></div></div>; }
 
+interface Props {
+  isOpen: boolean;
+  isClosing: boolean;
+  isLoading: boolean;
+  manifest: LoadPlanningManifest | null;
+  showPricing: boolean;
+  onClose: () => void;
+}
+
+const code = (manifest?: LoadPlanningManifest | null) => manifest?.manifest_code || manifest?.code || (manifest ? `BK-${manifest.id}` : '—');
+
+const PRINT_STYLE = `@media print {
+  body > *:not(.manifest-print-dialog-root) { display: none !important; }
+  .manifest-print-dialog-root {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    background: #fff !important;
+    padding: 0 !important;
+    backdrop-filter: none !important;
+  }
+  .manifest-print-dialog-panel {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+  .manifest-print-dialog-toolbar { display: none !important; }
+  .manifest-print-dialog-body {
+    display: block !important;
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
+  }
+}`;
+
+export default function PrintManifestDialog({ isOpen, isClosing, isLoading, manifest, showPricing, onClose }: Props) {
+  const [printColumnIds, setPrintColumnIds] = useState<DispatchPrintColumnId[]>(() => loadVisibleDispatchColumnIds(showPricing));
+
+  const printData = useMemo(() => {
+    if (!manifest) return null;
+    const payload = buildManifestPrintPayload(manifest, showPricing);
+    return { ...payload, visibleColumnIds: printColumnIds };
+  }, [manifest, printColumnIds, showPricing]);
+
+  const hasRows = Boolean(printData?.groups?.some((group) => group.rows.length > 0));
+
+  if (!isOpen) return null;
+
+  const updatePrintColumnIds = (ids: DispatchPrintColumnId[]) => {
+    saveVisibleDispatchColumnIds(ids);
+    setPrintColumnIds(ids);
+  };
+
+  return createPortal(
+    <div className="manifest-print-dialog-root fixed inset-0 z-[9999] flex justify-end print:static print:block print:bg-white print:p-0">
+      <style>{PRINT_STYLE}</style>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-md print:hidden" onClick={onClose} />
+      <div
+        className={`manifest-print-dialog-panel relative flex h-screen w-full max-w-[min(1280px,98vw)] flex-col border-l border-border bg-[#e8eef5] shadow-2xl print:block print:h-auto print:max-h-none print:overflow-visible print:border-0 print:bg-white print:shadow-none ${isClosing ? 'dialog-slide-out' : 'dialog-slide-in'}`}
+      >
+        <div className="manifest-print-dialog-toolbar flex shrink-0 items-center justify-between border-b border-border bg-white px-5 py-4 print:hidden">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-primary">In bảng kê phát hàng</p>
+            <h2 className="text-lg font-extrabold text-foreground">{code(manifest)}</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <DispatchPrintColumnDropdown value={printColumnIds} canViewPricing={showPricing} onChange={updatePrintColumnIds} />
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={isLoading || !hasRows}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-bold text-white disabled:opacity-50"
+            >
+              <Printer size={16} />
+              In
+            </button>
+            <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground hover:bg-muted">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="manifest-print-dialog-body min-h-0 flex-1 overflow-auto p-4 custom-scrollbar print:block print:overflow-visible print:p-0">
+          {isLoading ? (
+            <div className="flex min-h-[320px] items-center justify-center gap-2 text-[13px] font-bold text-muted-foreground print:hidden">
+              <Loader2 className="animate-spin" size={18} />
+              Đang tải dữ liệu in...
+            </div>
+          ) : !hasRows || !printData ? (
+            <div className="flex min-h-[320px] items-center justify-center text-[13px] font-bold text-muted-foreground print:hidden">
+              Bảng kê chưa có dòng hàng để in.
+            </div>
+          ) : (
+            <LoadPlanningPrintTemplate data={printData} />
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}

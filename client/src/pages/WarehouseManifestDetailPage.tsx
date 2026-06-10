@@ -39,8 +39,15 @@ const blank = (value?: string | number | null) => (value == null || value === ''
 const manifestCode = (manifest?: LoadPlanningManifest | null) => manifest?.manifest_code || manifest?.code || (manifest ? `MF-${manifest.id}` : '—');
 const hubLabel = (hub?: { code?: string | null; name?: string | null } | null, id?: string | number | null) => hub?.code || hub?.name || (id ? `Hub #${id}` : '—');
 const manifestTrip = (manifest: LoadPlanningManifest) => manifest.trip ?? manifest.trips?.[0] ?? null;
-const tripLabel = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.trip_code || manifestTrip(manifest)?.code || (manifest.trip_id ? `Chuyến #${manifest.trip_id}` : 'Chưa gán chuyến');
-const truckLabel = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.truck?.bks || manifestTrip(manifest)?.truck?.license_plate || 'Chưa có xe';
+const resolveTruckPlate = (trip?: LoadPlanningManifest['trip']) => trip?.truck?.bks?.trim() || trip?.truck?.license_plate?.trim() || trip?.carrier_label?.trim() || null;
+const tripLabel = (manifest: LoadPlanningManifest) => {
+  const trip = manifestTrip(manifest);
+  if (trip?.trip_code || trip?.code) return trip.trip_code || trip.code || '—';
+  const tripId = manifest.trip_id ?? trip?.id;
+  if (tripId && !String(tripId).startsWith('split-')) return `Chuyến #${tripId}`;
+  return resolveTruckPlate(trip) || 'Chưa gán chuyến';
+};
+const truckLabel = (manifest: LoadPlanningManifest) => resolveTruckPlate(manifestTrip(manifest)) || 'Chưa có xe';
 const driverLabel = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.driver_name || manifestTrip(manifest)?.driver?.name || manifestTrip(manifest)?.driver?.full_name || manifestTrip(manifest)?.truck?.ten_lai_xe || manifestTrip(manifest)?.truck?.driver?.name || manifestTrip(manifest)?.truck?.driver?.full_name || 'Chưa gán tài xế';
 const driverPhoneLabel = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.driver_phone || manifestTrip(manifest)?.driver?.phone || manifestTrip(manifest)?.truck?.driver?.phone || manifestTrip(manifest)?.truck?.phone || 'Chưa có SĐT';
 const expectedArrival = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.expected_arrival_time || manifestTrip(manifest)?.arrival_time || null;
@@ -137,6 +144,14 @@ export default function WarehouseManifestDetailPage() {
 
   useEffect(() => { void loadManifest(); }, [id]);
 
+  function openDispatchSheet(forPrint = false) {
+    if (forPrint && manifest) {
+      window.open(`/print/manifest/${manifest.id}`, '_blank', 'noopener');
+      return;
+    }
+    setIsDialogOpen(true);
+  }
+
   const links = useMemo(() => normalizeLinks(manifest).sort((a, b) => Number(a.loading_position ?? 9999) - Number(b.loading_position ?? 9999)), [manifest]);
   const filteredLinks = useMemo(() => {
     const search = keyword.trim().toLowerCase();
@@ -197,11 +212,12 @@ export default function WarehouseManifestDetailPage() {
           <button onClick={() => navigate(-1)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground hover:bg-muted"><ArrowLeft size={15} />Quay lại</button>
           <div className="relative min-w-0 flex-1 md:max-w-[520px]"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Tìm mã bảng kê, seal, chuyến xe..." className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-[13px] font-medium outline-none focus:ring-2 focus:ring-primary/10" /></div>
           <button onClick={() => void loadManifest()} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground hover:bg-muted"><RefreshCcw size={15} />Tải lại</button>
+          {manifest && <button type="button" onClick={() => openDispatchSheet(true)} className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100"><Printer size={15} />In bảng kê</button>}
         </div>
         <div className="p-4">
           {isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải bảng kê..." /> : !manifest ? <StateBlock icon={<AlertTriangle size={22} />} title="Không tìm thấy bảng kê." /> : (
             <div className="grid min-h-[520px] gap-4 lg:grid-cols-2">
-              {kanbanColumns.map((column) => <KanbanColumn key={column.key} title={column.title} icon={column.icon} tone={column.tone} count={column.items.length}>{column.items.length ? column.items.map((item) => <ManifestKanbanCard key={item.id} manifest={item} waybillCount={links.length} isSaving={isSaving} onOpen={() => setIsDialogOpen(true)} onSaveExpectedArrival={saveExpectedArrival} />) : <EmptyColumn title="Chưa có bảng kê ở trạng thái này" />}</KanbanColumn>)}
+              {kanbanColumns.map((column) => <KanbanColumn key={column.key} title={column.title} icon={column.icon} tone={column.tone} count={column.items.length}>{column.items.length ? column.items.map((item) => <ManifestKanbanCard key={item.id} manifest={item} waybillCount={links.length} isSaving={isSaving} onOpen={() => openDispatchSheet(false)} onPrint={() => openDispatchSheet(true)} onSaveExpectedArrival={saveExpectedArrival} />) : <EmptyColumn title="Chưa có bảng kê ở trạng thái này" />}</KanbanColumn>)}
             </div>
           )}
         </div>
@@ -211,7 +227,7 @@ export default function WarehouseManifestDetailPage() {
   );
 }
 
-function ManifestKanbanCard({ manifest, waybillCount, isSaving, onOpen, onSaveExpectedArrival }: { manifest: LoadPlanningManifest; waybillCount: number; isSaving: boolean; onOpen: () => void; onSaveExpectedArrival: (manifest: LoadPlanningManifest, value: string) => Promise<void> }) {
+function ManifestKanbanCard({ manifest, waybillCount, isSaving, onOpen, onPrint, onSaveExpectedArrival }: { manifest: LoadPlanningManifest; waybillCount: number; isSaving: boolean; onOpen: () => void; onPrint: () => void; onSaveExpectedArrival: (manifest: LoadPlanningManifest, value: string) => Promise<void> }) {
   const [isEditingArrival, setIsEditingArrival] = useState(false);
   const [arrivalValue, setArrivalValue] = useState(() => toDateTimeLocalValue(expectedArrival(manifest)));
 
@@ -242,22 +258,26 @@ function ManifestKanbanCard({ manifest, waybillCount, isSaving, onOpen, onSaveEx
       <Line icon={<CalendarClock size={15} />} label="Ngày dự kiến đến" value={isEditingArrival ? <span className="flex flex-wrap justify-end gap-2"><DateTimePicker value={arrivalValue} onChange={setArrivalValue} disabled={isSaving} placeholder="Chọn ngày đến" className="h-8" /><button disabled={isSaving} onClick={() => void saveArrival()} className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2 text-[12px] font-black text-white disabled:opacity-50">{isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Lưu</button><button disabled={isSaving} onClick={() => { setArrivalValue(toDateTimeLocalValue(expectedArrival(manifest))); setIsEditingArrival(false); }} className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-white px-2 text-[12px] font-black text-muted-foreground disabled:opacity-50"><X size={13} />Hủy</button></span> : <span className="flex items-center justify-end gap-2"><span>{formatDateTime(expectedArrival(manifest))}</span><button onClick={() => { setArrivalValue(toDateTimeLocalValue(expectedArrival(manifest))); setIsEditingArrival(true); }} className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 text-[12px] font-black text-amber-700 hover:bg-amber-100"><Edit3 size={13} />Sửa</button></span>} />
     </div>
     <div className="mt-3 rounded-2xl bg-slate-900 px-3 py-2 text-[13px] font-black text-white">{tripLabel(manifest)}</div>
-    <button onClick={onOpen} className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-black text-white transition-colors duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/20"><Eye size={16} />Xem chi tiết bảng kê</button>
+    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <button type="button" onClick={onOpen} className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-black text-white transition-colors duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/20"><Eye size={16} />Xem chi tiết</button>
+      <button type="button" onClick={onPrint} className="inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-[13px] font-black text-emerald-700 transition-colors duration-200 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-200"><Printer size={16} />In bảng kê</button>
+    </div>
   </article>;
 }
 
 function DispatchSheetDialog(props: { manifest: LoadPlanningManifest; links: RowLink[]; rows: EditableRows; keyword: string; isSaving: boolean; onKeywordChange: (value: string) => void; onCellChange: (waybillId: string, key: EditableKey, value: string) => void; onSave: () => Promise<void>; onClose: () => void }) {
   const { manifest, links, rows, keyword, isSaving, onKeywordChange, onCellChange, onSave, onClose } = props;
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-    <div className="flex max-h-[92vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-3">
-        <button onClick={onClose} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground hover:bg-muted"><X size={15} />Đóng</button>
+  return <div className="manifest-dispatch-print-root fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 print:static print:block print:bg-white print:p-0">
+    <style>{`@media print { body > *:not(.manifest-dispatch-print-root) { display: none !important; } .manifest-dispatch-print-root { display: block !important; position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; } .manifest-dispatch-print-panel { display: block !important; max-height: none !important; max-width: none !important; overflow: visible !important; border-radius: 0 !important; box-shadow: none !important; } .manifest-dispatch-print-toolbar { display: none !important; } .manifest-dispatch-print-body { display: block !important; overflow: visible !important; max-height: none !important; } }`}</style>
+    <div className="manifest-dispatch-print-panel flex max-h-[92vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="manifest-dispatch-print-toolbar flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-3">
+        <button type="button" onClick={onClose} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground hover:bg-muted"><X size={15} />Đóng</button>
         <div className="relative min-w-0 flex-1 md:max-w-[520px]"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input value={keyword} onChange={(event) => onKeywordChange(event.target.value)} placeholder="Tìm mã vận đơn, người gửi, người nhận..." className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-[13px] font-medium outline-none focus:ring-2 focus:ring-primary/10" /></div>
-        <button onClick={() => window.print()} className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100"><Printer size={15} />In</button>
+        <button type="button" onClick={() => window.print()} className="inline-flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100"><Printer size={15} />In bảng kê</button>
         <button disabled={isSaving} onClick={() => void onSave()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-extrabold text-white hover:bg-primary/90 disabled:opacity-50">{isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Lưu thay đổi</button>
       </div>
       <div className="shrink-0 border-b border-border px-4 py-3 text-center"><h2 className="text-[16px] font-black uppercase tracking-wide text-foreground">BẢNG KÊ PHÁT HÀNG ECO</h2><p className="mt-1 text-[12px] font-bold text-muted-foreground">{manifestCode(manifest)} · {links.length} dòng hàng</p></div>
-      <div className="min-h-0 flex-1 overflow-auto custom-scrollbar">
+      <div className="manifest-dispatch-print-body min-h-0 flex-1 overflow-auto custom-scrollbar">
         {!links.length ? <StateBlock icon={<PackageCheck size={22} />} title="Bảng kê chưa có dòng hàng phù hợp." /> : <table className="w-full min-w-[2100px] border-collapse text-center text-[12px] text-slate-950">
           <thead><tr><th colSpan={editableColumns.length + 1} className="border border-slate-700 bg-white py-1 text-[14px] font-black">BẢNG KÊ PHÁT HÀNG ECO</th></tr><tr className="bg-green-50 text-[11px] font-black"><th className="w-14 border border-slate-700 bg-yellow-300 px-1 py-2">Vị trí hàng</th>{editableColumns.map((column) => <th key={column.key} className={`border border-slate-700 px-1 py-2 ${column.className}`}>{column.label}</th>)}</tr></thead>
           <tbody>{links.map((link, index) => { const waybillId = rowKey(link); return <tr key={waybillId || index} className="align-middle odd:bg-white even:bg-slate-50"><td className="border border-slate-700 bg-yellow-300 px-1 py-2 font-black text-blue-900">{link.loading_position ?? index + 1}</td>{editableColumns.map((column) => <td key={column.key} className={`border border-slate-700 p-0 ${column.key === 'trang_thai_giao' ? 'bg-green-200' : column.key === 'du_kien_toi_hcm' ? 'bg-green-100' : ''}`}><textarea value={getCellValue(rows, link, column.key)} onChange={(event) => onCellChange(waybillId, column.key, event.target.value)} className="min-h-[50px] w-full resize-y border-0 bg-transparent px-1.5 py-2 text-center text-[12px] font-semibold outline-none focus:bg-white focus:ring-2 focus:ring-primary/30" /></td>)}</tr>; })}</tbody>

@@ -242,7 +242,7 @@ export default function WarehouseCustomerList({
             <table className="w-full min-w-[1360px] border-collapse text-left text-[13px]">
               <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-extrabold uppercase tracking-wide text-slate-600">
                 <tr>
-                  {['Mã KH', 'Tên KH', 'Tên tắt', 'Tỉnh đến', 'Địa chỉ nhận', 'ĐC kho HCM', 'ĐT nhận', 'CK %', 'Giao nhận', 'TT', 'Số đơn', 'Thao tác'].map((h) => (
+                  {['Mã KH', 'Tên KH', 'Người nhận', 'Tên tắt', 'Tỉnh đến', 'Địa chỉ nhận', 'ĐC kho HCM', 'ĐT nhận', 'CK %', 'Giao nhận', 'TT', 'Số đơn', 'Thao tác'].map((h) => (
                     <th key={h} className="border-b border-border px-3 py-3">
                       {h}
                     </th>
@@ -254,6 +254,9 @@ export default function WarehouseCustomerList({
                   <tr key={customer.id} className={clsx('hover:bg-blue-50/40', customer.is_suspended && 'opacity-60')}>
                     <td className="px-3 py-3 font-extrabold text-primary">{customer.code}</td>
                     <td className="px-3 py-3 font-medium">{customer.name}</td>
+                    <td className="max-w-[140px] truncate px-3 py-3" title={customer.receiver_hcm || customer.receiver_dng || ''}>
+                      {customer.receiver_hcm || customer.receiver_dng || '—'}
+                    </td>
                     <td className="max-w-[140px] truncate px-3 py-3" title={customer.short_name || ''}>
                       {customer.short_name || '—'}
                     </td>

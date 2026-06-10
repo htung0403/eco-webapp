@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Edit, Eye, FilePlus2, Filter, Loader2, PackageCheck, Phone, Plus, Printer, Route, Save, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Edit, Eye, FilePlus2, Filter, Loader2, PackageCheck, Phone, Plus, Printer, Save, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
@@ -15,6 +15,7 @@ import type { AuthUserProfile } from './login/types';
 import AssignManifestTripDialog from './warehouse/manifests/dialogs/AssignManifestTripDialog';
 import ManifestDetailDialog from './warehouse/manifests/dialogs/ManifestDetailDialog';
 import type { AddWaybillsFormState, AssignTripFormState, BadgeConfig, FilterOption, HubSummary, LoadPlanningFilters, LoadPlanningManifest, ManifestFormState, ManifestListResponse, ManifestWaybill, TripListResponse, TripSummary } from './warehouse/manifests/types';
+import { canAddWaybillsToManifest } from './warehouse/manifests/types';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
 const DISPATCHER = 8;
@@ -35,6 +36,10 @@ const tripStatusConfig: Record<string, BadgeConfig> = {
   READY: { label: 'Sẵn sàng', className: 'bg-emerald-50 text-emerald-700' },
   IN_TRANSIT: { label: 'Đang chạy', className: 'bg-amber-50 text-amber-700' },
   COMPLETED: { label: 'Hoàn tất', className: 'bg-slate-100 text-slate-600' },
+  WAITING_LOAD: { label: 'Chờ bốc', className: 'bg-slate-100 text-slate-600' },
+  LOADED: { label: 'Đã bốc', className: 'bg-blue-50 text-blue-700' },
+  DEPARTED: { label: 'Đã khởi hành', className: 'bg-amber-50 text-amber-700' },
+  DELIVERED: { label: 'Đã giao', className: 'bg-emerald-50 text-emerald-700' },
 };
 const statusOptions: FilterOption[] = [
   { value: 'DRAFT', label: 'Nháp' }, { value: 'OPEN', label: 'Đang gom' }, { value: 'CLOSED', label: 'Đã đóng' }, { value: 'ASSIGNED', label: 'Đã gán chuyến' }, { value: 'IN_TRANSIT', label: 'Đang vận chuyển' },
@@ -49,6 +54,7 @@ const getStoredUser = (): AuthUserProfile | null => {
 const hasRole = (mask: number, role: number) => (mask & role) !== 0;
 const canViewPage = (mask: number) => hasRole(mask, MANAGER) || hasRole(mask, DIRECTOR);
 const canAssignTrip = (mask: number) => hasRole(mask, DISPATCHER) || hasRole(mask, MANAGER) || hasRole(mask, DIRECTOR);
+const canViewPricing = (mask: number) => hasRole(mask, MANAGER) || hasRole(mask, DIRECTOR);
 const normalizeList = (response: ManifestListResponse | LoadPlanningManifest[]) => Array.isArray(response) ? response : response.data || response.items || response.manifests || [];
 const normalizeTripList = (response: TripListResponse | TripSummary[]) => Array.isArray(response) ? response : response.data || response.items || response.trips || [];
 const normalizeTotal = (response: ManifestListResponse | LoadPlanningManifest[], fallback: number) => Array.isArray(response) ? fallback : response.total ?? response.meta?.total ?? fallback;
@@ -56,10 +62,17 @@ const formatNumber = (value?: string | number | null, suffix = '') => value == n
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
 const manifestCode = (manifest: LoadPlanningManifest) => manifest.manifest_code || manifest.code || `MF-${manifest.id}`;
 const hubLabel = (hub?: HubSummary | null, id?: string | number | null) => hub?.code || hub?.name || (id ? `Hub #${id}` : '—');
-const tripLabel = (trip?: TripSummary | null, id?: string | number | null) => trip?.trip_code || trip?.code || (id ? `Chuyến #${id}` : 'Chưa gán');
 const manifestTrip = (manifest: LoadPlanningManifest) => manifest.trip ?? manifest.trips?.[0] ?? null;
+const resolveTruckPlate = (trip?: TripSummary | null) => trip?.truck?.bks?.trim() || trip?.truck?.license_plate?.trim() || trip?.carrier_label?.trim() || null;
+const tripLabel = (trip?: TripSummary | null, manifestTripId?: string | number | null) => {
+  if (trip?.trip_code || trip?.code) return trip.trip_code || trip.code || '—';
+  const tripId = manifestTripId ?? trip?.id;
+  if (tripId && !String(tripId).startsWith('split-')) return `Chuyến #${tripId}`;
+  return resolveTruckPlate(trip) || 'Chưa gán chuyến';
+};
+const manifestTransportHeadline = (manifest: LoadPlanningManifest) => tripLabel(manifestTrip(manifest), manifest.trip_id);
 const expectedArrival = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.expected_arrival_time || manifestTrip(manifest)?.arrival_time || null;
-const truckLabel = (manifest: LoadPlanningManifest) => { const trip = manifestTrip(manifest); return trip?.truck?.bks || trip?.truck?.license_plate || 'Chưa gán'; };
+const truckLabel = (manifest: LoadPlanningManifest) => resolveTruckPlate(manifestTrip(manifest)) || 'Chưa có xe';
 const driverLabel = (manifest: LoadPlanningManifest) => { const trip = manifestTrip(manifest); return trip?.driver_name || trip?.driver?.name || trip?.driver?.full_name || trip?.truck?.ten_lai_xe || trip?.truck?.driver?.name || trip?.truck?.driver?.full_name || 'Chưa gán'; };
 const driverPhoneLabel = (manifest: LoadPlanningManifest) => { const trip = manifestTrip(manifest); return trip?.driver_phone || trip?.driver?.phone || trip?.truck?.driver?.phone || trip?.truck?.phone || 'Chưa có SĐT'; };
 const getWaybillCount = (manifest: LoadPlanningManifest) => Number(manifest.waybill_count ?? manifest.total_waybills ?? manifest.waybills?.length ?? 0);
@@ -221,18 +234,23 @@ export default function WarehouseManifestsPage() {
     finally { setIsSubmitting(false); }
   }
   function closeAddWaybills() { setIsAddWaybillsClosing(true); window.setTimeout(() => { setIsAddWaybillsOpen(false); setAddWaybillsManifest(null); setIsAddWaybillsClosing(false); }, 180); }
-  function openAddWaybills(manifest: LoadPlanningManifest) { if (!canManageManifest || manifest.status !== 'DRAFT') return; setAddWaybillsManifest(manifest); setAddWaybillsForm({ keyword: '', selectedIds: [], page: 1, limit: 20 }); setIsAddWaybillsOpen(true); }
+  function openAddWaybills(manifest: LoadPlanningManifest) { if (!canManageManifest || !canAddWaybillsToManifest(manifest)) return; setAddWaybillsManifest(manifest); setAddWaybillsForm({ keyword: '', selectedIds: [], page: 1, limit: 20 }); setIsAddWaybillsOpen(true); }
   async function fetchWaybillChoices() {
     if (!addWaybillsManifest) return;
     setIsWaybillLoading(true);
-    try { const params = new URLSearchParams({ status: 'IN_WAREHOUSE', current_hub_id: String(addWaybillsManifest.origin_hub_id || ''), dest_hub_id: String(addWaybillsManifest.dest_hub_id || ''), keyword: addWaybillsForm.keyword, page: String(addWaybillsForm.page), limit: String(addWaybillsForm.limit) }); const response = await apiRequest<any>(`/waybills?${params.toString()}`); const list = Array.isArray(response) ? response : response.data || response.items || response.waybills || []; setWaybillChoices(list); setWaybillTotal(Array.isArray(response) ? list.length : response.total ?? response.meta?.total ?? list.length); }
+    try { const params = new URLSearchParams({ status: 'IN_WAREHOUSE', current_hub_id: String(addWaybillsManifest.origin_hub_id || ''), dest_hub_id: String(addWaybillsManifest.dest_hub_id || ''), keyword: addWaybillsForm.keyword, page: String(addWaybillsForm.page), limit: String(addWaybillsForm.limit) }); const response = await apiRequest<any>(`/waybills?${params.toString()}`); const raw = Array.isArray(response) ? response : response.data || response.items || response.waybills || []; const existingIds = new Set((addWaybillsManifest.waybills ?? addWaybillsManifest.manifest_waybills?.map((link) => link.waybill).filter(Boolean) ?? []).map((waybill) => String(waybill?.id))); const list = raw.filter((waybill: ManifestWaybill) => !existingIds.has(String(waybill.id))); setWaybillChoices(list); setWaybillTotal(Array.isArray(response) ? list.length : response.total ?? response.meta?.total ?? list.length); }
     catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể tải vận đơn khả dụng.'); setWaybillChoices([]); setWaybillTotal(0); }
     finally { setIsWaybillLoading(false); }
   }
   async function submitAddWaybills() {
     if (!addWaybillsManifest || !addWaybillsForm.selectedIds.length) return;
     setIsSubmitting(true); setActionError('');
-    try { await apiRequest(`/manifests/${addWaybillsManifest.id}/waybills`, { method: 'POST', body: { waybill_ids: addWaybillsForm.selectedIds } }); closeAddWaybills(); await fetchManifests(); }
+    try {
+      const updated = await apiRequest<LoadPlanningManifest>(`/manifests/${addWaybillsManifest.id}/waybills`, { method: 'POST', body: { waybill_ids: addWaybillsForm.selectedIds } });
+      closeAddWaybills();
+      await fetchManifests();
+      if (detailManifest && String(detailManifest.id) === String(updated.id)) setDetailManifest(updated);
+    }
     catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể thêm vận đơn vào bảng kê.'); }
     finally { setIsSubmitting(false); }
   }
@@ -240,7 +258,18 @@ export default function WarehouseManifestsPage() {
   function confirmCloseManifest(manifest: LoadPlanningManifest) { if (!canManageManifest) return; setConfirmDialog({ title: 'Đóng bảng kê', message: `Đóng bảng kê ${manifestCode(manifest)} và chuyển vận đơn sang MANIFEST_CLOSED?`, confirmLabel: 'Đóng bảng kê', onConfirm: async () => { try { await apiRequest(`/manifests/${manifest.id}/close`, { method: 'PATCH', body: { seal_code: manifest.seal_code || 'SEAL-' + manifest.id } }); await fetchManifests(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể đóng bảng kê.'); } } }); }
   function confirmDeleteManifest(manifest: LoadPlanningManifest) { if (!canManageManifest) return; setConfirmDialog({ title: 'Xóa bảng kê', message: `Xóa bảng kê nháp ${manifestCode(manifest)}?`, confirmLabel: 'Xóa', danger: true, onConfirm: async () => { try { await apiRequest(`/manifests/${manifest.id}`, { method: 'DELETE' }); await fetchManifests(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể xóa bảng kê.'); } } }); }
   function closePrint() { setIsPrintClosing(true); window.setTimeout(() => { setIsPrintOpen(false); setPrintManifest(null); setIsPrintClosing(false); }, 180); }
-  async function openPrint(manifest: LoadPlanningManifest) { setIsPrintOpen(true); setIsPrintLoading(true); setPrintManifest(manifest); try { setPrintManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}/print`)); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể tải dữ liệu in.'); } finally { setIsPrintLoading(false); } }
+  async function openPrint(manifest: LoadPlanningManifest) {
+    setIsPrintOpen(true);
+    setIsPrintLoading(true);
+    setPrintManifest(manifest);
+    try {
+      setPrintManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}`));
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Không thể tải dữ liệu in.');
+    } finally {
+      setIsPrintLoading(false);
+    }
+  }
 
   const departedManifests = manifests.filter(manifest => !isExpectedArrivalManifest(manifest));
   const expectedArrivalManifests = manifests.filter(isExpectedArrivalManifest);
@@ -279,7 +308,7 @@ export default function WarehouseManifestsPage() {
       <ManifestDetailDialog isOpen={isDetailOpen} isClosing={isDetailClosing} isLoading={isDetailLoading} isSubmitting={isSubmitting} manifest={detailManifest} statusConfig={statusConfig} canManage={canManageManifest} onClose={closeDetail} onRemoveWaybill={confirmRemoveWaybill} onUpdateDispatchFields={updateDetailDispatchFields} onUpdateExpectedArrival={updateExpectedArrival} />
       <AddEditManifestDialog isOpen={isFormOpen} isClosing={isFormClosing} isEditMode={isEditMode} isSubmitting={isSubmitting} formState={formState} hubs={hubs} onChange={(key, value) => setFormState(prev => ({ ...prev, [key]: value }))} onClose={closeForm} onSubmit={submitForm} />
       <AddWaybillsToManifestDialog isOpen={isAddWaybillsOpen} isClosing={isAddWaybillsClosing} isLoading={isWaybillLoading} isSubmitting={isSubmitting} manifest={addWaybillsManifest} waybills={waybillChoices} total={waybillTotal} formState={addWaybillsForm} onChange={patch => setAddWaybillsForm(prev => ({ ...prev, ...patch }))} onClose={closeAddWaybills} onSubmit={submitAddWaybills} />
-      <PrintManifestDialog isOpen={isPrintOpen} isClosing={isPrintClosing} isLoading={isPrintLoading} manifest={printManifest} onClose={closePrint} />
+      <PrintManifestDialog isOpen={isPrintOpen} isClosing={isPrintClosing} isLoading={isPrintLoading} manifest={printManifest} showPricing={canViewPricing(roleMask)} onClose={closePrint} />
       <ConfirmDialog dialog={confirmDialog} isSubmitting={isSubmitting} onClose={() => setConfirmDialog(null)} />
       <AssignManifestTripDialog isOpen={isAssignOpen} isClosing={isAssignClosing} isSubmitting={isSubmitting} manifest={assignManifest} trips={trips} formState={assignForm} onChange={trip_id => setAssignForm({ trip_id })} onClose={closeAssign} onSubmit={submitAssign} />
     </div>
@@ -292,51 +321,67 @@ function KanbanColumn({ title, count, tone, children }: { title: string; count: 
 function EmptyKanban({ title }: { title: string }) { return <div className="flex min-h-[260px] items-center justify-center rounded-2xl border border-dashed border-border bg-white text-center text-[13px] font-bold text-muted-foreground">{title}</div>; }
 function ManifestCard(props: ManifestItemProps) {
   const { manifest } = props;
-  return <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-200 hover:border-primary/30 hover:bg-blue-50/20">
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Bảng kê</p><h3 className="truncate text-base font-extrabold text-primary">{manifestCode(manifest)}</h3></div>
+  const trip = manifestTrip(manifest);
+  return <article className="group rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-colors duration-200 hover:border-primary/30 hover:bg-blue-50/20">
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <h3 className="truncate text-[14px] font-extrabold text-primary">{manifestCode(manifest)}</h3>
+        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-blue-800">
+          <span>{hubLabel(manifest.origin_hub, manifest.origin_hub_id)}</span>
+          <ArrowRight size={12} className="shrink-0 text-blue-500" />
+          <span>{hubLabel(manifest.dest_hub, manifest.dest_hub_id)}</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-foreground">{formatNumber(getWaybillCount(manifest))} đơn</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-foreground">{formatNumber(getTotalWeight(manifest), ' kg')}</span>
+        </p>
+      </div>
       <Badge config={statusConfig[String(manifest.status || '')]} fallback={manifest.status} />
     </div>
-    <div className="mt-3 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/70 px-3 py-2 text-[13px] font-black text-blue-800">
-      <span className="rounded-full bg-white px-2.5 py-1">{hubLabel(manifest.origin_hub, manifest.origin_hub_id)}</span>
-      <ArrowRight size={15} className="shrink-0 text-blue-500" />
-      <span className="rounded-full bg-white px-2.5 py-1">{hubLabel(manifest.dest_hub, manifest.dest_hub_id)}</span>
+    <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 p-2 text-[11px]">
+      <CompactCell label="BSX" value={truckLabel(manifest)} />
+      <CompactCell label="Tài xế" value={driverLabel(manifest)} />
+      <CompactCell label="SĐT" value={driverPhoneLabel(manifest)} />
+      <CompactCell label="Đóng lúc" value={formatDate(manifest.closed_at || manifest.created_at)} />
+      <ExpectedArrivalCompact manifest={manifest} canManage={props.canManage} isSubmitting={props.isSubmitting} onUpdateExpectedArrival={props.onUpdateExpectedArrival} className="col-span-2" />
+      <CompactCell label="Người đóng" value={closedBy(manifest)} />
+      <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-1.5">
+        {trip?.status && <Badge config={tripStatusConfig[String(trip.status)]} fallback={trip.status} />}
+        {manifestTransportHeadline(manifest) !== truckLabel(manifest) && <span className="truncate font-black text-slate-900">{manifestTransportHeadline(manifest)}</span>}
+      </div>
     </div>
-    <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] font-semibold text-foreground">
-      <Metric label="Vận đơn" value={formatNumber(getWaybillCount(manifest))} />
-      <Metric label="Trọng lượng" value={formatNumber(getTotalWeight(manifest), ' kg')} />
-    </div>
-    <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[13px] font-semibold text-foreground">
-      <InfoLine icon={<Truck size={15} />} label="Biển số xe" value={truckLabel(manifest)} />
-      <InfoLine icon={<Phone size={15} />} label="SĐT" value={driverPhoneLabel(manifest)} />
-      <InfoLine icon={<UserRound size={15} />} label="Tài xế" value={driverLabel(manifest)} />
-      <InfoLine icon={<CalendarDays size={15} />} label="Thời gian đóng" value={formatDate(manifest.closed_at || manifest.created_at)} />
-      <ExpectedArrivalLine manifest={manifest} canManage={props.canManage} isSubmitting={props.isSubmitting} onUpdateExpectedArrival={props.onUpdateExpectedArrival} />
-      <InfoLine icon={<PackageCheck size={15} />} label="Người đóng" value={closedBy(manifest)} />
-    </div>
-    <div className="mt-3 rounded-2xl bg-slate-900 px-3 py-2"><p className="text-[13px] font-black text-white">{tripLabel(manifestTrip(manifest), manifest.trip_id)}</p>{manifestTrip(manifest)?.status && <div className="mt-1"><Badge config={tripStatusConfig[String(manifestTrip(manifest)?.status)]} fallback={manifestTrip(manifest)?.status} /></div>}</div>
-    <div className="mt-4"><Actions {...props} /></div>
+    <div className="mt-2"><Actions {...props} /></div>
   </article>;
 }
 interface ManifestItemProps { manifest: LoadPlanningManifest; mayAssign: boolean; canManage: boolean; isSubmitting: boolean; onDetail: (manifest: LoadPlanningManifest) => void; onAssign: (manifest: LoadPlanningManifest) => void; onEdit: (manifest: LoadPlanningManifest) => void; onAddWaybills: (manifest: LoadPlanningManifest) => void; onCloseManifest: (manifest: LoadPlanningManifest) => void; onPrint: (manifest: LoadPlanningManifest) => void; onDelete: (manifest: LoadPlanningManifest) => void; onUpdateExpectedArrival: (manifest: LoadPlanningManifest, value: string) => Promise<void>; }
-function ExpectedArrivalLine({ manifest, canManage, isSubmitting, onUpdateExpectedArrival }: Pick<ManifestItemProps, 'manifest' | 'canManage' | 'isSubmitting' | 'onUpdateExpectedArrival'>) {
+function CompactCell({ label, value, className = '' }: { label: string; value: ReactNode; className?: string }) {
+  return <div className={`min-w-0 ${className}`}><p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p><p className="truncate font-black text-slate-950">{value}</p></div>;
+}
+function ExpectedArrivalCompact({ manifest, canManage, isSubmitting, onUpdateExpectedArrival, className = '' }: Pick<ManifestItemProps, 'manifest' | 'canManage' | 'isSubmitting' | 'onUpdateExpectedArrival'> & { className?: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(() => toDateTimeLocalValue(expectedArrival(manifest)));
-  const canEditArrival = canManage;
   const startEdit = () => { setValue(toDateTimeLocalValue(expectedArrival(manifest))); setIsEditing(true); };
   const save = async () => { await onUpdateExpectedArrival(manifest, value); setIsEditing(false); };
-  return <div className="flex items-start justify-between gap-3 border-b border-slate-200 py-2 last:border-b-0"><span className="flex items-center gap-2 text-muted-foreground"><CalendarDays size={15} />Ngày dự kiến đến</span><span className="text-right font-bold text-foreground">{isEditing ? <span className="flex flex-wrap justify-end gap-2"><DateTimePicker value={value} onChange={setValue} disabled={isSubmitting} placeholder="Chọn ngày đến" className="h-8" /><button disabled={isSubmitting} onClick={() => void save()} className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2 text-[12px] font-black text-white disabled:opacity-50">{isSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Lưu</button><button disabled={isSubmitting} onClick={() => setIsEditing(false)} className="h-8 rounded-lg border border-border bg-white px-2 text-[12px] font-black text-muted-foreground disabled:opacity-50">Hủy</button></span> : <span className="flex items-center justify-end gap-2"><span>{formatDate(expectedArrival(manifest))}</span>{canEditArrival && <button onClick={startEdit} className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 text-[12px] font-black text-amber-700 hover:bg-amber-100"><Edit size={13} />Sửa</button>}</span>}</span></div>;
+  if (isEditing) {
+    return <div className="col-span-3 space-y-1.5 rounded-lg border border-amber-200 bg-amber-50/60 p-2">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800">Dự kiến đến</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <DateTimePicker value={value} onChange={setValue} disabled={isSubmitting} placeholder="Chọn ngày" className="h-8 min-w-[150px] flex-1" />
+        <button disabled={isSubmitting} onClick={() => void save()} className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2 text-[11px] font-black text-white disabled:opacity-50">{isSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}Lưu</button>
+        <button disabled={isSubmitting} onClick={() => setIsEditing(false)} className="inline-flex h-8 items-center rounded-lg border border-border bg-white px-2 text-[11px] font-black text-muted-foreground">Hủy</button>
+      </div>
+    </div>;
+  }
+  return <CompactCell className={className} label="Dự kiến đến" value={<span className="inline-flex min-w-0 items-center gap-1">{formatDate(expectedArrival(manifest))}{canManage && <button type="button" onClick={startEdit} className="shrink-0 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-black text-amber-700 hover:bg-amber-100">Sửa</button>}</span>} />;
 }
-function Actions({ manifest, mayAssign, canManage, onDetail, onAssign, onEdit, onAddWaybills, onCloseManifest, onPrint, onDelete }: ManifestItemProps) {
+function Actions({ manifest, canManage, onDetail, onEdit, onAddWaybills, onPrint, onDelete }: ManifestItemProps) {
   const isDraft = manifest.status === 'DRAFT';
-  const isClosed = manifest.status === 'CLOSED';
+  const mayAddWaybills = canAddWaybillsToManifest(manifest);
   return (
     <div className="inline-flex flex-nowrap gap-2">
       <IconAction label="Xem" onClick={() => onDetail(manifest)} icon={<Eye size={15} />} />
       <IconAction label="Sửa" disabled={!canManage || !isDraft} onClick={() => onEdit(manifest)} icon={<Edit size={15} />} />
-      <IconAction label="Thêm đơn" disabled={!canManage || !isDraft} onClick={() => onAddWaybills(manifest)} icon={<FilePlus2 size={15} />} />
-      <IconAction label="Đóng bảng kê" disabled={!canManage || !isDraft} onClick={() => onCloseManifest(manifest)} icon={<PackageCheck size={15} />} />
-      <IconAction label="Gán chuyến" disabled={!mayAssign || !isClosed} onClick={() => onAssign(manifest)} icon={<Route size={15} />} />
+      <IconAction label="Thêm đơn" disabled={!canManage || !mayAddWaybills} onClick={() => onAddWaybills(manifest)} icon={<FilePlus2 size={15} />} />
       <IconAction label="In bảng kê" onClick={() => onPrint(manifest)} icon={<Printer size={15} />} />
       <IconAction label="Xóa" danger disabled={!canManage || !isDraft} onClick={() => onDelete(manifest)} icon={<Trash2 size={15} />} />
     </div>
@@ -345,8 +390,6 @@ function Actions({ manifest, mayAssign, canManage, onDetail, onAssign, onEdit, o
 function IconAction({ label, icon, disabled, danger, onClick }: { label: string; icon: ReactNode; disabled?: boolean; danger?: boolean; onClick: () => void }) {
   return <button type="button" title={label} aria-label={label} disabled={disabled} onClick={onClick} className={clsx('inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45', danger && 'text-red-500 hover:bg-red-50')}>{icon}</button>;
 }function Badge({ config, fallback }: { config?: BadgeConfig; fallback?: string | null }) { return <span className={`inline-flex h-7 items-center rounded-full px-3 text-[12px] font-bold ${config?.className || 'bg-slate-100 text-slate-600'}`}>{config?.label || fallback || '—'}</span>; }
-function Metric({ label, value }: { label: string; value: ReactNode }) { return <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2"><p className="text-[11px] font-black uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 text-[15px] font-black text-slate-950">{value}</p></div>; }
-function InfoLine({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) { return <div className="flex items-center justify-between gap-3 border-b border-slate-200 py-2 last:border-b-0"><span className="flex items-center gap-2 text-muted-foreground">{icon}{label}</span><span className="text-right font-black text-slate-950">{value}</span></div>; }
 function StateBlock({ icon, title }: { icon: ReactNode; title: string }) { return <div className="flex-1 min-h-[360px] flex items-center justify-center"><div className="flex flex-col items-center gap-3 text-center text-muted-foreground"><div className="text-primary">{icon}</div><p className="text-[13px] font-bold">{title}</p></div></div>; }
 function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground"><CalendarDays size={15} /><span>{label}</span><input type="date" value={value} onChange={event => onChange(event.target.value)} className="bg-transparent text-foreground outline-none" /></label>; }
 

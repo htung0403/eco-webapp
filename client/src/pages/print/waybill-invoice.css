@@ -1,7 +1,7 @@
 /* Phiếu vận chuyển ECO — A5 ngang, Times New Roman */
-@page a5-waybill {
+@page {
   size: A5 landscape;
-  margin: 3mm;
+  margin: 2mm;
 }
 
 @page standard-bill {
@@ -20,7 +20,6 @@
   --fs-3xl: 13pt;
   --fs-title: 14.5pt;
   --fs-money: 15pt;
-  page: a5-waybill;
 }
 
 .waybill-invoice-wrap {
@@ -34,7 +33,6 @@
 
 .waybill-invoice {
   width: 204mm;
-  min-height: 142mm;
   max-width: 100%;
   margin: 0 auto;
   background: #fff;
@@ -55,7 +53,6 @@
   display: grid;
   grid-template-columns: 48mm 1fr 54mm;
   border-bottom: 2px solid #222;
-  min-height: 30mm;
 }
 
 .eco-header-left {
@@ -155,7 +152,6 @@
 }
 
 .eco-box {
-  min-height: 27mm;
   padding: 2mm 3mm;
   border-right: 2px solid #222;
 }
@@ -193,7 +189,6 @@
 
 .eco-product-box {
   padding: 2mm 3mm;
-  min-height: 17mm;
   border-right: 2px solid #222;
   font-size: var(--fs-base);
 }
@@ -250,7 +245,6 @@
 .eco-pay-box {
   position: relative;
   padding: 2mm 3mm;
-  min-height: 20mm;
   border-right: 2px solid #222;
   font-size: var(--fs-base);
   line-height: 1.3;
@@ -301,7 +295,6 @@
 .eco-footer {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  min-height: 28mm;
 }
 
 .eco-footer-box {
@@ -309,7 +302,6 @@
   border-right: 2px solid #222;
   font-size: var(--fs-base);
   line-height: 1.25;
-  min-height: 28mm;
 }
 
 .eco-footer-box:last-child {
@@ -377,13 +369,17 @@
   --fs-money: 18pt;
   width: 190mm;
   max-width: 190mm;
-  min-height: 270mm;
   page: standard-bill;
 }
 
 /* ================= PRINT — giữ y nguyên giao diện xem ================= */
 
 @media print {
+  @page {
+    size: A5 landscape;
+    margin: 2mm;
+  }
+
   html,
   body {
     margin: 0 !important;
@@ -394,11 +390,8 @@
     overflow: visible !important;
   }
 
-  body * {
-    visibility: visible;
-  }
-
-  .print-toolbar {
+  .print-toolbar,
+  .waybill-invoice-wrap > *:not(.waybill-invoice) {
     display: none !important;
   }
 
@@ -410,12 +403,22 @@
     display: block !important;
   }
 
-  /* Không override kích thước/border — in đúng như màn hình xem */
   .waybill-invoice {
+    width: 204mm !important;
+    max-width: 204mm !important;
+    min-height: 0 !important;
+    height: auto !important;
     box-shadow: none !important;
     margin: 0 auto !important;
     break-inside: avoid;
     page-break-inside: avoid;
+    page-break-after: avoid;
+  }
+
+  .waybill-invoice-wrap--standard .waybill-invoice {
+    width: 190mm !important;
+    max-width: 190mm !important;
+    page: standard-bill;
   }
 
   .waybill-invoice,
@@ -429,8 +432,24 @@
   .eco-payment,
   .eco-footer {
     display: grid !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    min-height: 0 !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .eco-header {
+    min-height: 0 !important;
+  }
+
+  .eco-box,
+  .eco-product-box,
+  .eco-pay-box,
+  .eco-footer-box {
+    min-height: 0 !important;
+  }
+
+  .eco-footer {
+    min-height: 0 !important;
   }
 
   .eco-footer-service-row {
@@ -439,6 +458,11 @@
 
   .eco-line {
     display: grid !important;
+    margin-bottom: 0.5mm !important;
+  }
+
+  .eco-sign {
+    margin-top: 6mm !important;
   }
 
   .eco-total {

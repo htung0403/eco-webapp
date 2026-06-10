@@ -54,6 +54,7 @@ const HrAttendancePage = lazy(() => import('./pages/hr/HrAttendancePage'));
 const PrintWaybillPage = lazy(() => import('./pages/print/PrintWaybillPage'));
 const PrintInventoryStockPage = lazy(() => import('./pages/print/PrintInventoryStockPage'));
 const PrintLoadPlanningPage = lazy(() => import('./pages/print/PrintLoadPlanningPage'));
+const PrintManifestPage = lazy(() => import('./pages/print/PrintManifestPage'));
 const BusinessCrudPage = lazy(() => import('./pages/business/BusinessCrudPage'));
 
 const businessRouteConfigs = {
@@ -156,6 +157,14 @@ function App() {
           element={(
             <Suspense fallback={null}>
               <PrintLoadPlanningPage />
+            </Suspense>
+          )}
+        />
+        <Route
+          path="/print/manifest/:id"
+          element={(
+            <Suspense fallback={null}>
+              <PrintManifestPage />
             </Suspense>
           )}
         />

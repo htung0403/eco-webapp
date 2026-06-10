@@ -20,8 +20,10 @@ export type CustomerFormState = {
   name: string;
   short_name: string;
   destination_province: string;
+  receiver_hcm: string;
   address_hcm: string;
   phone_hcm: string;
+  receiver_dng: string;
   email: string;
   contact_person: string;
   manager_name: string;
@@ -45,8 +47,10 @@ export const emptyCustomerForm = (): CustomerFormState => ({
   name: '',
   short_name: '',
   destination_province: '',
+  receiver_hcm: '',
   address_hcm: '',
   phone_hcm: '',
+  receiver_dng: '',
   email: '',
   contact_person: '',
   manager_name: '',

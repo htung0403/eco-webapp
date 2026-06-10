@@ -132,16 +132,41 @@ export class ManifestsService {
   async addWaybills(id: string, dto: AddWaybillsToManifestDto, currentUser: UserEntity): Promise<ManifestRecord> {
     this.assertRole(currentUser, [Roles.DISPATCHER, Roles.PACKER, Roles.MANAGER, Roles.DIRECTOR]);
     const manifest = await this.findOne(id, currentUser);
-    this.assertDraft(manifest);
-    const uniqueIds = [...new Set(dto.waybill_ids)];
-    const waybills = await this.waybillsRepository.find({ where: { id: In(uniqueIds), deleted_at: IsNull() } as any }) as WaybillRecord[];
-    if (waybills.length !== uniqueIds.length) throw new NotFoundException('One or more waybills not found');
+    this.assertCanAddWaybills(manifest);
+    const uniqueIds = [...new Set(dto.waybill_ids.map(String))];
+    const existingLinks = await this.manifestWaybillsRepository.find({ where: { manifest_id: id } });
+    const existingIds = new Set(existingLinks.map((link) => String(link.waybill_id)));
+    const newIds = uniqueIds.filter((waybillId) => !existingIds.has(waybillId));
+    if (!newIds.length) throw new BadRequestException('All selected waybills are already in this manifest');
+
+    const waybills = await this.waybillsRepository.find({ where: { id: In(newIds), deleted_at: IsNull() } as any }) as WaybillRecord[];
+    if (waybills.length !== newIds.length) throw new NotFoundException('One or more waybills not found');
 
     for (const waybill of waybills) this.assertWaybillCanBeAdded(manifest, waybill);
 
-    const links = uniqueIds.map((waybillId) => this.manifestWaybillsRepository.create({ manifest_id: id, waybill_id: waybillId }));
+    const isClosed = manifest.status === ManifestStatus.CLOSED;
+    const now = new Date();
+    const nextPosition = existingLinks.reduce((max, link) => Math.max(max, Number(link.loading_position ?? 0)), 0);
+    const links = newIds.map((waybillId, index) => this.manifestWaybillsRepository.create({
+      manifest_id: id,
+      waybill_id: waybillId,
+      loading_position: isClosed ? nextPosition + index + 1 : null,
+      loaded_at: isClosed ? now : null,
+    }));
     if (links.length) await this.manifestWaybillsRepository.save(links as any);
-    waybills.forEach((waybill) => { waybill.manifest_id = id; });
+
+    waybills.forEach((waybill) => {
+      waybill.manifest_id = id;
+      if (isClosed) {
+        waybill.current_state = WaybillState.MANIFEST_CLOSED;
+        waybill.status = WaybillState.MANIFEST_CLOSED;
+        waybill.loaded_at = waybill.loaded_at ?? now;
+        waybill.updated_by = currentUser.id;
+        waybill.last_audit_action = 'MANIFEST_ADD_WAYBILL';
+        waybill.last_audit_user_id = currentUser.id;
+        waybill.last_audit_at = now;
+      }
+    });
     await this.waybillsRepository.save(waybills as any);
     await this.refreshTotals(manifest, waybills, currentUser.id);
     return this.findOne(id, currentUser);
@@ -314,7 +339,13 @@ export class ManifestsService {
       const manifest = manifestByWaybill.get(String(split.waybill_id));
       if (!manifest || manifest.trip) continue;
       const trip = split.trip as TripRecord | null;
-      const truck = split.truck ?? trip?.truck ?? null;
+      const rawTruck = split.truck ?? trip?.truck ?? null;
+      const plate = rawTruck?.bks ?? rawTruck?.license_plate ?? split.carrier_label ?? null;
+      const truck = rawTruck
+        ? { ...rawTruck, bks: rawTruck.bks ?? rawTruck.license_plate ?? plate, license_plate: rawTruck.license_plate ?? rawTruck.bks ?? plate }
+        : plate
+          ? { bks: plate, license_plate: plate }
+          : null;
       manifest.trip = {
         id: trip?.id ?? split.trip_id ?? `split-${split.id}`,
         trip_code: trip?.trip_code ?? trip?.code ?? null,
@@ -323,9 +354,9 @@ export class ManifestsService {
         arrival_time: trip?.arrival_time ?? split.expected_arrival_at ?? null,
         expected_arrival_time: trip?.expected_arrival_time ?? split.expected_arrival_at ?? null,
         truck,
-        driver_name: trip?.driver_name ?? truck?.ten_lai_xe ?? truck?.driver?.full_name ?? truck?.driver?.username ?? null,
-        driver_phone: trip?.driver_phone ?? truck?.driver?.phone ?? null,
-        carrier_label: split.carrier_label ?? truck?.nha_xe ?? truck?.vendor?.name ?? null,
+        driver_name: trip?.driver_name ?? rawTruck?.ten_lai_xe ?? rawTruck?.driver?.full_name ?? rawTruck?.driver?.username ?? null,
+        driver_phone: trip?.driver_phone ?? rawTruck?.driver?.phone ?? null,
+        carrier_label: split.carrier_label ?? plate ?? rawTruck?.nha_xe ?? rawTruck?.vendor?.name ?? null,
       };
     }
   }
@@ -392,6 +423,13 @@ export class ManifestsService {
 
   private assertDraft(manifest: ManifestRecord) {
     if (manifest.status !== ManifestStatus.DRAFT) throw new ConflictException('Manifest is already closed or locked');
+  }
+
+  private assertCanAddWaybills(manifest: ManifestRecord) {
+    const allowed = [ManifestStatus.DRAFT, ManifestStatus.CLOSED];
+    if (!allowed.includes(manifest.status as ManifestStatus)) {
+      throw new ConflictException('Cannot add waybills after manifest is assigned to a trip');
+    }
   }
 
   private assertWaybillCanBeAdded(manifest: ManifestRecord, waybill: WaybillRecord) {

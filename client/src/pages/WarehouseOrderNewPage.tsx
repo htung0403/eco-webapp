@@ -6,7 +6,7 @@ import { getLoginDisplayName, getStoredAuthUser } from '../lib/authUser';
 import CreateWaybillSuccessDialog from './warehouse/orders/dialogs/CreateWaybillSuccessDialog';
 import NewOrderWorkbench from './warehouse/orders/components/NewOrderWorkbench';
 import { emptyOrderForm } from './warehouse/orders/orderFormData';
-import { customerToOrderPatch } from './warehouse/customers/customerOrderPatch';
+import { applyReceiverByDestination, customerToOrderPatch } from './warehouse/customers/customerOrderPatch';
 import type { CustomerRecord } from './warehouse/customers/customerFormTypes';
 import {
   applyPricingToForm,
@@ -82,6 +82,7 @@ export default function WarehouseOrderNewPage() {
   const [createdWaybill, setCreatedWaybill] = useState<CreatedWaybill | null>(null);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isSuccessClosing, setIsSuccessClosing] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
 
   const canCreate = hasCreateRole(user?.role_mask ?? 0);
   const loginName = getLoginDisplayName(user as Parameters<typeof getLoginDisplayName>[0]);
@@ -181,6 +182,7 @@ export default function WarehouseOrderNewPage() {
         if (match) {
           const full = await apiRequest<Partial<CustomerListItem>>(`/customers/${match.id}`);
           const record = { ...match, ...full } as CustomerRecord;
+          setSelectedCustomer(record);
           setForm((prev) => applyPricingToForm({ ...prev, ...customerToOrderPatch(record, hubs) }));
           return;
         }
@@ -230,13 +232,22 @@ export default function WarehouseOrderNewPage() {
   };
 
   const handleCustomerSelect = (patch: Partial<NewOrderFormState>, customer: CustomerRecord) => {
-    void customer;
-    patchForm(patch);
+    setSelectedCustomer(customer);
+    setForm((prev) => {
+      const noiDen = patch.noiDen || prev.noiDen || 'HCM';
+      const huyen = patch.huyen || prev.huyen;
+      const receiverPatch = applyReceiverByDestination(customer, noiDen, huyen);
+      return applyPricingToForm({ ...prev, ...patch, ...receiverPatch, noiDen });
+    });
+    setActionError('');
   };
 
   const handleDestinationChange = (destHubId: string, noiDen: string, huyen: string) => {
     setForm((prev) => {
-      return applyPricingToForm({ ...prev, destHubId, noiDen, huyen });
+      const receiverPatch = selectedCustomer
+        ? applyReceiverByDestination(selectedCustomer, noiDen, huyen || prev.huyen)
+        : {};
+      return applyPricingToForm({ ...prev, destHubId, noiDen, huyen, ...receiverPatch });
     });
     setActionError('');
   };
@@ -258,6 +269,7 @@ export default function WarehouseOrderNewPage() {
 
   const handleSelectBill = async (bill: BillListItem) => {
     setSelectedBillId(bill.id);
+    setSelectedCustomer(null);
     setActionError('');
     try {
       const detail = await apiRequest<WaybillDetail>(`/waybills/${bill.id}`);
@@ -273,6 +285,7 @@ export default function WarehouseOrderNewPage() {
     const nextCode = await loadNextWaybillCode(defaultOrigin);
     const defaultOriginCode = getHubCode(hubs, defaultOrigin);
     setSelectedBillId(null);
+    setSelectedCustomer(null);
     setForm(
       applyPricingToForm({
         ...emptyOrderForm(),
@@ -366,6 +379,13 @@ export default function WarehouseOrderNewPage() {
     }, 250);
   };
 
+  const handleCreateAnother = () => {
+    setIsSuccessOpen(false);
+    setIsSuccessClosing(false);
+    setCreatedWaybill(null);
+    void handleNew();
+  };
+
   const createdId = createdWaybill?.id || createdWaybill?.waybill_code;
 
   if (!canCreate) {
@@ -439,7 +459,7 @@ export default function WarehouseOrderNewPage() {
         statusConfig={statusConfig}
         paymentConfig={paymentConfig}
         onClose={closeSuccess}
-        onCreateAnother={() => void handleNew()}
+        onCreateAnother={handleCreateAnother}
         onPrint={() => createdId && navigate(`/print/waybill/${createdId}`)}
       />
     </div>

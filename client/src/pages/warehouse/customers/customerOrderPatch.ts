@@ -78,7 +78,7 @@ export function customerReceiverAddress(customer: CustomerRecord) {
 }
 
 function customerReceiverName(customer: CustomerRecord) {
-  return str(customer.contact_person) || str(customer.name);
+  return str(customer.receiver_hcm) || str(customer.receiver_dng) || str(customer.contact_person);
 }
 
 function customerReceiverPhone(customer: CustomerRecord) {
@@ -129,27 +129,31 @@ export function applyReceiverByDestination(
   noiDen: string,
   huyen = '',
 ): Partial<NewOrderFormState> {
-  const patch: Partial<NewOrderFormState> = {
-    nguoiNhan: customerReceiverName(customer),
-    diaChiNhan: customerReceiverAddress(customer),
-    dienThoaiNhan: customerReceiverPhone(customer),
-  };
+  const fallbackName = customerReceiverName(customer);
+  const fallbackAddress = customerReceiverAddress(customer);
+  const fallbackPhone = customerReceiverPhone(customer);
 
   if (isHcmProvince(noiDen, huyen)) {
-    patch.diaChiNhan = str(customer.address_hcm) || patch.diaChiNhan;
-    patch.dienThoaiNhan = str(customer.phone_hcm) || patch.dienThoaiNhan;
-    if (str(customer.receiver_hcm)) patch.nguoiNhan = str(customer.receiver_hcm);
-    return patch;
+    return {
+      nguoiNhan: str(customer.receiver_hcm) || fallbackName,
+      diaChiNhan: str(customer.address_hcm) || fallbackAddress,
+      dienThoaiNhan: str(customer.phone_hcm) || fallbackPhone,
+    };
   }
 
   if (isDngProvince(noiDen, huyen)) {
-    patch.diaChiNhan = str(customer.address_dng) || patch.diaChiNhan;
-    patch.dienThoaiNhan = str(customer.phone_dng) || patch.dienThoaiNhan;
-    if (str(customer.receiver_dng)) patch.nguoiNhan = str(customer.receiver_dng);
-    return patch;
+    return {
+      nguoiNhan: str(customer.receiver_dng) || fallbackName,
+      diaChiNhan: str(customer.address_dng) || fallbackAddress,
+      dienThoaiNhan: str(customer.phone_dng) || fallbackPhone,
+    };
   }
 
-  return patch;
+  return {
+    nguoiNhan: fallbackName,
+    diaChiNhan: fallbackAddress,
+    dienThoaiNhan: fallbackPhone,
+  };
 }
 
 /** Điền form nhập đơn từ bản ghi bảng customers */
@@ -192,6 +196,9 @@ export function customerToOrderPatch(customer: CustomerRecord, hubs: HubSummary[
     patch.noiDen = noiDen;
     if (destHubId) patch.destHubId = destHubId;
   }
+
+  const receiverPatch = applyReceiverByDestination(customer, noiDen || 'HCM', huyen);
+  Object.assign(patch, receiverPatch);
 
   return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined && v !== '')) as Partial<NewOrderFormState>;
 }

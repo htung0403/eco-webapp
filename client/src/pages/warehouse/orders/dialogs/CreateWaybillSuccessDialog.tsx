@@ -56,8 +56,8 @@ export default function CreateWaybillSuccessDialog({ isOpen, isClosing, waybill,
             </div>
           </div>
 
-          <button onClick={onPrint} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-[13px] font-bold text-foreground hover:bg-muted"><Printer size={16} />In phiếu</button>
-          <button onClick={onCreateAnother} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100"><RotateCcw size={16} />Tạo đơn khác</button>
+          <button type="button" onClick={onPrint} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-[13px] font-bold text-foreground hover:bg-muted"><Printer size={16} />In phiếu</button>
+          <button type="button" onClick={onCreateAnother} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-[13px] font-bold text-emerald-700 hover:bg-emerald-100"><RotateCcw size={16} />Tạo đơn khác</button>
         </div>
       </div>
     </div>

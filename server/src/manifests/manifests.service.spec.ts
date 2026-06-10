@@ -133,11 +133,28 @@ describe('ManifestsService', () => {
   it('addWaybills thành công', async () => {
     const manifest = draftManifest();
     manifestsRepo.findOne.mockImplementation(async (options: any) => options?.where?.manifest_code ? null : manifest);
+    linksRepo.find.mockResolvedValue([]);
     waybillsRepo.find.mockResolvedValue([waybill()]);
     linksRepo.create.mockImplementation((value) => value);
     await service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher);
-    expect(linksRepo.save).toHaveBeenCalledWith([{ manifest_id: '10', waybill_id: '100' }]);
+    expect(linksRepo.save).toHaveBeenCalledWith([{ manifest_id: '10', waybill_id: '100', loading_position: null, loaded_at: null }]);
     expect(waybillsRepo.save).toHaveBeenCalledWith([expect.objectContaining({ manifest_id: '10' })]);
+  });
+
+  it('addWaybills vào manifest CLOSED sau xếp hàng thành công', async () => {
+    const manifest = draftManifest({ status: ManifestStatus.CLOSED });
+    manifestsRepo.findOne.mockImplementation(async (options: any) => options?.where?.manifest_code ? null : manifest);
+    linksRepo.find.mockResolvedValue([{ manifest_id: '10', waybill_id: '99', loading_position: 2 }]);
+    waybillsRepo.find.mockResolvedValue([waybill({ id: '100' })]);
+    linksRepo.create.mockImplementation((value) => value);
+    await service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher);
+    expect(linksRepo.save).toHaveBeenCalledWith([expect.objectContaining({ manifest_id: '10', waybill_id: '100', loading_position: 3, loaded_at: expect.any(Date) })]);
+    expect(waybillsRepo.save).toHaveBeenCalledWith([expect.objectContaining({ manifest_id: '10', status: WaybillState.MANIFEST_CLOSED, current_state: WaybillState.MANIFEST_CLOSED })]);
+  });
+
+  it('addWaybills sau khi gán chuyến phải bị chặn', async () => {
+    manifestsRepo.findOne.mockResolvedValue(draftManifest({ status: ManifestStatus.ASSIGNED_TO_TRIP }));
+    await expect(service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher)).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('add waybill không ở IN_WAREHOUSE phải bị chặn', async () => {

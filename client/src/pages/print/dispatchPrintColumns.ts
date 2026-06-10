@@ -9,7 +9,6 @@ export type DispatchPrintColumnId =
   | 'matHang'
   | 'noiTra'
   | 'soLuong'
-  | 'nguoiNhan'
   | 'tinhTrangGiaoHang'
   | 'ngayHoanThanh'
   | 'keHoach'
@@ -41,7 +40,6 @@ export const DISPATCH_PRINT_COLUMN_DEFS: DispatchPrintColumnDef[] = [
   { id: 'matHang', label: 'Mặt Hàng', header: 'Mặt Hàng', cssClass: 'col-item', defaultVisible: true },
   { id: 'noiTra', label: 'Nơi Trả', header: 'Nơi Trả', cssClass: 'col-place', defaultVisible: true },
   { id: 'soLuong', label: 'Số Lượng', header: 'Số Lượng', cssClass: 'col-qty', align: 'center', defaultVisible: true, totalKey: 'soLuong' },
-  { id: 'nguoiNhan', label: 'Người nhận / SĐT', header: '', cssClass: 'col-recipient', defaultVisible: true },
   { id: 'tinhTrangGiaoHang', label: 'Tình trạng giao hàng', header: 'TÌNH TRẠNG\nGIAO HÀNG', cssClass: 'col-delivery-status', align: 'center', defaultVisible: true },
   { id: 'ngayHoanThanh', label: 'Ngày hoàn thành', header: 'Ngày\nhoàn thành', cssClass: 'col-completion-date', align: 'center', defaultVisible: true },
   { id: 'keHoach', label: 'Kế hoạch', header: 'Kế hoạch', cssClass: 'col-plan', defaultVisible: true },
@@ -53,7 +51,7 @@ export const DISPATCH_PRINT_COLUMN_DEFS: DispatchPrintColumnDef[] = [
   { id: 'ghiChu', label: 'Ghi chú', header: 'Ghi chú', cssClass: 'col-note', defaultVisible: true },
 ];
 
-export const DISPATCH_PRINT_COLUMN_STORAGE_KEY = 'eco_dispatch_print_visible_columns_v2';
+export const DISPATCH_PRINT_COLUMN_STORAGE_KEY = 'eco_dispatch_print_visible_columns_v3';
 
 const defMap = new Map(DISPATCH_PRINT_COLUMN_DEFS.map((def) => [def.id, def]));
 
