@@ -226,10 +226,6 @@ export default function WarehouseOrderNewPage() {
     setActionError('');
   };
 
-  const patchForm = (patch: Partial<NewOrderFormState>) => {
-    setForm((prev) => applyPricingToForm({ ...prev, ...patch }));
-    setActionError('');
-  };
 
   const handleCustomerSelect = (patch: Partial<NewOrderFormState>, customer: CustomerRecord) => {
     setSelectedCustomer(customer);
