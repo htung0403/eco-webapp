@@ -1,10 +1,12 @@
-import { Loader2, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, Loader2, Plus, Search, X } from "lucide-react";
 import type { AddWaybillsFormState, LoadPlanningManifest, ManifestWaybill } from "../types";
 interface Props {
   isOpen: boolean;
   isClosing: boolean;
   isLoading: boolean;
   isSubmitting: boolean;
+  error?: string;
+  originHubLabel?: string;
   manifest: LoadPlanningManifest | null;
   waybills: ManifestWaybill[];
   total: number;
@@ -17,11 +19,31 @@ const display = (v?: string | number | null, f = "—") =>
   v == null || v === "" ? f : String(v);
 const num = (v?: string | number | null, s = "") =>
   v == null || v === "" ? "—" : `${Number(v).toLocaleString("vi-VN")}${s}`;
+const hubLabel = (hub?: { code?: string | null; name?: string | null } | null, id?: string | number | null) =>
+  hub?.code || hub?.name || (id ? `Hub #${id}` : "—");
+const packageLabel = (waybill: ManifestWaybill) => {
+  if (waybill.remaining_packages != null) {
+    const total = waybill.order_total_packages ?? waybill.package_count;
+    return total != null
+      ? `${waybill.remaining_packages} / ${total}`
+      : String(waybill.remaining_packages);
+  }
+  return display(waybill.package_count);
+};
+const statusLabel = (waybill: ManifestWaybill) => {
+  const status = String(waybill.current_state || waybill.status || "").toUpperCase();
+  if (status === "IN_WAREHOUSE") return "Trong kho";
+  if (status === "RECEIVED") return "Đã tạo đơn";
+  if (status === "MANIFEST_CLOSED") return "Chờ bốc";
+  return status || "—";
+};
 export default function AddWaybillsToManifestDialog({
   isOpen,
   isClosing,
   isLoading,
   isSubmitting,
+  error = "",
+  originHubLabel = "—",
   manifest,
   waybills,
   total,
@@ -49,10 +71,10 @@ export default function AddWaybillsToManifestDialog({
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
-              Thêm vận đơn
+              Thêm đơn tồn
             </p>
             <h2 className="text-lg font-extrabold text-foreground">
-              Chọn vận đơn IN_WAREHOUSE
+              Chọn đơn để thêm vào bảng kê
             </h2>
           </div>
           <button
@@ -64,10 +86,8 @@ export default function AddWaybillsToManifestDialog({
         </div>
         <div className="border-b border-border p-3">
           <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-semibold leading-5 text-blue-700">
-            Chỉ hiển thị vận đơn đã tiếp nhận kho: trạng thái IN_WAREHOUSE,
-            hub hiện tại {display(manifest?.origin_hub?.code || manifest?.origin_hub?.name || manifest?.origin_hub_id)},
-            hub đến {display(manifest?.dest_hub?.code || manifest?.dest_hub?.name || manifest?.dest_hub_id)},
-            và chưa bị khóa bởi chuyến/bảng kê khác.
+            Danh sách <b>Đơn tồn</b> đang ở kho <b>{originHubLabel}</b> (mọi hub đến, còn kiện chưa xếp hết).
+            Tích chọn đơn rồi bấm <b>Thêm vào bảng kê</b>.
           </div>
           <div className="relative">
             <Search
@@ -86,7 +106,7 @@ export default function AddWaybillsToManifestDialog({
           {isLoading ? (
             <div className="flex min-h-[320px] items-center justify-center gap-2 text-[13px] font-bold text-muted-foreground">
               <Loader2 className="animate-spin" size={18} />
-              Đang tải vận đơn...
+              Đang tải đơn tồn...
             </div>
           ) : (
             <>
@@ -98,12 +118,13 @@ export default function AddWaybillsToManifestDialog({
                       "Mã vận đơn",
                       "Người gửi",
                       "Người nhận",
+                      "Kiện còn",
+                      "Trạng thái",
                       "TL",
-                      "Kích thước",
-                      "TL quy đổi",
                       "Thanh toán",
                       "Hub đi",
                       "Hub đến",
+                      "Ghi chú tồn",
                     ].map((h) => (
                       <th
                         key={h}
@@ -133,25 +154,26 @@ export default function AddWaybillsToManifestDialog({
                       <td className="border-r border-border px-4 py-3 text-[13px]">
                         {display(w.receiver_info)}
                       </td>
+                      <td className="border-r border-border px-4 py-3 text-[13px] font-extrabold text-violet-700">
+                        {packageLabel(w)}
+                      </td>
+                      <td className="border-r border-border px-4 py-3 text-[13px]">
+                        {statusLabel(w)}
+                      </td>
                       <td className="border-r border-border px-4 py-3 text-[13px] font-bold">
                         {num(w.weight, " kg")}
-                      </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {[w.length, w.width, w.height]
-                          .map((v) => display(v, "0"))
-                          .join(" × ")}
-                      </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {num(w.volumetric_weight, " kg")}
                       </td>
                       <td className="border-r border-border px-4 py-3 text-[13px]">
                         {display(w.payment_type)}
                       </td>
                       <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {display(w.origin_hub_id)}
+                        {hubLabel(w.origin_hub, w.origin_hub_id)}
                       </td>
-                      <td className="px-4 py-3 text-[13px]">
-                        {display(w.dest_hub_id)}
+                      <td className="border-r border-border px-4 py-3 text-[13px]">
+                        {hubLabel(w.dest_hub, w.dest_hub_id)}
+                      </td>
+                      <td className="px-4 py-3 text-[13px] text-muted-foreground">
+                        {display(w.trip_label)}
                       </td>
                     </tr>
                   ))}
@@ -180,10 +202,13 @@ export default function AddWaybillsToManifestDialog({
                             {display(w.receiver_info)}
                           </span>
                           <span>
-                            {num(w.weight, " kg")} · {display(w.payment_type)} ·
-                            Hub {display(w.origin_hub_id)} →{" "}
-                            {display(w.dest_hub_id)}
+                            {statusLabel(w)} · Kiện còn {packageLabel(w)} · {num(w.weight, " kg")} ·{" "}
+                            {display(w.payment_type)} · {hubLabel(w.origin_hub, w.origin_hub_id)} →{" "}
+                            {hubLabel(w.dest_hub, w.dest_hub_id)}
                           </span>
+                          {w.trip_label && (
+                            <span className="text-[12px]">{w.trip_label}</span>
+                          )}
                         </div>
                       </div>
                     </label>
@@ -194,13 +219,10 @@ export default function AddWaybillsToManifestDialog({
                 <div className="flex min-h-[260px] items-center justify-center px-6 text-center">
                   <div className="max-w-md">
                     <p className="text-[13px] font-extrabold text-muted-foreground">
-                      Không có vận đơn IN_WAREHOUSE phù hợp.
+                      Không có đơn tồn phù hợp.
                     </p>
                     <p className="mt-2 text-[12px] font-medium leading-5 text-muted-foreground">
-                      Vận đơn mới tạo đang ở trạng thái RECEIVED/Đã tạo đơn. Hãy
-                      vào trang Tiếp nhận đơn tại kho để scan + upload ảnh cho
-                      đúng tuyến {display(manifest?.origin_hub?.code || manifest?.origin_hub_id)} → {display(manifest?.dest_hub?.code || manifest?.dest_hub_id)},
-                      sau đó vận đơn mới xuất hiện để thêm vào bảng kê.
+                      Kiểm tra trang <b>Đơn tồn</b> — đơn đang ở kho <b>{originHubLabel}</b>, còn kiện chưa xếp hết lên xe.
                     </p>
                   </div>
                 </div>
@@ -209,9 +231,17 @@ export default function AddWaybillsToManifestDialog({
           )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/10 p-4">
-          <p className="text-[12px] font-bold text-muted-foreground">
-            Đã chọn {formState.selectedIds.length} · Tổng:{total}
-          </p>
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-[12px] font-bold text-muted-foreground">
+              Đã chọn {formState.selectedIds.length} · Tổng:{total}
+            </p>
+            {error ? (
+              <p className="flex items-start gap-1.5 text-[12px] font-semibold text-red-600">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                {error}
+              </p>
+            ) : null}
+          </div>
           <div className="flex gap-2">
             <button
               onClick={onClose}
@@ -229,7 +259,7 @@ export default function AddWaybillsToManifestDialog({
               ) : (
                 <Plus size={16} />
               )}
-              Thêm
+              Thêm vào bảng kê
             </button>
           </div>
         </div>

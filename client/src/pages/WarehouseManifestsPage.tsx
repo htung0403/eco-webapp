@@ -62,6 +62,39 @@ const formatNumber = (value?: string | number | null, suffix = '') => value == n
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
 const manifestCode = (manifest: LoadPlanningManifest) => manifest.manifest_code || manifest.code || `MF-${manifest.id}`;
 const hubLabel = (hub?: HubSummary | null, id?: string | number | null) => hub?.code || hub?.name || (id ? `Hub #${id}` : '—');
+const normalizeHubCode = (hub?: HubSummary | null) => {
+  const code = hub?.code?.trim().toUpperCase();
+  if (code === 'HAN' || code === 'HCM') return code;
+  const name = hub?.name?.trim().toUpperCase() || '';
+  if (/HÀ NỘI|HA NOI|HAN/.test(name)) return 'HAN';
+  if (/HỒ CHÍ MINH|HO CHI MINH|TP\.?HCM|HCM/.test(name)) return 'HCM';
+  return code || '';
+};
+type ManifestOriginLane = 'HAN' | 'HCM';
+const manifestOriginLane = (manifest: LoadPlanningManifest): ManifestOriginLane | null => {
+  const origin = normalizeHubCode(manifest.origin_hub);
+  if (origin === 'HAN' || origin === 'HCM') return origin;
+  return null;
+};
+const resolveManifestOriginHubId = (manifest: LoadPlanningManifest, hubList: HubSummary[]) => {
+  const direct = String(manifest.origin_hub_id || manifest.origin_hub?.id || '').trim();
+  if (direct) return direct;
+  const lane = manifestOriginLane(manifest);
+  if (!lane) return '';
+  const matched = hubList.find((hub) => normalizeHubCode(hub) === lane);
+  return matched ? String(matched.id) : '';
+};
+const resolveManifestOriginHubLabel = (manifest: LoadPlanningManifest, hubList: HubSummary[]) => {
+  if (manifest.origin_hub?.code || manifest.origin_hub?.name) {
+    return hubLabel(manifest.origin_hub, manifest.origin_hub_id);
+  }
+  const lane = manifestOriginLane(manifest);
+  if (lane === 'HAN') return 'HAN';
+  if (lane === 'HCM') return 'HCM';
+  const hubId = resolveManifestOriginHubId(manifest, hubList);
+  const hub = hubList.find((item) => String(item.id) === hubId);
+  return hub ? hubLabel(hub, hubId) : hubId ? `Hub #${hubId}` : '—';
+};
 const manifestTrip = (manifest: LoadPlanningManifest) => manifest.trip ?? manifest.trips?.[0] ?? null;
 const resolveTruckPlate = (trip?: TripSummary | null) => trip?.truck?.bks?.trim() || trip?.truck?.license_plate?.trim() || trip?.carrier_label?.trim() || null;
 const tripLabel = (trip?: TripSummary | null, manifestTripId?: string | number | null) => {
@@ -122,6 +155,7 @@ export default function WarehouseManifestsPage() {
   const [isWaybillLoading, setIsWaybillLoading] = useState(false);
   const [addWaybillsManifest, setAddWaybillsManifest] = useState<LoadPlanningManifest | null>(null);
   const [addWaybillsForm, setAddWaybillsForm] = useState<AddWaybillsFormState>({ keyword: '', selectedIds: [], page: 1, limit: 20 });
+  const [addWaybillsError, setAddWaybillsError] = useState('');
   const [printManifest, setPrintManifest] = useState<LoadPlanningManifest | null>(null);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isPrintClosing, setIsPrintClosing] = useState(false);
@@ -218,7 +252,9 @@ export default function WarehouseManifestsPage() {
   }
 
 
-  useEffect(() => { if (isAddWaybillsOpen && addWaybillsManifest) void fetchWaybillChoices(); }, [isAddWaybillsOpen, addWaybillsManifest, addWaybillsForm.keyword, addWaybillsForm.page, addWaybillsForm.limit]);
+  useEffect(() => {
+    if (isAddWaybillsOpen && addWaybillsManifest) void fetchWaybillChoices();
+  }, [isAddWaybillsOpen, addWaybillsManifest, addWaybillsForm.keyword, addWaybillsForm.page, addWaybillsForm.limit, hubs]);
 
   function toForm(manifest?: LoadPlanningManifest | null): ManifestFormState {
     return { origin_hub_id: manifest?.origin_hub_id ? String(manifest.origin_hub_id) : '', dest_hub_id: manifest?.dest_hub_id ? String(manifest.dest_hub_id) : '', seal_code: manifest?.seal_code || '', note: (manifest as any)?.note || '' };
@@ -234,24 +270,93 @@ export default function WarehouseManifestsPage() {
     finally { setIsSubmitting(false); }
   }
   function closeAddWaybills() { setIsAddWaybillsClosing(true); window.setTimeout(() => { setIsAddWaybillsOpen(false); setAddWaybillsManifest(null); setIsAddWaybillsClosing(false); }, 180); }
-  function openAddWaybills(manifest: LoadPlanningManifest) { if (!canManageManifest || !canAddWaybillsToManifest(manifest)) return; setAddWaybillsManifest(manifest); setAddWaybillsForm({ keyword: '', selectedIds: [], page: 1, limit: 20 }); setIsAddWaybillsOpen(true); }
+  async function openAddWaybills(manifest: LoadPlanningManifest) {
+    if (!canManageManifest || !canAddWaybillsToManifest(manifest)) return;
+    setAddWaybillsForm({ keyword: '', selectedIds: [], page: 1, limit: 100 });
+    setAddWaybillsError('');
+    setAddWaybillsManifest(manifest);
+    setIsAddWaybillsOpen(true);
+    try {
+      setAddWaybillsManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}`));
+    } catch {
+      setAddWaybillsManifest(manifest);
+    }
+  }
   async function fetchWaybillChoices() {
     if (!addWaybillsManifest) return;
+    const originHubId = resolveManifestOriginHubId(addWaybillsManifest, hubs);
+    if (!originHubId) {
+      setWaybillChoices([]);
+      setWaybillTotal(0);
+      const message = 'Bảng kê chưa có hub khởi hành. Vui lòng sửa bảng kê trước khi thêm đơn.';
+      setAddWaybillsError(message);
+      setActionError(message);
+      return;
+    }
     setIsWaybillLoading(true);
-    try { const params = new URLSearchParams({ status: 'IN_WAREHOUSE', current_hub_id: String(addWaybillsManifest.origin_hub_id || ''), dest_hub_id: String(addWaybillsManifest.dest_hub_id || ''), keyword: addWaybillsForm.keyword, page: String(addWaybillsForm.page), limit: String(addWaybillsForm.limit) }); const response = await apiRequest<any>(`/waybills?${params.toString()}`); const raw = Array.isArray(response) ? response : response.data || response.items || response.waybills || []; const existingIds = new Set((addWaybillsManifest.waybills ?? addWaybillsManifest.manifest_waybills?.map((link) => link.waybill).filter(Boolean) ?? []).map((waybill) => String(waybill?.id))); const list = raw.filter((waybill: ManifestWaybill) => !existingIds.has(String(waybill.id))); setWaybillChoices(list); setWaybillTotal(Array.isArray(response) ? list.length : response.total ?? response.meta?.total ?? list.length); }
-    catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể tải vận đơn khả dụng.'); setWaybillChoices([]); setWaybillTotal(0); }
-    finally { setIsWaybillLoading(false); }
+    setActionError('');
+    setAddWaybillsError('');
+    try {
+      const params = new URLSearchParams({
+        only_incomplete_split: '1',
+        hub_id: originHubId,
+        keyword: addWaybillsForm.keyword,
+        page: String(addWaybillsForm.page),
+        limit: String(addWaybillsForm.limit),
+      });
+      const response = await apiRequest<{
+        items?: ManifestWaybill[];
+        data?: ManifestWaybill[];
+        waybills?: ManifestWaybill[];
+        meta?: { total?: number; total_lines?: number; total_waybills?: number };
+        total?: number;
+      }>(`/waybills/inventory/trip-lines?${params.toString()}`);
+      const raw = Array.isArray(response) ? response : response.items || response.data || response.waybills || [];
+      const manifestId = String(addWaybillsManifest.id);
+      const existingIds = new Set(
+        (addWaybillsManifest.waybills ?? addWaybillsManifest.manifest_waybills?.map((link) => link.waybill).filter(Boolean) ?? [])
+          .map((waybill) => String(waybill?.id)),
+      );
+      const seen = new Set<string>();
+      const list = raw.filter((waybill) => {
+        const id = String(waybill.id);
+        if (!id || seen.has(id) || existingIds.has(id)) return false;
+        if (waybill.manifest_id && String(waybill.manifest_id) !== manifestId) return false;
+        seen.add(id);
+        return true;
+      });
+      setWaybillChoices(list);
+      setWaybillTotal(
+        Array.isArray(response)
+          ? list.length
+          : response.meta?.total_lines ?? response.meta?.total_waybills ?? response.meta?.total ?? response.total ?? list.length,
+      );
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Không thể tải đơn tồn khả dụng.';
+      setAddWaybillsError(message);
+      setActionError(message);
+      setWaybillChoices([]);
+      setWaybillTotal(0);
+    } finally {
+      setIsWaybillLoading(false);
+    }
   }
   async function submitAddWaybills() {
     if (!addWaybillsManifest || !addWaybillsForm.selectedIds.length) return;
-    setIsSubmitting(true); setActionError('');
+    setIsSubmitting(true);
+    setAddWaybillsError('');
+    setActionError('');
     try {
       const updated = await apiRequest<LoadPlanningManifest>(`/manifests/${addWaybillsManifest.id}/waybills`, { method: 'POST', body: { waybill_ids: addWaybillsForm.selectedIds } });
       closeAddWaybills();
       await fetchManifests();
       if (detailManifest && String(detailManifest.id) === String(updated.id)) setDetailManifest(updated);
     }
-    catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể thêm vận đơn vào bảng kê.'); }
+    catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Không thể thêm vận đơn vào bảng kê.';
+      setAddWaybillsError(message);
+      setActionError(message);
+    }
     finally { setIsSubmitting(false); }
   }
   function confirmRemoveWaybill(waybill: ManifestWaybill) { if (!detailManifest) return; setConfirmDialog({ title: 'Gỡ vận đơn', message: `Gỡ vận đơn ${waybill.waybill_code || waybill.id} khỏi bảng kê?`, confirmLabel: 'Gỡ', danger: true, onConfirm: async () => { try { await apiRequest(`/manifests/${detailManifest.id}/waybills/${waybill.id}`, { method: 'DELETE' }); await openDetail(detailManifest); await fetchManifests(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể gỡ vận đơn.'); } } }); }
@@ -271,8 +376,6 @@ export default function WarehouseManifestsPage() {
     }
   }
 
-  const departedManifests = manifests.filter(manifest => !isExpectedArrivalManifest(manifest));
-  const expectedArrivalManifests = manifests.filter(isExpectedArrivalManifest);
   if (!allowed) return null;
 
   return (
@@ -299,7 +402,7 @@ export default function WarehouseManifestsPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
-          {isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải danh sách bảng kê..." /> : error ? <StateBlock icon={<AlertTriangle size={22} />} title={error} /> : !manifests.length ? <StateBlock icon={<PackageCheck size={22} />} title="Chưa có bảng kê phù hợp." /> : <ManifestKanbanBoard departed={departedManifests} expected={expectedArrivalManifests} mayAssign={mayAssign} canManage={canManageManifest} isSubmitting={isSubmitting} onDetail={openDetail} onAssign={openAssign} onEdit={openEdit} onAddWaybills={openAddWaybills} onCloseManifest={confirmCloseManifest} onPrint={openPrint} onDelete={confirmDeleteManifest} onUpdateExpectedArrival={updateExpectedArrival} />}
+          {isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải danh sách bảng kê..." /> : error ? <StateBlock icon={<AlertTriangle size={22} />} title={error} /> : !manifests.length ? <StateBlock icon={<PackageCheck size={22} />} title="Chưa có bảng kê phù hợp." /> : <ManifestKanbanBoard manifests={manifests} mayAssign={mayAssign} canManage={canManageManifest} isSubmitting={isSubmitting} onDetail={openDetail} onAssign={openAssign} onEdit={openEdit} onAddWaybills={openAddWaybills} onCloseManifest={confirmCloseManifest} onPrint={openPrint} onDelete={confirmDeleteManifest} onUpdateExpectedArrival={updateExpectedArrival} />}
         </div>
 
         <div className="shrink-0 border-t border-border bg-card px-3 py-2"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[12px] font-bold text-muted-foreground">{`${rangeStart}-${rangeEnd}/Tổng:${total}`}</p><div className="flex items-center gap-2"><SearchableSelect value={String(filters.limit)} onValueChange={value => updateFilters({ limit: Number(value), page: 1 })} options={[{ value: '10', label: '10' }, { value: '20', label: '20' }, { value: '50', label: '50' }]} className="h-9 w-[88px] rounded-lg bg-white px-3 text-[13px] text-muted-foreground" searchPlaceholder="Tìm số dòng..." /><span className="hidden text-[12px] text-muted-foreground sm:inline">/ trang</span><button disabled={filters.page <= 1} onClick={() => updateFilters({ page: filters.page - 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronLeft size={16} /></button><button disabled={filters.page >= totalPages} onClick={() => updateFilters({ page: filters.page + 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronRight size={16} /></button><span className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-primary px-2 text-[13px] font-bold text-white">{filters.page}</span><span className="text-[13px] font-bold text-foreground">/ {totalPages}</span></div></div></div>
@@ -307,7 +410,7 @@ export default function WarehouseManifestsPage() {
       <FilterBottomSheet isOpen={isFilterOpen} draftFilters={draftFilters} setDraftFilters={setDraftFilters} openGroups={openGroups} setOpenGroups={setOpenGroups} groupSearch={groupSearch} setGroupSearch={setGroupSearch} hubOptions={hubOptions} tripOptions={tripOptions} onClose={() => setIsFilterOpen(false)} onApply={applyFilters} />
       <ManifestDetailDialog isOpen={isDetailOpen} isClosing={isDetailClosing} isLoading={isDetailLoading} isSubmitting={isSubmitting} manifest={detailManifest} statusConfig={statusConfig} canManage={canManageManifest} onClose={closeDetail} onRemoveWaybill={confirmRemoveWaybill} onUpdateDispatchFields={updateDetailDispatchFields} onUpdateExpectedArrival={updateExpectedArrival} />
       <AddEditManifestDialog isOpen={isFormOpen} isClosing={isFormClosing} isEditMode={isEditMode} isSubmitting={isSubmitting} formState={formState} hubs={hubs} onChange={(key, value) => setFormState(prev => ({ ...prev, [key]: value }))} onClose={closeForm} onSubmit={submitForm} />
-      <AddWaybillsToManifestDialog isOpen={isAddWaybillsOpen} isClosing={isAddWaybillsClosing} isLoading={isWaybillLoading} isSubmitting={isSubmitting} manifest={addWaybillsManifest} waybills={waybillChoices} total={waybillTotal} formState={addWaybillsForm} onChange={patch => setAddWaybillsForm(prev => ({ ...prev, ...patch }))} onClose={closeAddWaybills} onSubmit={submitAddWaybills} />
+      <AddWaybillsToManifestDialog isOpen={isAddWaybillsOpen} isClosing={isAddWaybillsClosing} isLoading={isWaybillLoading} isSubmitting={isSubmitting} error={addWaybillsError} manifest={addWaybillsManifest} originHubLabel={addWaybillsManifest ? resolveManifestOriginHubLabel(addWaybillsManifest, hubs) : '—'} waybills={waybillChoices} total={waybillTotal} formState={addWaybillsForm} onChange={patch => setAddWaybillsForm(prev => ({ ...prev, ...patch }))} onClose={closeAddWaybills} onSubmit={submitAddWaybills} />
       <PrintManifestDialog isOpen={isPrintOpen} isClosing={isPrintClosing} isLoading={isPrintLoading} manifest={printManifest} showPricing={canViewPricing(roleMask)} onClose={closePrint} />
       <ConfirmDialog dialog={confirmDialog} isSubmitting={isSubmitting} onClose={() => setConfirmDialog(null)} />
       <AssignManifestTripDialog isOpen={isAssignOpen} isClosing={isAssignClosing} isSubmitting={isSubmitting} manifest={assignManifest} trips={trips} formState={assignForm} onChange={trip_id => setAssignForm({ trip_id })} onClose={closeAssign} onSubmit={submitAssign} />
@@ -316,9 +419,59 @@ export default function WarehouseManifestsPage() {
 }
 
 function isExpectedArrivalManifest(manifest: LoadPlanningManifest) { return ['ARRIVED', 'AT_DEST_HUB', 'COMPLETED', 'Xe đã đến'].includes(String(manifestTrip(manifest)?.status || manifest.status || '')); }
-function ManifestKanbanBoard({ departed, expected, ...actions }: { departed: LoadPlanningManifest[]; expected: LoadPlanningManifest[] } & Omit<ManifestItemProps, 'manifest'>) { return <div className="grid min-h-[560px] gap-4 p-3 lg:grid-cols-2"><KanbanColumn title="Xe đã khởi hành" count={departed.length} tone="border-blue-200 bg-blue-50 text-blue-700">{departed.length ? departed.map(manifest => <ManifestCard key={manifest.id} manifest={manifest} {...actions} />) : <EmptyKanban title="Chưa có bảng kê xe đã khởi hành" />}</KanbanColumn><KanbanColumn title="Dự kiến đến" count={expected.length} tone="border-amber-200 bg-amber-50 text-amber-700">{expected.length ? expected.map(manifest => <ManifestCard key={manifest.id} manifest={manifest} {...actions} />) : <EmptyKanban title="Chưa có bảng kê dự kiến đến" />}</KanbanColumn></div>; }
-function KanbanColumn({ title, count, tone, children }: { title: string; count: number; tone: string; children: React.ReactNode }) { return <section className="flex min-h-[520px] flex-col rounded-2xl border border-border bg-slate-50"><div className={clsx('flex items-center justify-between rounded-t-2xl border-b px-4 py-3', tone)}><h3 className="text-[14px] font-black">{title}</h3><span className="rounded-full bg-white px-2.5 py-1 text-[12px] font-black text-foreground">{count}</span></div><div className="flex-1 space-y-3 overflow-auto p-3 custom-scrollbar">{children}</div></section>; }
-function EmptyKanban({ title }: { title: string }) { return <div className="flex min-h-[260px] items-center justify-center rounded-2xl border border-dashed border-border bg-white text-center text-[13px] font-bold text-muted-foreground">{title}</div>; }
+
+const ORIGIN_LANES: Array<{ id: ManifestOriginLane; title: string; headerTone: string }> = [
+  { id: 'HAN', title: 'Xuất phát từ HN', headerTone: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
+  { id: 'HCM', title: 'Xuất phát từ HCM', headerTone: 'border-indigo-200 bg-indigo-50 text-indigo-800' },
+];
+
+function ManifestKanbanBoard({ manifests, ...actions }: { manifests: LoadPlanningManifest[] } & Omit<ManifestItemProps, 'manifest'>) {
+  const laneManifests = (origin: ManifestOriginLane) => manifests.filter((manifest) => manifestOriginLane(manifest) === origin);
+  const departed = (origin: ManifestOriginLane) => laneManifests(origin).filter((manifest) => !isExpectedArrivalManifest(manifest));
+  const expected = (origin: ManifestOriginLane) => laneManifests(origin).filter(isExpectedArrivalManifest);
+
+  return (
+    <div className="min-w-[1080px] p-3">
+      <div className="mb-2 grid grid-cols-4 gap-3">
+        {ORIGIN_LANES.map((lane) => (
+          <div key={lane.id} className={clsx('col-span-2 flex items-center justify-between rounded-xl border px-4 py-2.5', lane.headerTone)}>
+            <h2 className="text-[14px] font-black">{lane.title}</h2>
+            <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-black text-foreground">{laneManifests(lane.id).length}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid min-h-[520px] grid-cols-4 gap-3">
+        <KanbanColumn title="Xe đã khởi hành" count={departed('HAN').length} tone="border-blue-200 bg-blue-50 text-blue-700">
+          {departed('HAN').length ? departed('HAN').map((manifest) => <ManifestCard key={manifest.id} manifest={manifest} {...actions} />) : <EmptyKanban title="Chưa có bảng kê" />}
+        </KanbanColumn>
+        <KanbanColumn title="Dự kiến đến" count={expected('HAN').length} tone="border-amber-200 bg-amber-50 text-amber-700">
+          {expected('HAN').length ? expected('HAN').map((manifest) => <ManifestCard key={manifest.id} manifest={manifest} {...actions} />) : <EmptyKanban title="Chưa có bảng kê" />}
+        </KanbanColumn>
+        <KanbanColumn title="Xe đã khởi hành" count={departed('HCM').length} tone="border-blue-200 bg-blue-50 text-blue-700">
+          {departed('HCM').length ? departed('HCM').map((manifest) => <ManifestCard key={manifest.id} manifest={manifest} {...actions} />) : <EmptyKanban title="Chưa có bảng kê" />}
+        </KanbanColumn>
+        <KanbanColumn title="Dự kiến đến" count={expected('HCM').length} tone="border-amber-200 bg-amber-50 text-amber-700">
+          {expected('HCM').length ? expected('HCM').map((manifest) => <ManifestCard key={manifest.id} manifest={manifest} {...actions} />) : <EmptyKanban title="Chưa có bảng kê" />}
+        </KanbanColumn>
+      </div>
+    </div>
+  );
+}
+function KanbanColumn({ title, count, tone, children }: { title: string; count: number; tone: string; children: React.ReactNode }) {
+  return (
+    <section className="flex min-h-[480px] flex-col rounded-xl border border-border bg-white">
+      <div className={clsx('flex items-center justify-between rounded-t-xl border-b px-3 py-2.5', tone)}>
+        <h3 className="text-[13px] font-black">{title}</h3>
+        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-foreground">{count}</span>
+      </div>
+      <div className="flex-1 space-y-2 overflow-auto p-2 custom-scrollbar">{children}</div>
+    </section>
+  );
+}
+function EmptyKanban({ title }: { title: string }) {
+  return <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-border bg-slate-50 text-center text-[12px] font-bold text-muted-foreground">{title}</div>;
+}
 function ManifestCard(props: ManifestItemProps) {
   const { manifest } = props;
   const trip = manifestTrip(manifest);

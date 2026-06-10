@@ -408,12 +408,18 @@ export class ManifestsService {
   private assertManifestAccess(manifest: ManifestRecord, currentUser: UserEntity) {
     if (isManager(currentUser.role_mask)) return;
     if (!currentUser.hub_id) throw new ForbiddenException('User is not assigned to a hub');
-    if (![manifest.origin_hub_id, manifest.dest_hub_id].includes(currentUser.hub_id)) throw new ForbiddenException('User cannot access this manifest outside assigned hub');
+    const userHubId = String(currentUser.hub_id);
+    const allowedHubIds = [manifest.origin_hub_id, manifest.dest_hub_id].map((id) => String(id ?? ''));
+    if (!allowedHubIds.includes(userHubId)) {
+      throw new ForbiddenException('User cannot access this manifest outside assigned hub');
+    }
   }
 
   private async assertHubAccess(hubId: string, currentUser: UserEntity) {
     if (isManager(currentUser.role_mask)) return;
-    if (currentUser.hub_id !== hubId) throw new ForbiddenException('User is not assigned to this hub');
+    if (String(currentUser.hub_id ?? '') !== String(hubId)) {
+      throw new ForbiddenException('User is not assigned to this hub');
+    }
   }
 
   private async assertActiveHub(hubId: string) {
@@ -433,10 +439,25 @@ export class ManifestsService {
   }
 
   private assertWaybillCanBeAdded(manifest: ManifestRecord, waybill: WaybillRecord) {
-    if (this.getWaybillStatus(waybill) !== WaybillState.IN_WAREHOUSE) throw new BadRequestException('Only IN_WAREHOUSE waybills can be added');
-    if (waybill.manifest_id && waybill.manifest_id !== manifest.id) throw new ConflictException('Waybill already belongs to another manifest');
-    if (waybill.origin_hub_id !== manifest.origin_hub_id && waybill.current_hub_id !== manifest.origin_hub_id) throw new BadRequestException('Waybill origin/current hub does not match manifest origin hub');
-    if (waybill.dest_hub_id !== manifest.dest_hub_id) throw new BadRequestException('Waybill destination hub does not match manifest destination hub');
+    const status = this.getWaybillStatus(waybill);
+    const allowedStatuses = manifest.status === ManifestStatus.CLOSED
+      ? [WaybillState.IN_WAREHOUSE]
+      : [WaybillState.RECEIVED, WaybillState.IN_WAREHOUSE];
+    if (!allowedStatuses.includes(status)) {
+      throw new BadRequestException(
+        manifest.status === ManifestStatus.CLOSED
+          ? 'Only IN_WAREHOUSE waybills can be added to a closed manifest'
+          : 'Only RECEIVED or IN_WAREHOUSE waybills from inventory can be added',
+      );
+    }
+    if (waybill.manifest_id && String(waybill.manifest_id) !== String(manifest.id)) {
+      throw new ConflictException('Waybill already belongs to another manifest');
+    }
+    const manifestOriginHubId = String(manifest.origin_hub_id ?? '');
+    const waybillCurrentHubId = String(waybill.current_hub_id ?? waybill.origin_hub_id ?? '');
+    if (waybillCurrentHubId !== manifestOriginHubId) {
+      throw new BadRequestException('Waybill must be at manifest origin hub');
+    }
   }
 
   private extractWaybills(manifest: ManifestRecord): WaybillRecord[] {

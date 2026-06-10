@@ -49,3 +49,4 @@ export function buildInitialSharedFields(waybills: WaybillInventoryItem[]): Stac
     vendor_cost: '',
   };
 }
+

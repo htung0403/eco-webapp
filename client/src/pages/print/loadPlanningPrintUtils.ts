@@ -1,3 +1,5 @@
+import type { StackOntoTruckFormRow, StackOntoTruckSharedFields } from '../warehouse/inventory/stackOntoTruckUtils';
+import type { WaybillInventoryItem } from '../warehouse/inventory/types';
 import type { LoadPlanningBoardFilters, LoadPlanningBoardItem, LoadPlanningBoardResponse, LoadPlanningTruckGroup } from '../warehouse/load-planning/types';
 import { splitLoadStatusLabel } from '../warehouse/splits/splitLoadStatus';
 import type { DispatchPrintColumnId } from './dispatchPrintColumns';
@@ -155,6 +157,95 @@ export function summarizeLoadPlanningFilters(filters: LoadPlanningBoardFilters, 
   if (statuses.length) parts.push(`Trạng thái: ${statuses.map((status) => splitLoadStatusLabel(status)).join(', ')}`);
   if (filters.date_from || filters.date_to) parts.push(`Ngày bốc: ${filters.date_from || '...'} -> ${filters.date_to || '...'}`);
   return parts.length ? parts.join(' · ') : 'Tất cả dòng hàng theo bộ lọc hiện tại';
+}
+
+function parseContactName(value?: string | null) {
+  if (!value) return '';
+  return value.split('|')[0]?.split(' · ')[0]?.trim() || value.trim();
+}
+
+function formatNgayBoc(date = new Date()) {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}`;
+}
+
+function allocateByPackages(total: number, packages: number, allPackages: number) {
+  if (!allPackages || !packages) return 0;
+  return Math.round((total * packages) / allPackages);
+}
+
+export function buildDraftManifestCode(date = new Date()) {
+  const y = String(date.getFullYear()).slice(-2);
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `BK-${y}${m}${d}-${hh}${mm}`;
+}
+
+export function mapStackOntoTruckToPrintPayload(
+  waybills: WaybillInventoryItem[],
+  rows: StackOntoTruckFormRow[],
+  shared: StackOntoTruckSharedFields,
+  licensePlate: string,
+  showPricing: boolean,
+  visibleColumnIds?: DispatchPrintColumnId[],
+  manifestCode?: string,
+): LoadPlanningPrintPayload {
+  const waybillMap = new Map(waybills.map((waybill) => [String(waybill.id), waybill]));
+  const ngayBoc = formatNgayBoc();
+  const manifestLabel = manifestCode?.trim() || buildDraftManifestCode();
+
+  const dispatchRows: DispatchPrintRow[] = rows.map((row, index) => {
+    const waybill = waybillMap.get(row.waybill_id);
+    const pkg = Number(row.package_count) || 0;
+    const totalPkg = Math.max(1, Number(waybill?.order_total_packages ?? waybill?.package_count ?? pkg));
+    const freightTotal = Number(waybill?.allocated_freight ?? waybill?.freight_amount ?? waybill?.cost_amount ?? 0);
+    const codTotal = Number(waybill?.allocated_cod ?? waybill?.cod_amount ?? 0);
+
+    return {
+      viTriHang: row.loading_position || String(index + 1),
+      ngayBoc,
+      maTinh: String(waybill?.noi_den || waybill?.dest_hub?.code || '').trim(),
+      tenCtv: String((waybill as { ten_cty?: string | null })?.ten_cty || waybill?.ma_kh || parseContactName(waybill?.sender_info)).trim(),
+      dv: 'TC',
+      matHang: row.waybill_code,
+      matHangNote: '',
+      noiTra: String(waybill?.dest_hub?.name || waybill?.receiver_address || parseContactName(waybill?.receiver_info)).trim(),
+      soLuong: String(pkg),
+      donVi: 'kiện',
+      nguoiNhanPhone: String(waybill?.receiver_phone || '').trim(),
+      nguoiNhanDiaChi: String(waybill?.receiver_address || '').trim(),
+      tinhTrangGiaoHang: '',
+      ngayHoanThanh: addDaysToDispatchDate(ngayBoc, DISPATCH_COMPLETION_DAYS),
+      keHoach: '',
+      tangHaThuKhach: formatDispatchMoney(allocateByPackages(codTotal, pkg, totalPkg)),
+      cuoc: showPricing ? formatDispatchMoney(allocateByPackages(freightTotal, pkg, totalPkg)) : '',
+      laiXeThuHo: '',
+      bcThuHo: '',
+      maBill: row.waybill_code,
+      ghiChu: row.expected_arrival_label ? `Dự kiến tới ${row.expected_arrival_label}` : String(waybill?.note || waybill?.notes || '').trim(),
+    };
+  });
+
+  const group: LoadPlanningPrintGroup = {
+    truckLabel: [licensePlate, shared.nha_xe].filter(Boolean).join(' · ') || licensePlate || '—',
+    licensePlate: licensePlate || '—',
+    nhaXe: shared.nha_xe || '',
+    manifestCode: manifestLabel,
+    rows: dispatchRows,
+    totals: buildGroupTotals(dispatchRows, showPricing),
+  };
+
+  return {
+    title: 'BẢNG KÊ PHÁT HÀNG ECO',
+    printedAt: new Date().toLocaleString('vi-VN'),
+    filterSummary: manifestLabel,
+    showPricing,
+    visibleColumnIds: visibleColumnIds ?? loadVisibleDispatchColumnIds(showPricing),
+    groups: [group],
+  };
 }
 
 export function mapSingleTruckPrintPayload(

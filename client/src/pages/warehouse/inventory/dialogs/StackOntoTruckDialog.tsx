@@ -1,10 +1,16 @@
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { AlertTriangle, Loader2, Save, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Loader2, Printer, Save, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, apiRequest } from '../../../../lib/api';
 import TruckSearchSelect from '../../components/TruckSearchSelect';
 import type { Truck as TruckRecord, TruckListResponse } from '../../../trucks/types';
+import type { AuthUserProfile } from '../../../login/types';
+import DispatchPrintColumnDropdown from '../../../print/DispatchPrintColumnDropdown';
+import type { DispatchPrintColumnId } from '../../../print/dispatchPrintColumns';
+import { loadVisibleDispatchColumnIds, saveVisibleDispatchColumnIds } from '../../../print/dispatchPrintColumns';
+import LoadPlanningPrintTemplate from '../../../print/LoadPlanningPrintTemplate';
+import { mapStackOntoTruckToPrintPayload } from '../../../print/loadPlanningPrintUtils';
 import type { TruckPickOption } from '../types';
 import type { WaybillInventoryItem } from '../types';
 import {
@@ -14,6 +20,21 @@ import {
   type StackOntoTruckSharedFields,
 } from '../stackOntoTruckUtils';
 import { formatDonGia, parseMoneyAmount } from '../../orders/orderFormUtils';
+import '../../../print/inventory-stock-list.css';
+
+const USER_PROFILE_KEY = 'eco_user_profile';
+const MANAGER = 32;
+const DIRECTOR = 64;
+
+const getStoredUser = (): AuthUserProfile | null => {
+  const raw = localStorage.getItem(USER_PROFILE_KEY) || sessionStorage.getItem(USER_PROFILE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthUserProfile;
+  } catch {
+    return null;
+  }
+};
 
 interface Props {
   isOpen: boolean;
@@ -55,7 +76,40 @@ export default function StackOntoTruckDialog({
   const [truckOptions, setTruckOptions] = useState<TruckPickOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [error, setError] = useState('');
+  const user = useMemo(getStoredUser, []);
+  const canViewPricing = ((user?.role_mask ?? 0) & (MANAGER | DIRECTOR)) !== 0;
+  const [printColumnIds, setPrintColumnIds] = useState<DispatchPrintColumnId[]>(() =>
+    loadVisibleDispatchColumnIds(canViewPricing),
+  );
+
+  const selectedTruckLabel = useMemo(() => {
+    const truck = truckOptions.find((item) => item.id === shared.truck_id);
+    return truck?.bks || truck?.license_plate || '';
+  }, [shared.truck_id, truckOptions]);
+
+  const updatePrintColumnIds = (ids: DispatchPrintColumnId[]) => {
+    saveVisibleDispatchColumnIds(ids);
+    setPrintColumnIds(ids);
+  };
+
+  const printPayload = useMemo(
+    () =>
+      mapStackOntoTruckToPrintPayload(
+        waybills,
+        rows,
+        shared,
+        selectedTruckLabel,
+        canViewPricing,
+        printColumnIds,
+      ),
+    [waybills, rows, shared, selectedTruckLabel, canViewPricing, printColumnIds],
+  );
+
+  useEffect(() => {
+    setPrintColumnIds(loadVisibleDispatchColumnIds(canViewPricing));
+  }, [canViewPricing]);
 
   const loadTrucks = useCallback(async () => {
     setIsLoading(true);
@@ -74,7 +128,10 @@ export default function StackOntoTruckDialog({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setIsPrintOpen(false);
+      return;
+    }
     setRows(buildStackFormRows(waybills));
     setShared(buildInitialSharedFields(waybills));
     void loadTrucks();
@@ -134,7 +191,45 @@ export default function StackOntoTruckDialog({
 
   if (!isOpen && !isClosing) return null;
 
-  return createPortal(
+  const printPreview = isPrintOpen ? createPortal(
+    <div className="statement-print-root fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm print:static print:block print:bg-white print:p-0 print:backdrop-blur-none">
+      <style>{`@media print { body > *:not(.statement-print-root) { display: none !important; } .statement-print-root { display: block !important; position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; backdrop-filter: none !important; } .statement-print-shell { display: block !important; max-height: none !important; max-width: none !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important; background: #fff !important; box-shadow: none !important; } .statement-print-toolbar { display: none !important; } .statement-print-scroll { display: block !important; overflow: visible !important; padding: 0 !important; } }`}</style>
+      <div className="statement-print-shell flex max-h-[92vh] w-full max-w-[min(98vw,1200px)] flex-col overflow-hidden rounded-2xl border border-border bg-slate-100 shadow-2xl print:block print:max-h-none print:max-w-none print:overflow-visible print:rounded-none print:border-0 print:bg-white print:shadow-none">
+        <div className="statement-print-toolbar flex shrink-0 items-center justify-between gap-3 border-b border-border bg-white px-4 py-3 print:hidden">
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-primary">In duyệt xếp hàng</p>
+            <h3 className="text-[16px] font-extrabold text-foreground">
+              {printPayload.groups[0]?.manifestCode || 'BẢNG KÊ PHÁT HÀNG ECO'}
+            </h3>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <DispatchPrintColumnDropdown
+              value={printColumnIds}
+              canViewPricing={canViewPricing}
+              onChange={updatePrintColumnIds}
+              className="w-[min(220px,42vw)]"
+            />
+            <button type="button" onClick={() => window.print()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-extrabold text-white hover:bg-primary/90">
+              <Printer size={16} />
+              In bảng kê (A4 ngang)
+            </button>
+            <button type="button" onClick={() => setIsPrintOpen(false)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="statement-print-scroll flex-1 overflow-auto p-4 custom-scrollbar print:block print:overflow-visible print:p-0">
+          <LoadPlanningPrintTemplate data={printPayload} />
+        </div>
+      </div>
+    </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+    {printPreview}
+    {createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div className={clsx('absolute inset-0 bg-slate-900/50 backdrop-blur-sm', isClosing ? 'opacity-0' : 'opacity-100')} onClick={onClose} />
       <div className={clsx(
@@ -242,9 +337,18 @@ export default function StackOntoTruckDialog({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-border px-6 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-border px-6 py-4">
           <button type="button" onClick={onClose} className="h-11 rounded-lg border border-border px-5 text-[14px] font-bold text-muted-foreground hover:bg-muted">
             Hủy
+          </button>
+          <button
+            type="button"
+            disabled={isLoading || rows.length === 0}
+            onClick={() => setIsPrintOpen(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-lg border border-primary/20 bg-blue-50 px-5 text-[14px] font-bold text-primary hover:bg-blue-100 disabled:opacity-50"
+          >
+            <Printer size={16} />
+            In duyệt
           </button>
           <button
             type="button"
@@ -259,5 +363,7 @@ export default function StackOntoTruckDialog({
       </div>
     </div>,
     document.body,
+    )}
+    </>
   );
 }

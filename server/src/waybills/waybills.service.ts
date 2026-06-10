@@ -1051,10 +1051,17 @@ export class WaybillsService {
   }
 
   private resolveInventoryHubFilter(query: QueryWaybillsDto, currentUser: UserEntity) {
-    if (query.ma_kh?.trim() || query.vendor_id?.trim()) {
-      return query.current_hub_id ?? query.hub_id ?? undefined;
+    if (query.current_hub_id?.trim() || query.hub_id?.trim()) {
+      return query.current_hub_id ?? query.hub_id;
     }
-    return query.current_hub_id ?? query.hub_id ?? currentUser.hub_id ?? undefined;
+    if (query.ma_kh?.trim() || query.vendor_id?.trim()) {
+      return undefined;
+    }
+    // Khi lọc theo hub khởi hành (vd. thêm đơn vào bảng kê), hàng phải đang ở hub xuất phát.
+    if (query.origin_hub_id?.trim()) {
+      return query.origin_hub_id;
+    }
+    return currentUser.hub_id ?? undefined;
   }
 
   private applyHubScope(qb: any, currentUser: UserEntity) {

@@ -35,7 +35,11 @@ function renderDispatchCell(id: DispatchPrintColumnId, row: DispatchPrintRow): R
     case 'maTinh':
       return <td className={`${def.cssClass} col-center`}>{row.maTinh}</td>;
     case 'tenCtv':
-      return <td className={def.cssClass}>{row.tenCtv}</td>;
+      return (
+        <td className={def.cssClass}>
+          <span className="dispatch-cell-inner">{row.tenCtv}</span>
+        </td>
+      );
     case 'dv':
       return <td className={`${def.cssClass} col-center`}>{row.dv}</td>;
     case 'matHang':
@@ -46,7 +50,11 @@ function renderDispatchCell(id: DispatchPrintColumnId, row: DispatchPrintRow): R
         </td>
       );
     case 'noiTra':
-      return <td className={def.cssClass}>{row.noiTra}</td>;
+      return (
+        <td className={def.cssClass}>
+          <span className="dispatch-cell-inner">{row.noiTra}</span>
+        </td>
+      );
     case 'soLuong': {
       const qty = formatDispatchQuantity(row.soLuong, row.donVi);
       return (
@@ -75,9 +83,17 @@ function renderDispatchCell(id: DispatchPrintColumnId, row: DispatchPrintRow): R
     case 'bcThuHo':
       return <td className={def.cssClass}>{row.bcThuHo}</td>;
     case 'maBill':
-      return <td className={`${def.cssClass} col-center`}>{row.maBill}</td>;
+      return (
+        <td className={`${def.cssClass} col-center`}>
+          <span className="dispatch-cell-inner">{row.maBill}</span>
+        </td>
+      );
     case 'ghiChu':
-      return <td className={def.cssClass}>{row.ghiChu}</td>;
+      return (
+        <td className={def.cssClass}>
+          <span className="dispatch-cell-inner">{row.ghiChu}</span>
+        </td>
+      );
     default:
       return <td className={alignClass}>{null}</td>;
   }
@@ -91,7 +107,6 @@ function renderFooterCells(
   const totalIds = new Set(
     DISPATCH_PRINT_COLUMN_DEFS.filter((col) => col.totalKey).map((col) => col.id),
   );
-  const visibleTotals = visibleColumnIds.filter((id) => totalIds.has(id));
   const firstTotalIndex = visibleColumnIds.findIndex((id) => totalIds.has(id));
   const cells: ReactNode[] = [];
 
@@ -107,6 +122,7 @@ function renderFooterCells(
     if (index > 0 && index < firstTotalIndex) return;
 
     const def = getDispatchColumnDef(id);
+
     if (id === 'soLuong') {
       cells.push(
         <td key={id} className={`${def.cssClass} col-center font-bold`}>
@@ -141,19 +157,8 @@ function renderFooterCells(
       return;
     }
 
-    const lastTotalIndex = visibleTotals.length
-      ? visibleColumnIds.indexOf(visibleTotals[visibleTotals.length - 1]!)
-      : -1;
-    if (lastTotalIndex >= 0 && index > lastTotalIndex) {
-      if (index === lastTotalIndex + 1) {
-        const trailing = visibleColumnIds.length - index;
-        cells.push(<td key={`trail-${id}`} colSpan={trailing} />);
-      }
-    } else if (firstTotalIndex >= 0 && !totalIds.has(id)) {
-      if (index === firstTotalIndex + visibleTotals.length) {
-        const trailing = visibleColumnIds.length - index;
-        if (trailing > 0) cells.push(<td key={`trail-${id}`} colSpan={trailing} />);
-      }
+    if (firstTotalIndex >= 0 && index >= firstTotalIndex) {
+      cells.push(<td key={id} className={def.cssClass} />);
     }
   });
 

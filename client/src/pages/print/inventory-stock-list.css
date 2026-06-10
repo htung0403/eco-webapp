@@ -10,6 +10,13 @@
     background: #fff !important;
     font-family: Arial, Helvetica, sans-serif;
   }
+  .inventory-stock-table--dispatch {
+    font-size: 6.5pt;
+  }
+  .inventory-stock-table--dispatch th,
+  .inventory-stock-table--dispatch td {
+    padding: 1px 2px;
+  }
   .inventory-print-toolbar {
     display: none !important;
   }
@@ -81,10 +88,12 @@
 .inventory-stock-table th,
 .inventory-stock-table td {
   border: 1px solid #000;
-  padding: 1px 2px;
+  padding: 2px 2px;
   vertical-align: middle;
+  overflow: hidden;
   overflow-wrap: break-word;
-  word-break: normal;
+  word-break: break-word;
+  hyphens: auto;
 }
 
 .inventory-stock-table thead th {
@@ -92,18 +101,26 @@
   font-weight: 700;
   text-align: center;
   font-size: 6.5pt;
-  line-height: 1.05;
+  line-height: 1.08;
   vertical-align: middle;
   padding: 2px 1px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .inventory-stock-table--dispatch {
   font-size: 6.8pt;
-  line-height: 1.08;
+  line-height: 1.12;
+}
+
+.inventory-stock-table--dispatch th,
+.inventory-stock-table--dispatch td {
+  max-width: 0;
 }
 
 .inventory-stock-table--dispatch tbody td {
-  padding: 1px 2px;
+  padding: 2px 2px;
 }
 
 .inventory-stock-table--dispatch tbody td.col-company,
@@ -123,6 +140,14 @@
 
 .inventory-stock-table--dispatch td > div + div {
   margin-top: 1px;
+}
+
+.inventory-stock-table--dispatch .dispatch-cell-inner {
+  display: block;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.12;
 }
 
 .inventory-stock-table tbody tr:nth-child(even) td:not(.col-location) {
@@ -155,11 +180,29 @@
 }
 
 .inventory-stock-table tbody .col-date,
-.inventory-stock-table tbody .col-qty,
-.inventory-stock-table tbody .col-fee,
-.inventory-stock-table tbody .col-surcharge,
-.inventory-stock-table tbody .col-bill {
+.inventory-stock-table tbody .col-qty {
   white-space: nowrap;
+  word-break: keep-all;
+}
+
+.inventory-stock-table tbody .col-fee,
+.inventory-stock-table tbody .col-surcharge {
+  white-space: normal;
+  word-break: break-all;
+  font-size: 6.5pt;
+  line-height: 1.1;
+}
+
+.inventory-stock-table tbody .col-company,
+.inventory-stock-table tbody .col-item,
+.inventory-stock-table tbody .col-place,
+.inventory-stock-table tbody .col-bill,
+.inventory-stock-table tbody .col-note,
+.inventory-stock-table tbody .col-driver,
+.inventory-stock-table tbody .col-post {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .inventory-stock-table thead th.col-surcharge,
@@ -185,32 +228,33 @@
 }
 
 .inventory-stock-table .col-location {
-  width: 3.8%;
+  width: 3.5%;
   font-weight: 700;
   text-align: center;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .inventory-stock-table tbody .col-location {
   background: #ffff00 !important;
 }
 
-.inventory-stock-table .col-date { width: 4.2%; }
-.inventory-stock-table .col-province { width: 5%; }
+.inventory-stock-table .col-date { width: 4%; }
+.inventory-stock-table .col-province { width: 4.5%; }
 .inventory-stock-table .col-company { width: 9.5%; }
-.inventory-stock-table .col-service { width: 2.8%; }
-.inventory-stock-table .col-item { width: 10%; }
-.inventory-stock-table .col-place { width: 9%; }
-.inventory-stock-table .col-qty { width: 5%; }
-.inventory-stock-table .col-delivery-status { width: 6.5%; }
-.inventory-stock-table .col-completion-date { width: 5.2%; }
-.inventory-stock-table .col-plan { width: 4.8%; }
-.inventory-stock-table .col-surcharge { width: 6.5%; }
-.inventory-stock-table .col-fee { width: 5.5%; }
-.inventory-stock-table .col-driver { width: 5.2%; }
-.inventory-stock-table .col-post { width: 5%; }
-.inventory-stock-table .col-bill { width: 6%; }
-.inventory-stock-table .col-note { width: 7%; }
+.inventory-stock-table .col-service { width: 2.5%; }
+.inventory-stock-table .col-item { width: 9%; }
+.inventory-stock-table .col-place { width: 12.5%; }
+.inventory-stock-table .col-qty { width: 5.5%; }
+.inventory-stock-table .col-delivery-status { width: 5.5%; }
+.inventory-stock-table .col-completion-date { width: 4.5%; }
+.inventory-stock-table .col-plan { width: 4%; }
+.inventory-stock-table .col-surcharge { width: 6%; }
+.inventory-stock-table .col-fee { width: 6.5%; }
+.inventory-stock-table .col-driver { width: 4.5%; }
+.inventory-stock-table .col-post { width: 4.5%; }
+.inventory-stock-table .col-bill { width: 7%; }
+.inventory-stock-table .col-note { width: 6.5%; }
 
 .inventory-stock-table .item-note,
 .inventory-stock-table .qty-highlight {

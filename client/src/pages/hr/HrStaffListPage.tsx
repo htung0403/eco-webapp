@@ -15,7 +15,9 @@ import { ROLE_BITS } from '../admin/users/types';
 import { hasManagerRole, normalizeUserList } from '../../lib/userNormalize';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
-const emptyForm: UserFormState = { username: '', name: '', phone: '', role_mask: '1', password: '' };
+const emptyForm: UserFormState = { username: '', name: '', phone: '', role_mask: '1', password: '', hub_id: '' };
+
+const getUserHubId = (user: UserAccount) => String(user.hub?.id || user.hubs?.[0]?.id || '');
 const validRoleMask = ROLE_BITS.reduce((sum, role) => sum + role.value, 0);
 const isDirector = (roleMask = 0) => (Number(roleMask) & 64) !== 0;
 
@@ -183,6 +185,7 @@ export default function HrStaffListPage() {
       phone: user.phone || '',
       role_mask: String(user.role_mask || 1),
       password: '',
+      hub_id: getUserHubId(user),
     });
     setFieldErrors({});
     setFormOpen(true);
@@ -208,6 +211,12 @@ export default function HrStaffListPage() {
             body: { role_mask: Number(form.role_mask) },
           });
         }
+        if (form.hub_id !== getUserHubId(editingUser)) {
+          await apiRequest(`/users/${editingUser.id}/hub`, {
+            method: 'PATCH',
+            body: { hub_id: form.hub_id || null },
+          });
+        }
       } else {
         await apiRequest('/users', {
           method: 'POST',
@@ -217,6 +226,7 @@ export default function HrStaffListPage() {
             phone: form.phone.trim() || undefined,
             password: form.password,
             role_mask: Number(form.role_mask),
+            ...(form.hub_id ? { hub_id: form.hub_id } : {}),
           },
         });
       }
@@ -524,6 +534,7 @@ export default function HrStaffListPage() {
         errors={fieldErrors}
         submitting={submitting}
         canSetDirector={canDelete}
+        hubs={hubs}
         setField={setFormField}
         onClose={() => setFormOpen(false)}
         onSubmit={submitForm}
