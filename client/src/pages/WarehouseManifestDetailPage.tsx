@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, Eye, Loader2, PackageCheck, Phone, Printer, RefreshCcw, Save, Search, Truck, UserRound, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, Edit3, Eye, Loader2, PackageCheck, Phone, Printer, RefreshCcw, Save, Search, Truck, UserRound, X } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
+import { DateTimePicker } from '../components/ui/DateTimePicker';
 import type { LoadPlanningManifest, ManifestDispatchFields, ManifestWaybill } from './warehouse/manifests/types';
 
 const editableColumns = [
@@ -42,6 +43,7 @@ const tripLabel = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.tr
 const truckLabel = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.truck?.bks || manifestTrip(manifest)?.truck?.license_plate || 'Chưa có xe';
 const driverLabel = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.driver_name || manifestTrip(manifest)?.driver?.name || manifestTrip(manifest)?.driver?.full_name || manifestTrip(manifest)?.truck?.ten_lai_xe || manifestTrip(manifest)?.truck?.driver?.name || manifestTrip(manifest)?.truck?.driver?.full_name || 'Chưa gán tài xế';
 const driverPhoneLabel = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.driver_phone || manifestTrip(manifest)?.driver?.phone || manifestTrip(manifest)?.truck?.driver?.phone || manifestTrip(manifest)?.truck?.phone || 'Chưa có SĐT';
+const expectedArrival = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.expected_arrival_time || manifestTrip(manifest)?.arrival_time || null;
 const parseName = (info?: string | null) => (info || '').split('|')[0]?.trim() || '';
 const formatNumber = (value?: string | number | null, suffix = '') => value == null || value === '' ? '—' : `${Number(value).toLocaleString('vi-VN')}${suffix}`;
 const formatDateTime = (value?: string | null) => {
@@ -55,6 +57,13 @@ const formatShortDate = (value?: string | null) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(date);
+};
+const toDateTimeLocalValue = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 };
 
 function rowKey(link: RowLink) {
@@ -156,6 +165,21 @@ export default function WarehouseManifestDetailPage() {
     }
   }
 
+  async function saveExpectedArrival(manifestItem: LoadPlanningManifest, value: string) {
+    setIsSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      await apiRequest(`/manifests/${manifestItem.id}/expected-arrival`, { method: 'PATCH', body: { expected_arrival_time: value ? new Date(value).toISOString() : null } });
+      setMessage('Đã cập nhật ngày dự kiến đến.');
+      await loadManifest();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Không cập nhật được ngày dự kiến đến.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const kanbanColumns = useMemo(() => {
     const departed = manifest && !isArrived(manifest) ? [manifest] : [];
     const expected = manifest && isArrived(manifest) ? [manifest] : [];
@@ -177,7 +201,7 @@ export default function WarehouseManifestDetailPage() {
         <div className="p-4">
           {isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải bảng kê..." /> : !manifest ? <StateBlock icon={<AlertTriangle size={22} />} title="Không tìm thấy bảng kê." /> : (
             <div className="grid min-h-[520px] gap-4 lg:grid-cols-2">
-              {kanbanColumns.map((column) => <KanbanColumn key={column.key} title={column.title} icon={column.icon} tone={column.tone} count={column.items.length}>{column.items.length ? column.items.map((item) => <ManifestKanbanCard key={item.id} manifest={item} waybillCount={links.length} onOpen={() => setIsDialogOpen(true)} />) : <EmptyColumn title="Chưa có bảng kê ở trạng thái này" />}</KanbanColumn>)}
+              {kanbanColumns.map((column) => <KanbanColumn key={column.key} title={column.title} icon={column.icon} tone={column.tone} count={column.items.length}>{column.items.length ? column.items.map((item) => <ManifestKanbanCard key={item.id} manifest={item} waybillCount={links.length} isSaving={isSaving} onOpen={() => setIsDialogOpen(true)} onSaveExpectedArrival={saveExpectedArrival} />) : <EmptyColumn title="Chưa có bảng kê ở trạng thái này" />}</KanbanColumn>)}
             </div>
           )}
         </div>
@@ -187,7 +211,15 @@ export default function WarehouseManifestDetailPage() {
   );
 }
 
-function ManifestKanbanCard({ manifest, waybillCount, onOpen }: { manifest: LoadPlanningManifest; waybillCount: number; onOpen: () => void }) {
+function ManifestKanbanCard({ manifest, waybillCount, isSaving, onOpen, onSaveExpectedArrival }: { manifest: LoadPlanningManifest; waybillCount: number; isSaving: boolean; onOpen: () => void; onSaveExpectedArrival: (manifest: LoadPlanningManifest, value: string) => Promise<void> }) {
+  const [isEditingArrival, setIsEditingArrival] = useState(false);
+  const [arrivalValue, setArrivalValue] = useState(() => toDateTimeLocalValue(expectedArrival(manifest)));
+
+  const saveArrival = async () => {
+    await onSaveExpectedArrival(manifest, arrivalValue);
+    setIsEditingArrival(false);
+  };
+
   return <article className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-200 hover:border-primary/30 hover:bg-blue-50/20">
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0"><p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">Bảng kê</p><h3 className="mt-1 truncate text-lg font-black text-primary">{manifestCode(manifest)}</h3></div>
@@ -207,6 +239,7 @@ function ManifestKanbanCard({ manifest, waybillCount, onOpen }: { manifest: Load
       <Line icon={<UserRound size={15} />} label="Tài xế" value={driverLabel(manifest)} />
       <Line icon={<Phone size={15} />} label="SĐT" value={driverPhoneLabel(manifest)} />
       <Line icon={<CalendarClock size={15} />} label="Thời gian đóng" value={formatDateTime(manifest.closed_at || manifest.created_at)} />
+      <Line icon={<CalendarClock size={15} />} label="Ngày dự kiến đến" value={isEditingArrival ? <span className="flex flex-wrap justify-end gap-2"><DateTimePicker value={arrivalValue} onChange={setArrivalValue} disabled={isSaving} placeholder="Chọn ngày đến" className="h-8" /><button disabled={isSaving} onClick={() => void saveArrival()} className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2 text-[12px] font-black text-white disabled:opacity-50">{isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Lưu</button><button disabled={isSaving} onClick={() => { setArrivalValue(toDateTimeLocalValue(expectedArrival(manifest))); setIsEditingArrival(false); }} className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-white px-2 text-[12px] font-black text-muted-foreground disabled:opacity-50"><X size={13} />Hủy</button></span> : <span className="flex items-center justify-end gap-2"><span>{formatDateTime(expectedArrival(manifest))}</span><button onClick={() => { setArrivalValue(toDateTimeLocalValue(expectedArrival(manifest))); setIsEditingArrival(true); }} className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 text-[12px] font-black text-amber-700 hover:bg-amber-100"><Edit3 size={13} />Sửa</button></span>} />
     </div>
     <div className="mt-3 rounded-2xl bg-slate-900 px-3 py-2 text-[13px] font-black text-white">{tripLabel(manifest)}</div>
     <button onClick={onOpen} className="mt-4 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-black text-white transition-colors duration-200 hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/20"><Eye size={16} />Xem chi tiết bảng kê</button>

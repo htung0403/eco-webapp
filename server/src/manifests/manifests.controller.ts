@@ -48,6 +48,13 @@ export class ManifestsController {
     return this.manifestsService.update(id, dto, currentUser);
   }
 
+  @Patch(':id/expected-arrival')
+  @RequireRoles(Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Update expected arrival for a manifest transport summary' })
+  updateExpectedArrival(@Param('id') id: string, @Body() dto: { expected_arrival_time?: Date | string | null }, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.updateExpectedArrival(id, dto, currentUser);
+  }
+
   @Post(':id/waybills')
   @RequireRoles(Roles.DISPATCHER, Roles.PACKER, Roles.MANAGER, Roles.DIRECTOR)
   @ApiOperation({ summary: 'Add waybills to a draft manifest' })

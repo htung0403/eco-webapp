@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { Check, Edit3, Loader2, Package, X } from 'lucide-react';
+import { CalendarDays, Check, Edit3, Loader2, Package, X } from 'lucide-react';
+import { DateTimePicker } from '../../../../components/ui/DateTimePicker';
 import type { BadgeConfig, LoadPlanningManifest, ManifestWaybill } from '../types';
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
   onClose: () => void;
   onRemoveWaybill: (waybill: ManifestWaybill) => void;
   onUpdateDispatchFields?: (waybill: ManifestWaybill, fields: Record<string, string>) => Promise<void> | void;
+  onUpdateExpectedArrival?: (manifest: LoadPlanningManifest, value: string) => Promise<void> | void;
 }
 
 type EditableFields = { ghi_chu_1: string; ghi_chu_2: string; ke_hoach: string; lai_xe_thu_ho: string };
@@ -20,6 +22,10 @@ type EditableFields = { ghi_chu_1: string; ghi_chu_2: string; ke_hoach: string; 
 const display = (value?: string | number | null, fallback = '—') => value == null || value === '' ? fallback : String(value);
 const num = (value?: string | number | null, suffix = '') => value == null || value === '' ? '—' : `${Number(value).toLocaleString('vi-VN')}${suffix}`;
 const code = (manifest: LoadPlanningManifest) => manifest.manifest_code || manifest.code || `MF-${manifest.id}`;
+const manifestTrip = (manifest: LoadPlanningManifest) => manifest.trip ?? manifest.trips?.[0] ?? null;
+const expectedArrival = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.expected_arrival_time || manifestTrip(manifest)?.arrival_time || null;
+const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
+const toDateTimeLocalValue = (value?: string | null) => { if (!value) return ''; const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); };
 const badge = (status?: string | null, config?: BadgeConfig) => <span className={`inline-flex h-7 items-center rounded-full px-3 text-[12px] font-bold ${config?.className || 'bg-slate-100 text-slate-600'}`}>{config?.label || status || '—'}</span>;
 const extractWaybills = (manifest: LoadPlanningManifest | null): ManifestWaybill[] => manifest?.waybills?.length ? manifest.waybills : (manifest?.manifest_waybills || []).map((link) => link.waybill ? { ...link.waybill, loading_position: link.loading_position ?? link.waybill.loading_position, dispatch_fields: { ...(link.waybill.dispatch_fields ?? {}), ...(link.dispatch_fields ?? {}) } } : null).filter(Boolean) as ManifestWaybill[];
 const contactName = (value?: string | null) => display((value || '').split('|')[0]?.trim(), display(value));
@@ -28,7 +34,7 @@ const dispatchValue = (waybill: ManifestWaybill, key: string) => display(waybill
 const destinationName = (waybill: ManifestWaybill) => dispatchValue(waybill, 'noi_tra') || waybill.dest_hub?.name || waybill.dest_hub?.code || display(waybill.noi_den || waybill.dest_hub_id, '');
 const editableValues = (waybill: ManifestWaybill): EditableFields => ({ ghi_chu_1: dispatchValue(waybill, 'ghi_chu_1'), ghi_chu_2: dispatchValue(waybill, 'ghi_chu_2'), ke_hoach: dispatchValue(waybill, 'ke_hoach'), lai_xe_thu_ho: dispatchValue(waybill, 'lai_xe_thu_ho') });
 
-export default function ManifestDetailDialog({ isOpen, isClosing, isLoading, isSubmitting = false, manifest, statusConfig, canManage, onClose, onUpdateDispatchFields }: Props) {
+export default function ManifestDetailDialog({ isOpen, isClosing, isLoading, isSubmitting = false, manifest, statusConfig, canManage, onClose, onUpdateDispatchFields, onUpdateExpectedArrival }: Props) {
   if (!isOpen) return null;
   const waybills = extractWaybills(manifest);
 
@@ -42,11 +48,12 @@ export default function ManifestDetailDialog({ isOpen, isClosing, isLoading, isS
 
       <main className="min-h-0 flex-1 overflow-auto p-5 custom-scrollbar">
         {isLoading ? <State label="Đang tải chi tiết bảng kê..." /> : !manifest ? <State label="Không tìm thấy bảng kê." /> : <div className="space-y-4">
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Info label="Trạng thái" value={badge(manifest.status, statusConfig[String(manifest.status || '')])} />
             <Info label="Hub đi" value={display(manifest.origin_hub?.code || manifest.origin_hub?.name || manifest.origin_hub_id)} />
             <Info label="Hub đến" value={display(manifest.dest_hub?.code || manifest.dest_hub?.name || manifest.dest_hub_id)} />
             <Info label="Seal" value={display(manifest.seal_code)} mono />
+            <Info label="Ngày dự kiến đến" value={<ExpectedArrivalEditor manifest={manifest} canManage={canManage && !!onUpdateExpectedArrival} isSubmitting={isSubmitting} onUpdateExpectedArrival={onUpdateExpectedArrival} />} />
           </section>
 
           <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -69,6 +76,16 @@ export default function ManifestDetailDialog({ isOpen, isClosing, isLoading, isS
       </main>
     </div>
   </div>;
+}
+
+function ExpectedArrivalEditor({ manifest, canManage, isSubmitting, onUpdateExpectedArrival }: { manifest: LoadPlanningManifest; canManage: boolean; isSubmitting: boolean; onUpdateExpectedArrival?: (manifest: LoadPlanningManifest, value: string) => Promise<void> | void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [value, setValue] = useState(() => toDateTimeLocalValue(expectedArrival(manifest)));
+  const canEditArrival = canManage;
+  const startEdit = () => { setValue(toDateTimeLocalValue(expectedArrival(manifest))); setIsEditing(true); };
+  const save = async () => { if (!onUpdateExpectedArrival) return; await onUpdateExpectedArrival(manifest, value); setIsEditing(false); };
+  if (isEditing) return <div className="space-y-2"><DateTimePicker value={value} onChange={setValue} disabled={isSubmitting} placeholder="Chọn ngày đến" className="w-full" /><div className="flex gap-2"><button disabled={isSubmitting} onClick={() => void save()} className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2 text-[11px] font-black text-white disabled:opacity-60">{isSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}Lưu</button><button disabled={isSubmitting} onClick={() => setIsEditing(false)} className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-black text-slate-600 disabled:opacity-60"><X size={13} />Hủy</button></div></div>;
+  return <div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-1"><CalendarDays size={14} />{formatDate(expectedArrival(manifest))}</span>{canEditArrival && <button onClick={startEdit} className="inline-flex h-8 items-center gap-1 rounded-lg border border-primary/20 bg-blue-50 px-2 text-[11px] font-black text-primary hover:bg-blue-100"><Edit3 size={13} />Sửa</button>}</div>;
 }
 
 function WaybillRow({ waybill, index, canManage, isSubmitting, onUpdateDispatchFields }: { waybill: ManifestWaybill; index: number; canManage: boolean; isSubmitting: boolean; onUpdateDispatchFields?: (waybill: ManifestWaybill, fields: Record<string, string>) => Promise<void> | void }) {

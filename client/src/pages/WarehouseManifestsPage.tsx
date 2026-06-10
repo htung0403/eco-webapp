@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Edit, Eye, FilePlus2, Filter, Loader2, PackageCheck, Phone, Plus, Printer, Route, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Edit, Eye, FilePlus2, Filter, Loader2, PackageCheck, Phone, Plus, Printer, Route, Save, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
 import { FilterSelect } from '../components/ui/FilterSelect';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { ConfirmDialog, type ConfirmDialogState } from '../components/ui/ConfirmDialog';
+import { DateTimePicker } from '../components/ui/DateTimePicker';
 import AddEditManifestDialog from './warehouse/manifests/dialogs/AddEditManifestDialog';
 import AddWaybillsToManifestDialog from './warehouse/manifests/dialogs/AddWaybillsToManifestDialog';
 import PrintManifestDialog from './warehouse/manifests/dialogs/PrintManifestDialog';
@@ -57,12 +58,14 @@ const manifestCode = (manifest: LoadPlanningManifest) => manifest.manifest_code 
 const hubLabel = (hub?: HubSummary | null, id?: string | number | null) => hub?.code || hub?.name || (id ? `Hub #${id}` : '—');
 const tripLabel = (trip?: TripSummary | null, id?: string | number | null) => trip?.trip_code || trip?.code || (id ? `Chuyến #${id}` : 'Chưa gán');
 const manifestTrip = (manifest: LoadPlanningManifest) => manifest.trip ?? manifest.trips?.[0] ?? null;
+const expectedArrival = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.expected_arrival_time || manifestTrip(manifest)?.arrival_time || null;
 const truckLabel = (manifest: LoadPlanningManifest) => { const trip = manifestTrip(manifest); return trip?.truck?.bks || trip?.truck?.license_plate || 'Chưa gán'; };
 const driverLabel = (manifest: LoadPlanningManifest) => { const trip = manifestTrip(manifest); return trip?.driver_name || trip?.driver?.name || trip?.driver?.full_name || trip?.truck?.ten_lai_xe || trip?.truck?.driver?.name || trip?.truck?.driver?.full_name || 'Chưa gán'; };
 const driverPhoneLabel = (manifest: LoadPlanningManifest) => { const trip = manifestTrip(manifest); return trip?.driver_phone || trip?.driver?.phone || trip?.truck?.driver?.phone || trip?.truck?.phone || 'Chưa có SĐT'; };
 const getWaybillCount = (manifest: LoadPlanningManifest) => Number(manifest.waybill_count ?? manifest.total_waybills ?? manifest.waybills?.length ?? 0);
 const getTotalWeight = (manifest: LoadPlanningManifest) => manifest.total_weight ?? manifest.weight_total ?? manifest.waybills?.reduce((sum, item) => sum + Number(item.weight || 0), 0);
 const closedBy = (manifest: LoadPlanningManifest) => manifest.closed_by?.name || manifest.closed_by?.full_name || manifest.closed_by?.username || manifest.created_by?.name || manifest.created_by?.full_name || manifest.created_by?.username || '—';
+const toDateTimeLocalValue = (value?: string | null) => { if (!value) return ''; const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); };
 
 export default function WarehouseManifestsPage() {
   const navigate = useNavigate();
@@ -182,6 +185,16 @@ export default function WarehouseManifestsPage() {
     finally { setIsSubmitting(false); }
   }
 
+  async function updateExpectedArrival(manifest: LoadPlanningManifest, value: string) {
+    setIsSubmitting(true); setActionError('');
+    try {
+      const freshManifest = await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}/expected-arrival`, { method: 'PATCH', body: { expected_arrival_time: value ? new Date(value).toISOString() : null } });
+      setDetailManifest(prev => prev && String(prev.id) === String(freshManifest.id) ? freshManifest : prev);
+      setManifests(prev => prev.map(item => String(item.id) === String(freshManifest.id) ? freshManifest : item));
+    } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể cập nhật ngày dự kiến đến.'); }
+    finally { setIsSubmitting(false); }
+  }
+
   function openAssign(manifest: LoadPlanningManifest) { if (!mayAssign) return; setAssignManifest(manifest); setAssignForm({ trip_id: manifest.trip_id ? String(manifest.trip_id) : '' }); setIsAssignOpen(true); }
   async function submitAssign() {
     if (!assignManifest || !assignForm.trip_id) return;
@@ -257,13 +270,13 @@ export default function WarehouseManifestsPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
-          {isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải danh sách bảng kê..." /> : error ? <StateBlock icon={<AlertTriangle size={22} />} title={error} /> : !manifests.length ? <StateBlock icon={<PackageCheck size={22} />} title="Chưa có bảng kê phù hợp." /> : <ManifestKanbanBoard departed={departedManifests} expected={expectedArrivalManifests} mayAssign={mayAssign} canManage={canManageManifest} onDetail={openDetail} onAssign={openAssign} onEdit={openEdit} onAddWaybills={openAddWaybills} onCloseManifest={confirmCloseManifest} onPrint={openPrint} onDelete={confirmDeleteManifest} />}
+          {isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải danh sách bảng kê..." /> : error ? <StateBlock icon={<AlertTriangle size={22} />} title={error} /> : !manifests.length ? <StateBlock icon={<PackageCheck size={22} />} title="Chưa có bảng kê phù hợp." /> : <ManifestKanbanBoard departed={departedManifests} expected={expectedArrivalManifests} mayAssign={mayAssign} canManage={canManageManifest} isSubmitting={isSubmitting} onDetail={openDetail} onAssign={openAssign} onEdit={openEdit} onAddWaybills={openAddWaybills} onCloseManifest={confirmCloseManifest} onPrint={openPrint} onDelete={confirmDeleteManifest} onUpdateExpectedArrival={updateExpectedArrival} />}
         </div>
 
         <div className="shrink-0 border-t border-border bg-card px-3 py-2"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[12px] font-bold text-muted-foreground">{`${rangeStart}-${rangeEnd}/Tổng:${total}`}</p><div className="flex items-center gap-2"><SearchableSelect value={String(filters.limit)} onValueChange={value => updateFilters({ limit: Number(value), page: 1 })} options={[{ value: '10', label: '10' }, { value: '20', label: '20' }, { value: '50', label: '50' }]} className="h-9 w-[88px] rounded-lg bg-white px-3 text-[13px] text-muted-foreground" searchPlaceholder="Tìm số dòng..." /><span className="hidden text-[12px] text-muted-foreground sm:inline">/ trang</span><button disabled={filters.page <= 1} onClick={() => updateFilters({ page: filters.page - 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronLeft size={16} /></button><button disabled={filters.page >= totalPages} onClick={() => updateFilters({ page: filters.page + 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronRight size={16} /></button><span className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-primary px-2 text-[13px] font-bold text-white">{filters.page}</span><span className="text-[13px] font-bold text-foreground">/ {totalPages}</span></div></div></div>
       </div>
       <FilterBottomSheet isOpen={isFilterOpen} draftFilters={draftFilters} setDraftFilters={setDraftFilters} openGroups={openGroups} setOpenGroups={setOpenGroups} groupSearch={groupSearch} setGroupSearch={setGroupSearch} hubOptions={hubOptions} tripOptions={tripOptions} onClose={() => setIsFilterOpen(false)} onApply={applyFilters} />
-      <ManifestDetailDialog isOpen={isDetailOpen} isClosing={isDetailClosing} isLoading={isDetailLoading} isSubmitting={isSubmitting} manifest={detailManifest} statusConfig={statusConfig} canManage={canManageManifest} onClose={closeDetail} onRemoveWaybill={confirmRemoveWaybill} onUpdateDispatchFields={updateDetailDispatchFields} />
+      <ManifestDetailDialog isOpen={isDetailOpen} isClosing={isDetailClosing} isLoading={isDetailLoading} isSubmitting={isSubmitting} manifest={detailManifest} statusConfig={statusConfig} canManage={canManageManifest} onClose={closeDetail} onRemoveWaybill={confirmRemoveWaybill} onUpdateDispatchFields={updateDetailDispatchFields} onUpdateExpectedArrival={updateExpectedArrival} />
       <AddEditManifestDialog isOpen={isFormOpen} isClosing={isFormClosing} isEditMode={isEditMode} isSubmitting={isSubmitting} formState={formState} hubs={hubs} onChange={(key, value) => setFormState(prev => ({ ...prev, [key]: value }))} onClose={closeForm} onSubmit={submitForm} />
       <AddWaybillsToManifestDialog isOpen={isAddWaybillsOpen} isClosing={isAddWaybillsClosing} isLoading={isWaybillLoading} isSubmitting={isSubmitting} manifest={addWaybillsManifest} waybills={waybillChoices} total={waybillTotal} formState={addWaybillsForm} onChange={patch => setAddWaybillsForm(prev => ({ ...prev, ...patch }))} onClose={closeAddWaybills} onSubmit={submitAddWaybills} />
       <PrintManifestDialog isOpen={isPrintOpen} isClosing={isPrintClosing} isLoading={isPrintLoading} manifest={printManifest} onClose={closePrint} />
@@ -298,13 +311,22 @@ function ManifestCard(props: ManifestItemProps) {
       <InfoLine icon={<Phone size={15} />} label="SĐT" value={driverPhoneLabel(manifest)} />
       <InfoLine icon={<UserRound size={15} />} label="Tài xế" value={driverLabel(manifest)} />
       <InfoLine icon={<CalendarDays size={15} />} label="Thời gian đóng" value={formatDate(manifest.closed_at || manifest.created_at)} />
+      <ExpectedArrivalLine manifest={manifest} canManage={props.canManage} isSubmitting={props.isSubmitting} onUpdateExpectedArrival={props.onUpdateExpectedArrival} />
       <InfoLine icon={<PackageCheck size={15} />} label="Người đóng" value={closedBy(manifest)} />
     </div>
     <div className="mt-3 rounded-2xl bg-slate-900 px-3 py-2"><p className="text-[13px] font-black text-white">{tripLabel(manifestTrip(manifest), manifest.trip_id)}</p>{manifestTrip(manifest)?.status && <div className="mt-1"><Badge config={tripStatusConfig[String(manifestTrip(manifest)?.status)]} fallback={manifestTrip(manifest)?.status} /></div>}</div>
     <div className="mt-4"><Actions {...props} /></div>
   </article>;
 }
-interface ManifestItemProps { manifest: LoadPlanningManifest; mayAssign: boolean; canManage: boolean; onDetail: (manifest: LoadPlanningManifest) => void; onAssign: (manifest: LoadPlanningManifest) => void; onEdit: (manifest: LoadPlanningManifest) => void; onAddWaybills: (manifest: LoadPlanningManifest) => void; onCloseManifest: (manifest: LoadPlanningManifest) => void; onPrint: (manifest: LoadPlanningManifest) => void; onDelete: (manifest: LoadPlanningManifest) => void; }
+interface ManifestItemProps { manifest: LoadPlanningManifest; mayAssign: boolean; canManage: boolean; isSubmitting: boolean; onDetail: (manifest: LoadPlanningManifest) => void; onAssign: (manifest: LoadPlanningManifest) => void; onEdit: (manifest: LoadPlanningManifest) => void; onAddWaybills: (manifest: LoadPlanningManifest) => void; onCloseManifest: (manifest: LoadPlanningManifest) => void; onPrint: (manifest: LoadPlanningManifest) => void; onDelete: (manifest: LoadPlanningManifest) => void; onUpdateExpectedArrival: (manifest: LoadPlanningManifest, value: string) => Promise<void>; }
+function ExpectedArrivalLine({ manifest, canManage, isSubmitting, onUpdateExpectedArrival }: Pick<ManifestItemProps, 'manifest' | 'canManage' | 'isSubmitting' | 'onUpdateExpectedArrival'>) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [value, setValue] = useState(() => toDateTimeLocalValue(expectedArrival(manifest)));
+  const canEditArrival = canManage;
+  const startEdit = () => { setValue(toDateTimeLocalValue(expectedArrival(manifest))); setIsEditing(true); };
+  const save = async () => { await onUpdateExpectedArrival(manifest, value); setIsEditing(false); };
+  return <div className="flex items-start justify-between gap-3 border-b border-slate-200 py-2 last:border-b-0"><span className="flex items-center gap-2 text-muted-foreground"><CalendarDays size={15} />Ngày dự kiến đến</span><span className="text-right font-bold text-foreground">{isEditing ? <span className="flex flex-wrap justify-end gap-2"><DateTimePicker value={value} onChange={setValue} disabled={isSubmitting} placeholder="Chọn ngày đến" className="h-8" /><button disabled={isSubmitting} onClick={() => void save()} className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2 text-[12px] font-black text-white disabled:opacity-50">{isSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Lưu</button><button disabled={isSubmitting} onClick={() => setIsEditing(false)} className="h-8 rounded-lg border border-border bg-white px-2 text-[12px] font-black text-muted-foreground disabled:opacity-50">Hủy</button></span> : <span className="flex items-center justify-end gap-2"><span>{formatDate(expectedArrival(manifest))}</span>{canEditArrival && <button onClick={startEdit} className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 text-[12px] font-black text-amber-700 hover:bg-amber-100"><Edit size={13} />Sửa</button>}</span>}</span></div>;
+}
 function Actions({ manifest, mayAssign, canManage, onDetail, onAssign, onEdit, onAddWaybills, onCloseManifest, onPrint, onDelete }: ManifestItemProps) {
   const isDraft = manifest.status === 'DRAFT';
   const isClosed = manifest.status === 'CLOSED';

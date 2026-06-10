@@ -104,6 +104,31 @@ export class ManifestsService {
     return await this.manifestsRepository.save(manifest) as ManifestRecord;
   }
 
+  async updateExpectedArrival(id: string, dto: { expected_arrival_time?: Date | string | null }, currentUser: UserEntity): Promise<ManifestRecord> {
+    this.assertRole(currentUser, [Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR]);
+    const manifest = await this.findOne(id, currentUser);
+    const expectedArrivalTime = dto.expected_arrival_time ? new Date(dto.expected_arrival_time) : null;
+    if (dto.expected_arrival_time && Number.isNaN(expectedArrivalTime?.getTime())) throw new BadRequestException('expected_arrival_time must be a valid date-time');
+
+    const tripId = manifest.trip_id ?? manifest.trip?.id;
+    if (tripId && /^\d+$/.test(String(tripId))) {
+      const trip = await this.tripsRepository.findOne({ where: { id: String(tripId) } as any }) as TripRecord | null;
+      if (!trip) throw new NotFoundException('Trip not found');
+      trip.expected_arrival_time = expectedArrivalTime;
+      await this.tripsRepository.save(trip);
+      return this.findOne(id, currentUser);
+    }
+
+    const links = await this.manifestWaybillsRepository.find({ where: { manifest_id: String(manifest.id) } });
+    const waybillIds = links.map((link) => String(link.waybill_id)).filter(Boolean);
+    if (!waybillIds.length) throw new BadRequestException('Manifest has no waybill split to update expected arrival');
+    const splits = await this.waybillSplitsRepository.find({ where: { waybill_id: In(waybillIds) }, order: { loading_position: 'ASC', id: 'ASC' } });
+    if (!splits.length) throw new BadRequestException('Manifest has no transport split to update expected arrival');
+    splits.forEach((split) => { split.expected_arrival_at = expectedArrivalTime; });
+    await this.waybillSplitsRepository.save(splits);
+    return this.findOne(id, currentUser);
+  }
+
   async addWaybills(id: string, dto: AddWaybillsToManifestDto, currentUser: UserEntity): Promise<ManifestRecord> {
     this.assertRole(currentUser, [Roles.DISPATCHER, Roles.PACKER, Roles.MANAGER, Roles.DIRECTOR]);
     const manifest = await this.findOne(id, currentUser);
@@ -295,6 +320,8 @@ export class ManifestsService {
         trip_code: trip?.trip_code ?? trip?.code ?? null,
         code: trip?.code ?? null,
         status: trip?.status ?? split.load_status ?? null,
+        arrival_time: trip?.arrival_time ?? split.expected_arrival_at ?? null,
+        expected_arrival_time: trip?.expected_arrival_time ?? split.expected_arrival_at ?? null,
         truck,
         driver_name: trip?.driver_name ?? truck?.ten_lai_xe ?? truck?.driver?.full_name ?? truck?.driver?.username ?? null,
         driver_phone: trip?.driver_phone ?? truck?.driver?.phone ?? null,
@@ -309,6 +336,7 @@ export class ManifestsService {
       ...trip,
       driver_name: trip.driver_name ?? truck?.ten_lai_xe ?? truck?.driver?.full_name ?? truck?.driver?.username ?? null,
       driver_phone: trip.driver_phone ?? truck?.driver?.phone ?? null,
+      expected_arrival_time: trip.expected_arrival_time ?? trip.arrival_time ?? null,
     };
   }
 
