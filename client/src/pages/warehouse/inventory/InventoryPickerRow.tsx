@@ -20,7 +20,7 @@ const displayValue = (value: unknown, suffix = '') =>
   value === null || value === undefined || value === '' ? '—' : `${value}${suffix}`;
 const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—');
 const formatHub = (
-  hub?: { code?: string | null; name?: string | null } | null,
+  hub?: { id?: string | number; code?: string | null; name?: string | null } | null,
   fallback?: string | number | null,
 ) => (hub ? [hub.code?.toUpperCase(), hub.name].filter(Boolean).join(' · ') || `Hub #${hub.id}` : fallback ? `Hub #${fallback}` : '—');
 
