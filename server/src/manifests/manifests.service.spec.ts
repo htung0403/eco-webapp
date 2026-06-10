@@ -15,6 +15,7 @@ import { ManifestsService } from './manifests.service';
 const makeRepo = () => ({
   create: jest.fn((value) => ({ ...value })),
   save: jest.fn(async (value) => value),
+  update: jest.fn(async () => undefined),
   find: jest.fn().mockResolvedValue([]),
   findOne: jest.fn(),
   delete: jest.fn(),
@@ -134,18 +135,39 @@ describe('ManifestsService', () => {
     const manifest = draftManifest();
     manifestsRepo.findOne.mockImplementation(async (options: any) => options?.where?.manifest_code ? null : manifest);
     linksRepo.find.mockResolvedValue([]);
-    waybillsRepo.find.mockResolvedValue([waybill()]);
+    splitsRepo.find.mockResolvedValue([]);
+    waybillsRepo.find.mockResolvedValue([waybill({ package_count: 1 })]);
     linksRepo.create.mockImplementation((value) => value);
     await service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher);
-    expect(linksRepo.save).toHaveBeenCalledWith([{ manifest_id: '10', waybill_id: '100', loading_position: null, loaded_at: null }]);
+    expect(linksRepo.save).toHaveBeenCalledWith([expect.objectContaining({ manifest_id: '10', waybill_id: '100', dispatch_fields: { so_luong: '1' } })]);
+    expect(splitsRepo.save).toHaveBeenCalled();
     expect(waybillsRepo.save).toHaveBeenCalledWith([expect.objectContaining({ manifest_id: '10' })]);
+  });
+
+  it('addWaybills chỉ phân bổ đúng số kiện khi thêm một phần', async () => {
+    const manifest = draftManifest({ status: ManifestStatus.CLOSED });
+    manifestsRepo.findOne.mockImplementation(async (options: any) => options?.where?.manifest_code ? null : manifest);
+    linksRepo.find.mockResolvedValue([]);
+    splitsRepo.find.mockResolvedValue([]);
+    waybillsRepo.find.mockResolvedValue([waybill({ id: '100', package_count: 10 })]);
+    linksRepo.create.mockImplementation((value) => value);
+    await service.addWaybills('10', { items: [{ waybill_id: '100', package_count: 5 }] }, dispatcher);
+    expect(linksRepo.save).toHaveBeenCalledWith([expect.objectContaining({
+      manifest_id: '10',
+      waybill_id: '100',
+      dispatch_fields: { so_luong: '5' },
+      loaded_at: null,
+    })]);
+    expect(splitsRepo.save).toHaveBeenCalledWith([expect.objectContaining({ waybill_id: '100', package_count: 5 })]);
+    expect(waybillsRepo.save).not.toHaveBeenCalled();
   });
 
   it('addWaybills vào manifest CLOSED sau xếp hàng thành công', async () => {
     const manifest = draftManifest({ status: ManifestStatus.CLOSED });
     manifestsRepo.findOne.mockImplementation(async (options: any) => options?.where?.manifest_code ? null : manifest);
     linksRepo.find.mockResolvedValue([{ manifest_id: '10', waybill_id: '99', loading_position: 2 }]);
-    waybillsRepo.find.mockResolvedValue([waybill({ id: '100' })]);
+    splitsRepo.find.mockResolvedValue([]);
+    waybillsRepo.find.mockResolvedValue([waybill({ id: '100', package_count: 1 })]);
     linksRepo.create.mockImplementation((value) => value);
     await service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher);
     expect(linksRepo.save).toHaveBeenCalledWith([expect.objectContaining({ manifest_id: '10', waybill_id: '100', loading_position: 3, loaded_at: expect.any(Date) })]);
@@ -167,10 +189,14 @@ describe('ManifestsService', () => {
     expect(linksRepo.save).toHaveBeenCalled();
   });
 
-  it('add waybill RECEIVED vào manifest CLOSED phải bị chặn', async () => {
-    manifestsRepo.findOne.mockResolvedValue(draftManifest({ status: ManifestStatus.CLOSED }));
+  it('add waybill RECEIVED vào manifest CLOSED được phép', async () => {
+    const manifest = draftManifest({ status: ManifestStatus.CLOSED });
+    manifestsRepo.findOne.mockImplementation(async (options: any) => options?.where?.manifest_code ? null : manifest);
+    linksRepo.find.mockResolvedValue([]);
     waybillsRepo.find.mockResolvedValue([waybill({ status: WaybillState.RECEIVED, current_state: WaybillState.RECEIVED })]);
-    await expect(service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher)).rejects.toBeInstanceOf(BadRequestException);
+    linksRepo.create.mockImplementation((value) => value);
+    await service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher);
+    expect(linksRepo.save).toHaveBeenCalled();
   });
 
   it('add waybill đã thuộc manifest khác phải bị chặn', async () => {
@@ -178,9 +204,14 @@ describe('ManifestsService', () => {
     await expect(service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher)).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('add waybill khác origin hub phải bị chặn', async () => {
-    waybillsRepo.find.mockResolvedValue([waybill({ origin_hub_id: '3', current_hub_id: '3' })]);
-    await expect(service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher)).rejects.toBeInstanceOf(BadRequestException);
+  it('add waybill khác hub vẫn được nếu đúng trạng thái tồn', async () => {
+    const manifest = draftManifest();
+    manifestsRepo.findOne.mockImplementation(async (options: any) => options?.where?.manifest_code ? null : manifest);
+    linksRepo.find.mockResolvedValue([]);
+    waybillsRepo.find.mockResolvedValue([waybill({ origin_hub_id: '3', current_hub_id: '3', dest_hub_id: '2' })]);
+    linksRepo.create.mockImplementation((value) => value);
+    await service.addWaybills('10', { waybill_ids: ['100'] }, dispatcher);
+    expect(linksRepo.save).toHaveBeenCalled();
   });
 
   it('add waybill khớp hub dù id kiểu number/string khác nhau', async () => {

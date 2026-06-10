@@ -36,6 +36,7 @@ import {
   saveVisibleColumnIds,
   type InventoryColumnId,
 } from './warehouse/inventory/inventoryColumns';
+import { buildInventoryTripLinesQuery, isIncompleteSplitRow } from './warehouse/inventory/inventoryTripLines';
 import type { BadgeConfig, FilterOption, HubSummary, InventoryFilters, InventoryListResponse, WaybillInventoryDetail, WaybillInventoryItem } from './warehouse/inventory/types';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
@@ -93,29 +94,8 @@ const isMutableWaybill = (waybill: WaybillInventoryItem) => MUTABLE_WAYBILL_STAT
 const actionMenuId = (waybill: WaybillInventoryItem) => `${waybill.id}-${waybill.split_id ?? 'base'}`;
 const formatHub = (hub: HubSummary | null | undefined, fallback?: string | number | null) => hub ? [hub.code?.toUpperCase(), hub.name].filter(Boolean).join(' · ') || `Hub #${hub.id}` : fallback ? `Hub #${fallback}` : '—';
 
-const isIncompleteSplitRow = (item: WaybillInventoryItem) => {
-  if (item.split_id) return false;
-  if (item.remaining_packages != null) return Number(item.remaining_packages) > 0;
-  if (item.trip_label?.startsWith('Còn ') || item.trip_label === 'Chưa phân xe') return true;
-  const totalPackages = Math.max(1, Number(item.order_total_packages ?? item.package_count ?? 1));
-  return Number(item.trip_package_count ?? item.package_count ?? 0) < totalPackages;
-};
-
-const buildQuery = (filters: InventoryFilters, variant: InventoryPageVariant) => {
-  const params = new URLSearchParams({ page: String(filters.page), limit: String(filters.limit) });
-  if (filters.receivedFrom) params.set('received_from', filters.receivedFrom);
-  if (filters.receivedTo) params.set('received_to', filters.receivedTo);
-  if (variant === 'split-pending') {
-    params.set('only_incomplete_split', '1');
-    if (filters.keyword.trim()) params.set('keyword', filters.keyword.trim());
-    if (filters.ma_kh.trim()) params.set('ma_kh', filters.ma_kh.trim());
-    if (filters.statuses.length) params.set('status', filters.statuses.join(','));
-    if (filters.hubIds.length) params.set('hub_id', filters.hubIds.join(','));
-    if (filters.paymentTypes.length) params.set('payment_type', filters.paymentTypes.join(','));
-    if (filters.priorities.length) params.set('priority', filters.priorities.join(','));
-  }
-  return params.toString();
-};
+const buildQuery = (filters: InventoryFilters, variant: InventoryPageVariant) =>
+  buildInventoryTripLinesQuery(filters, { onlyIncompleteSplit: variant === 'split-pending' });
 
 const sortAllOrders = (items: WaybillInventoryItem[]) =>
   [...items].sort((a, b) => {

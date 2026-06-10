@@ -57,7 +57,7 @@ const getPositiveInteger = (value: string | undefined, fallback: number) => {
           console.warn(`DATABASE_URL is using a Supabase direct host. ${getDatabaseUrlHelp()}`);
         }
 
-        const poolMax = getPositiveInteger(configService.get<string>('DB_POOL_MAX'), 5);
+        const poolMax = getPositiveInteger(configService.get<string>('DB_POOL_MAX'), 2);
         const connectionTimeoutMillis = getPositiveInteger(configService.get<string>('DB_CONNECTION_TIMEOUT_MS'), 10_000);
         const idleTimeoutMillis = getPositiveInteger(configService.get<string>('DB_IDLE_TIMEOUT_MS'), 10_000);
 

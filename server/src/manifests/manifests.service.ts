@@ -10,6 +10,7 @@ import { UserEntity } from '../users/user.entity';
 import { WaybillSplitEntity } from '../waybills/waybill-split.entity';
 import { WaybillEntity } from '../waybills/waybill.entity';
 import { AddWaybillsToManifestDto } from './dto/add-waybills-to-manifest.dto';
+import { WaybillSplitLoadStatus } from '../waybills/dto/waybill-split-load-status.enum';
 import { AssignManifestTripDto } from './dto/assign-manifest-trip.dto';
 import { CloseManifestDto } from './dto/close-manifest.dto';
 import { CreateManifestDto } from './dto/create-manifest.dto';
@@ -133,41 +134,118 @@ export class ManifestsService {
     this.assertRole(currentUser, [Roles.DISPATCHER, Roles.PACKER, Roles.MANAGER, Roles.DIRECTOR]);
     const manifest = await this.findOne(id, currentUser);
     this.assertCanAddWaybills(manifest);
-    const uniqueIds = [...new Set(dto.waybill_ids.map(String))];
+
+    type ManifestAddLine = { waybill_id: string; package_count?: number; loading_position?: number };
+    const rawLines: ManifestAddLine[] = dto.items?.length
+      ? dto.items.map((line) => ({
+        waybill_id: String(line.waybill_id),
+        package_count: line.package_count,
+        loading_position: line.loading_position,
+      }))
+      : (dto.waybill_ids ?? []).map((waybillId) => ({ waybill_id: String(waybillId) }));
+    if (!rawLines.length) throw new BadRequestException('Chưa chọn vận đơn để thêm vào bảng kê');
+
+    const lines = [...rawLines.reduce((map, line) => map.set(line.waybill_id, line), new Map<string, ManifestAddLine>()).values()];
     const existingLinks = await this.manifestWaybillsRepository.find({ where: { manifest_id: id } });
     const existingIds = new Set(existingLinks.map((link) => String(link.waybill_id)));
-    const newIds = uniqueIds.filter((waybillId) => !existingIds.has(waybillId));
-    if (!newIds.length) throw new BadRequestException('All selected waybills are already in this manifest');
+    const linesNeedingLink = lines.filter((line) => !existingIds.has(line.waybill_id));
+    const linesAddingPackages = lines.filter((line) => existingIds.has(line.waybill_id));
+    if (!lines.length) throw new BadRequestException('Chưa chọn vận đơn để thêm vào bảng kê');
 
-    const waybills = await this.waybillsRepository.find({ where: { id: In(newIds), deleted_at: IsNull() } as any }) as WaybillRecord[];
+    const newIds = [...new Set(lines.map((line) => line.waybill_id))];
+    const waybills = await this.waybillsRepository.find({
+      where: { id: In(newIds), deleted_at: IsNull() } as any,
+      relations: ['order'],
+    }) as WaybillRecord[];
     if (waybills.length !== newIds.length) throw new NotFoundException('One or more waybills not found');
 
+    const waybillById = new Map(waybills.map((waybill) => [String(waybill.id), waybill]));
     for (const waybill of waybills) this.assertWaybillCanBeAdded(manifest, waybill);
 
     const isClosed = manifest.status === ManifestStatus.CLOSED;
     const now = new Date();
-    const nextPosition = existingLinks.reduce((max, link) => Math.max(max, Number(link.loading_position ?? 0)), 0);
-    const links = newIds.map((waybillId, index) => this.manifestWaybillsRepository.create({
-      manifest_id: id,
-      waybill_id: waybillId,
-      loading_position: isClosed ? nextPosition + index + 1 : null,
-      loaded_at: isClosed ? now : null,
-    }));
-    if (links.length) await this.manifestWaybillsRepository.save(links as any);
+    let nextPosition = existingLinks.reduce((max, link) => Math.max(max, Number(link.loading_position ?? 0)), 0);
+    const links: ManifestWaybillEntity[] = [];
+    const splitsToSave: WaybillSplitEntity[] = [];
+    const linkDispatchUpdates: Array<{ waybill_id: string; package_count: number }> = [];
+    const mutatedWaybillIds = new Set<string>();
 
-    waybills.forEach((waybill) => {
-      waybill.manifest_id = id;
-      if (isClosed) {
-        waybill.current_state = WaybillState.MANIFEST_CLOSED;
-        waybill.status = WaybillState.MANIFEST_CLOSED;
-        waybill.loaded_at = waybill.loaded_at ?? now;
-        waybill.updated_by = currentUser.id;
-        waybill.last_audit_action = 'MANIFEST_ADD_WAYBILL';
-        waybill.last_audit_user_id = currentUser.id;
-        waybill.last_audit_at = now;
+    const allocatePackages = async (line: ManifestAddLine, createLink: boolean) => {
+      const waybill = waybillById.get(line.waybill_id);
+      if (!waybill) return;
+
+      const remainingPackages = await this.getRemainingPackages(waybill);
+      const packageCount = line.package_count != null ? Number(line.package_count) : remainingPackages;
+      if (!Number.isFinite(packageCount) || packageCount <= 0) {
+        throw new BadRequestException(`Vận đơn ${waybill.waybill_code} không còn kiện để thêm vào bảng kê`);
       }
-    });
-    await this.waybillsRepository.save(waybills as any);
+      if (packageCount > remainingPackages) {
+        throw new BadRequestException(`Vận đơn ${waybill.waybill_code}: số kiện vượt quá còn lại (${remainingPackages})`);
+      }
+
+      const loadingPosition = line.loading_position ?? (isClosed ? ++nextPosition : null);
+      if (createLink) {
+        links.push(this.manifestWaybillsRepository.create({
+          manifest_id: id,
+          waybill_id: line.waybill_id,
+          loading_position: loadingPosition,
+          loaded_at: isClosed && packageCount >= remainingPackages ? now : null,
+          dispatch_fields: { so_luong: String(packageCount) },
+        }));
+      } else {
+        linkDispatchUpdates.push({ waybill_id: line.waybill_id, package_count: packageCount });
+      }
+
+      splitsToSave.push(this.waybillSplitsRepository.create({
+        waybill_id: line.waybill_id,
+        package_count: packageCount,
+        loading_position: loadingPosition,
+        load_status: isClosed && packageCount >= remainingPackages
+          ? WaybillSplitLoadStatus.LOADED
+          : WaybillSplitLoadStatus.WAITING_LOAD,
+        expected_arrival_at: this.computeExpectedArrivalAt(waybill),
+        created_by: currentUser.id,
+      }));
+
+      const isFullyAllocated = packageCount >= remainingPackages;
+      if (isFullyAllocated) {
+        waybill.manifest_id = id;
+        mutatedWaybillIds.add(line.waybill_id);
+        if (isClosed) {
+          waybill.current_state = WaybillState.MANIFEST_CLOSED;
+          waybill.status = WaybillState.MANIFEST_CLOSED;
+          waybill.loaded_at = waybill.loaded_at ?? now;
+          waybill.updated_by = currentUser.id;
+          waybill.last_audit_action = 'MANIFEST_ADD_WAYBILL';
+          waybill.last_audit_user_id = currentUser.id;
+          waybill.last_audit_at = now;
+        }
+      }
+    };
+
+    for (const line of linesNeedingLink) {
+      await allocatePackages(line, true);
+    }
+    for (const line of linesAddingPackages) {
+      await allocatePackages(line, false);
+    }
+
+    if (links.length) await this.manifestWaybillsRepository.save(links as any);
+    if (splitsToSave.length) await this.waybillSplitsRepository.save(splitsToSave);
+
+    for (const update of linkDispatchUpdates) {
+      const link = existingLinks.find((row) => String(row.waybill_id) === update.waybill_id);
+      if (!link) continue;
+      const currentQty = Number((link.dispatch_fields as Record<string, unknown> | null)?.so_luong ?? 0);
+      link.dispatch_fields = {
+        ...(link.dispatch_fields ?? {}),
+        so_luong: String(currentQty + update.package_count),
+      };
+      await this.manifestWaybillsRepository.save(link);
+    }
+
+    const waybillsToSave = waybills.filter((waybill) => mutatedWaybillIds.has(String(waybill.id)));
+    if (waybillsToSave.length) await this.waybillsRepository.save(waybillsToSave as any);
     await this.refreshTotals(manifest, waybills, currentUser.id);
     return this.findOne(id, currentUser);
   }
@@ -440,23 +518,12 @@ export class ManifestsService {
 
   private assertWaybillCanBeAdded(manifest: ManifestRecord, waybill: WaybillRecord) {
     const status = this.getWaybillStatus(waybill);
-    const allowedStatuses = manifest.status === ManifestStatus.CLOSED
-      ? [WaybillState.IN_WAREHOUSE]
-      : [WaybillState.RECEIVED, WaybillState.IN_WAREHOUSE];
+    const allowedStatuses = [WaybillState.RECEIVED, WaybillState.IN_WAREHOUSE];
     if (!allowedStatuses.includes(status)) {
-      throw new BadRequestException(
-        manifest.status === ManifestStatus.CLOSED
-          ? 'Only IN_WAREHOUSE waybills can be added to a closed manifest'
-          : 'Only RECEIVED or IN_WAREHOUSE waybills from inventory can be added',
-      );
+      throw new BadRequestException('Chỉ thêm được đơn ở trạng thái Đã tạo đơn hoặc Trong kho');
     }
     if (waybill.manifest_id && String(waybill.manifest_id) !== String(manifest.id)) {
       throw new ConflictException('Waybill already belongs to another manifest');
-    }
-    const manifestOriginHubId = String(manifest.origin_hub_id ?? '');
-    const waybillCurrentHubId = String(waybill.current_hub_id ?? waybill.origin_hub_id ?? '');
-    if (waybillCurrentHubId !== manifestOriginHubId) {
-      throw new BadRequestException('Waybill must be at manifest origin hub');
     }
   }
 
@@ -464,15 +531,17 @@ export class ManifestsService {
     return (manifest.manifest_waybills ?? []).map((link: ManifestWaybillEntity & Record<string, any>) => link.waybill).filter(Boolean) as WaybillRecord[];
   }
 
-  private async refreshTotals(manifest: ManifestRecord, knownWaybills?: WaybillRecord[], userId?: string) {
-    const waybills = knownWaybills ?? this.extractWaybills(await this.loadManifest(manifest.id));
-    Object.assign(manifest, {
+  private async refreshTotals(manifest: ManifestRecord, _knownWaybills?: WaybillRecord[], userId?: string) {
+    const loaded = await this.loadManifest(manifest.id);
+    const waybills = this.extractWaybills(loaded);
+    const totals = {
       total_waybills: waybills.length,
       total_weight: waybills.reduce((sum, waybill) => sum + Number(waybill.weight ?? 0), 0),
       total_cod_amount: waybills.reduce((sum, waybill) => sum + Number(waybill.cod_amount ?? 0), 0),
       updated_by: userId ?? manifest.updated_by,
-    });
-    await this.manifestsRepository.save(manifest);
+    };
+    await this.manifestsRepository.save({ id: loaded.id, ...totals } as any);
+    Object.assign(manifest, totals);
   }
 
   private getWaybillStatus(waybill: WaybillRecord) {
@@ -491,6 +560,25 @@ export class ManifestsService {
 
   private assertRole(currentUser: UserEntity, roles: number[]) {
     if (!roles.some((role) => (currentUser.role_mask & role) !== 0)) throw new ForbiddenException('Insufficient role permissions');
+  }
+
+  private resolveTotalPackages(waybill: WaybillRecord): number {
+    const fromWaybill = Number(waybill.package_count ?? 0);
+    const fromOrder = Number(waybill.order?.package_count ?? 0);
+    return Math.max(1, fromWaybill, fromOrder);
+  }
+
+  private async getRemainingPackages(waybill: WaybillRecord): Promise<number> {
+    const splits = await this.waybillSplitsRepository.find({ where: { waybill_id: String(waybill.id) } });
+    const allocated = splits.reduce((sum, row) => sum + Number(row.package_count ?? 0), 0);
+    return this.resolveTotalPackages(waybill) - allocated;
+  }
+
+  private computeExpectedArrivalAt(waybill: WaybillRecord): Date {
+    const base = waybill.created_at ? new Date(waybill.created_at) : new Date();
+    const next = new Date(Number.isNaN(base.getTime()) ? Date.now() : base.getTime());
+    next.setDate(next.getDate() + 3);
+    return next;
   }
 }
 

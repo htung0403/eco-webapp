@@ -1,5 +1,16 @@
-import { AlertTriangle, Loader2, Plus, Search, X } from "lucide-react";
-import type { AddWaybillsFormState, LoadPlanningManifest, ManifestWaybill } from "../types";
+import { createPortal } from 'react-dom';
+import { clsx } from 'clsx';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, Plus, Search, X } from 'lucide-react';
+import {
+  buildManifestAddFormRows,
+  buildManifestAddSubmitItems,
+  type ManifestAddFormRow,
+  type ManifestAddSubmitItem,
+} from '../addManifestFormUtils';
+import type { WaybillInventoryItem } from '../../inventory/types';
+import type { AddWaybillsFormState, LoadPlanningManifest } from '../types';
+
 interface Props {
   isOpen: boolean;
   isClosing: boolean;
@@ -8,42 +19,21 @@ interface Props {
   error?: string;
   originHubLabel?: string;
   manifest: LoadPlanningManifest | null;
-  waybills: ManifestWaybill[];
+  waybills: WaybillInventoryItem[];
   total: number;
   formState: AddWaybillsFormState;
   onChange: (patch: Partial<AddWaybillsFormState>) => void;
   onClose: () => void;
-  onSubmit: () => void;
+  onSubmit: (items: ManifestAddSubmitItem[]) => void;
 }
-const display = (v?: string | number | null, f = "—") =>
-  v == null || v === "" ? f : String(v);
-const num = (v?: string | number | null, s = "") =>
-  v == null || v === "" ? "—" : `${Number(v).toLocaleString("vi-VN")}${s}`;
-const hubLabel = (hub?: { code?: string | null; name?: string | null } | null, id?: string | number | null) =>
-  hub?.code || hub?.name || (id ? `Hub #${id}` : "—");
-const packageLabel = (waybill: ManifestWaybill) => {
-  if (waybill.remaining_packages != null) {
-    const total = waybill.order_total_packages ?? waybill.package_count;
-    return total != null
-      ? `${waybill.remaining_packages} / ${total}`
-      : String(waybill.remaining_packages);
-  }
-  return display(waybill.package_count);
-};
-const statusLabel = (waybill: ManifestWaybill) => {
-  const status = String(waybill.current_state || waybill.status || "").toUpperCase();
-  if (status === "IN_WAREHOUSE") return "Trong kho";
-  if (status === "RECEIVED") return "Đã tạo đơn";
-  if (status === "MANIFEST_CLOSED") return "Chờ bốc";
-  return status || "—";
-};
+
 export default function AddWaybillsToManifestDialog({
   isOpen,
   isClosing,
   isLoading,
   isSubmitting,
-  error = "",
-  originHubLabel = "—",
+  error = '',
+  originHubLabel = '—',
   manifest,
   waybills,
   total,
@@ -52,218 +42,265 @@ export default function AddWaybillsToManifestDialog({
   onClose,
   onSubmit,
 }: Props) {
-  if (!isOpen) return null;
-  const toggle = (id: string) =>
-    onChange({
-      selectedIds: formState.selectedIds.includes(id)
-        ? formState.selectedIds.filter((x) => x !== id)
-        : [...formState.selectedIds, id],
+  const [rows, setRows] = useState<ManifestAddFormRow[]>([]);
+  const [localError, setLocalError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setRows((prev) => {
+      const prevById = new Map(prev.map((row) => [row.waybill_id, row]));
+      return buildManifestAddFormRows(waybills).map((row) => {
+        const existing = prevById.get(row.waybill_id);
+        if (!existing) return row;
+        return {
+          ...row,
+          selected: existing.selected,
+          package_count: existing.package_count,
+          loading_position: existing.loading_position,
+        };
+      });
     });
-  return (
-    <div className="fixed inset-0 z-[9999] flex justify-end">
+    setLocalError('');
+  }, [isOpen, waybills]);
+
+  const selectedRows = useMemo(() => rows.filter((row) => row.selected), [rows]);
+  const selectedPackageTotal = useMemo(
+    () => selectedRows.reduce((sum, row) => sum + (Number(row.package_count) || 0), 0),
+    [selectedRows],
+  );
+  const totalPages = Math.max(1, Math.ceil(total / formState.limit));
+  const allSelected = rows.length > 0 && rows.every((row) => row.selected);
+
+  if (!isOpen && !isClosing) return null;
+
+  const manifestLabel = manifest?.manifest_code || manifest?.code || (manifest ? `BK #${manifest.id}` : '');
+
+  const updateRow = (waybillId: string, patch: Partial<ManifestAddFormRow>) => {
+    setRows((prev) => prev.map((row) => (row.waybill_id === waybillId ? { ...row, ...patch } : row)));
+  };
+
+  const toggleAll = () => {
+    setRows((prev) => prev.map((row) => ({ ...row, selected: !allSelected })));
+  };
+
+  const handleSubmit = () => {
+    setLocalError('');
+    const items = buildManifestAddSubmitItems(rows);
+    if (!items.length) {
+      setLocalError('Chọn ít nhất một vận đơn để thêm vào bảng kê.');
+      return;
+    }
+    const missingQty = selectedRows.find((row) => !String(row.package_count).trim());
+    if (missingQty) {
+      setLocalError(`Nhập số kiện cho ${missingQty.waybill_code}.`);
+      return;
+    }
+    const invalid = rows.find((row) => {
+      if (!row.selected) return false;
+      const count = Number(row.package_count);
+      return !Number.isFinite(count) || count < 1 || count > row.max_package_count;
+    });
+    if (invalid) {
+      setLocalError(`Số kiện của ${invalid.waybill_code} phải từ 1 đến ${invalid.max_package_count}.`);
+      return;
+    }
+    onSubmit(items);
+  };
+
+  const displayError = localError || error;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-end justify-center sm:items-center">
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-md transition-all duration-350 ease-out"
+        className={clsx(
+          'absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-200',
+          isClosing ? 'opacity-0' : 'opacity-100',
+        )}
         onClick={onClose}
       />
       <div
-        className={`relative w-full max-w-[920px] bg-[#f8fafc] shadow-2xl flex flex-col h-screen border-l border-border ${isClosing ? "dialog-slide-out" : "dialog-slide-in"}`}
+        className={clsx(
+          'relative z-10 flex max-h-[96vh] min-h-[min(80vh,720px)] w-full max-w-[min(98vw,1100px)] flex-col overflow-hidden rounded-t-[28px] border border-border bg-background shadow-2xl sm:rounded-[28px] transition-all duration-200',
+          isClosing ? 'translate-y-6 opacity-0 sm:scale-95' : 'translate-y-0 opacity-100',
+        )}
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
-              Thêm đơn tồn
+            <p className="text-[18px] font-black text-foreground">Thêm đơn tồn vào bảng kê</p>
+            <p className="text-[13px] text-muted-foreground">
+              {manifestLabel ? `${manifestLabel} · ` : ''}
+              Chọn đơn và nhập số kiện
+              {originHubLabel !== '—' ? ` · Xuất phát ${originHubLabel}` : ''}
             </p>
-            <h2 className="text-lg font-extrabold text-foreground">
-              Chọn đơn để thêm vào bảng kê
-            </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground hover:bg-muted"
-          >
-            <X size={18} />
+          <button type="button" onClick={onClose} className="rounded-full p-2.5 hover:bg-muted">
+            <X size={22} />
           </button>
         </div>
-        <div className="border-b border-border p-3">
-          <div className="mb-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-semibold leading-5 text-blue-700">
-            Danh sách <b>Đơn tồn</b> đang ở kho <b>{originHubLabel}</b> (mọi hub đến, còn kiện chưa xếp hết).
-            Tích chọn đơn rồi bấm <b>Thêm vào bảng kê</b>.
-          </div>
+
+        <div className="shrink-0 border-b border-border px-6 py-3">
           <div className="relative">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={formState.keyword}
               onChange={(e) => onChange({ keyword: e.target.value, page: 1 })}
               placeholder="Tìm mã vận đơn, người gửi, người nhận..."
-              className="h-10 w-full rounded-lg border border-border bg-muted/10 pl-9 pr-3 text-[13px] font-medium outline-none"
+              className="h-11 w-full rounded-lg border border-border bg-muted/10 pl-9 pr-3 text-[14px] font-medium outline-none focus:border-primary"
             />
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
+
+        <div className="min-h-0 flex-1 overflow-auto custom-scrollbar p-6">
+          {displayError ? (
+            <div className="mb-3 flex gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              {displayError}
+            </div>
+          ) : null}
+
           {isLoading ? (
-            <div className="flex min-h-[320px] items-center justify-center gap-2 text-[13px] font-bold text-muted-foreground">
+            <div className="flex min-h-[240px] items-center justify-center gap-2 text-[13px] font-bold text-muted-foreground">
               <Loader2 className="animate-spin" size={18} />
               Đang tải đơn tồn...
             </div>
+          ) : rows.length === 0 ? (
+            <div className="flex min-h-[240px] items-center justify-center px-6 text-center">
+              <div className="max-w-md">
+                <p className="text-[13px] font-extrabold text-muted-foreground">Chưa có đơn cần chia</p>
+                <p className="mt-2 text-[12px] font-medium leading-5 text-muted-foreground">
+                  Tất cả đơn tồn đã phân hết kiện lên xe, hoặc đã nằm trong bảng kê khác.
+                </p>
+              </div>
+            </div>
           ) : (
-            <>
-              <table className="hidden md:table w-full min-w-[980px] text-left border-collapse">
-                <thead className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-600">
-                  <tr>
-                    {[
-                      "Chọn",
-                      "Mã vận đơn",
-                      "Người gửi",
-                      "Người nhận",
-                      "Kiện còn",
-                      "Trạng thái",
-                      "TL",
-                      "Thanh toán",
-                      "Hub đi",
-                      "Hub đến",
-                      "Ghi chú tồn",
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className="border-r border-border px-4 py-3 font-bold last:border-r-0"
-                      >
-                        {h}
-                      </th>
-                    ))}
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[720px] border-collapse text-[14px]">
+                <thead>
+                  <tr className="bg-slate-100 text-[12px] font-bold uppercase tracking-wide text-slate-700">
+                    <th className="w-10 border-b border-r border-border px-2 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
+                        aria-label="Chọn tất cả"
+                      />
+                    </th>
+                    <th className="border-b border-r border-border px-4 py-3 text-left">Mã vận đơn</th>
+                    <th className="border-b border-r border-border px-4 py-3 text-left">Tỉnh đến</th>
+                    <th className="border-b border-r border-border px-4 py-3 text-center">Số kiện</th>
+                    <th className="border-b border-r border-border px-4 py-3 text-center">Vị trí xếp hàng</th>
+                    <th className="border-b border-border px-4 py-3 text-center">Ngày tới</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {waybills.map((w) => (
-                    <tr key={w.id} className="border-b border-border">
-                      <td className="border-r border-border px-4 py-3">
+                  {rows.map((row) => (
+                    <tr key={row.waybill_id} className="border-b border-border align-top">
+                      <td className="border-r border-border px-2 py-3 text-center">
                         <input
                           type="checkbox"
-                          checked={formState.selectedIds.includes(String(w.id))}
-                          onChange={() => toggle(String(w.id))}
+                          checked={row.selected}
+                          onChange={(e) => updateRow(row.waybill_id, { selected: e.target.checked })}
+                          className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
+                          aria-label={`Chọn ${row.waybill_code}`}
                         />
                       </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px] font-bold text-primary">
-                        {display(w.waybill_code)}
+                      <td className="border-r border-border px-4 py-3 text-[15px] font-extrabold text-primary">
+                        {row.waybill_code}
                       </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {display(w.sender_info)}
+                      <td className="border-r border-border px-4 py-3 text-[13px] font-medium text-foreground">
+                        {row.noi_den}
                       </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {display(w.receiver_info)}
+                      <td className="border-r border-border px-4 py-3">
+                        <input
+                          type="number"
+                          min={1}
+                          max={row.max_package_count}
+                          value={row.package_count}
+                          disabled={!row.selected}
+                          onChange={(e) => updateRow(row.waybill_id, { package_count: e.target.value })}
+                          title={`Tối đa ${row.max_package_count} kiện`}
+                          className="h-11 w-full min-w-[88px] rounded-lg border border-violet-300 bg-violet-50 px-2 text-center text-[15px] font-extrabold outline-none focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <p className="mt-1 text-center text-[11px] font-medium text-muted-foreground">/ {row.max_package_count}</p>
                       </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px] font-extrabold text-violet-700">
-                        {packageLabel(w)}
+                      <td className="border-r border-border px-4 py-3">
+                        <input
+                          type="number"
+                          min={1}
+                          value={row.loading_position}
+                          disabled={!row.selected}
+                          onChange={(e) => updateRow(row.waybill_id, { loading_position: e.target.value })}
+                          placeholder="VT"
+                          className="h-11 w-full min-w-[88px] rounded-lg border border-yellow-300 bg-yellow-50 px-2 text-center text-[15px] font-bold outline-none focus:border-primary disabled:cursor-not-allowed disabled:opacity-50"
+                        />
                       </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {statusLabel(w)}
-                      </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px] font-bold">
-                        {num(w.weight, " kg")}
-                      </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {display(w.payment_type)}
-                      </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {hubLabel(w.origin_hub, w.origin_hub_id)}
-                      </td>
-                      <td className="border-r border-border px-4 py-3 text-[13px]">
-                        {hubLabel(w.dest_hub, w.dest_hub_id)}
-                      </td>
-                      <td className="px-4 py-3 text-[13px] text-muted-foreground">
-                        {display(w.trip_label)}
+                      <td className="px-4 py-3 text-center text-[15px] font-bold text-emerald-800">
+                        {row.expected_arrival_label}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div className="grid gap-3 p-3 md:hidden">
-                {waybills.map((w) => (
-                  <article
-                    key={w.id}
-                    className="rounded-2xl border border-border bg-white p-4 shadow-sm"
-                  >
-                    <label className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={formState.selectedIds.includes(String(w.id))}
-                        onChange={() => toggle(String(w.id))}
-                        className="mt-1"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="font-extrabold text-primary">
-                          {display(w.waybill_code)}
-                        </div>
-                        <div className="mt-2 grid gap-1 text-[13px] text-muted-foreground">
-                          <span>
-                            {display(w.sender_info)} →{" "}
-                            {display(w.receiver_info)}
-                          </span>
-                          <span>
-                            {statusLabel(w)} · Kiện còn {packageLabel(w)} · {num(w.weight, " kg")} ·{" "}
-                            {display(w.payment_type)} · {hubLabel(w.origin_hub, w.origin_hub_id)} →{" "}
-                            {hubLabel(w.dest_hub, w.dest_hub_id)}
-                          </span>
-                          {w.trip_label && (
-                            <span className="text-[12px]">{w.trip_label}</span>
-                          )}
-                        </div>
-                      </div>
-                    </label>
-                  </article>
-                ))}
-              </div>
-              {!waybills.length && (
-                <div className="flex min-h-[260px] items-center justify-center px-6 text-center">
-                  <div className="max-w-md">
-                    <p className="text-[13px] font-extrabold text-muted-foreground">
-                      Không có đơn tồn phù hợp.
-                    </p>
-                    <p className="mt-2 text-[12px] font-medium leading-5 text-muted-foreground">
-                      Kiểm tra trang <b>Đơn tồn</b> — đơn đang ở kho <b>{originHubLabel}</b>, còn kiện chưa xếp hết lên xe.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
           )}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/10 p-4">
-          <div className="min-w-0 flex-1 space-y-1">
-            <p className="text-[12px] font-bold text-muted-foreground">
-              Đã chọn {formState.selectedIds.length} · Tổng:{total}
-            </p>
-            {error ? (
-              <p className="flex items-start gap-1.5 text-[12px] font-semibold text-red-600">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                {error}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex gap-2">
+
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border px-6 py-4">
+          <p className="text-[12px] font-medium text-muted-foreground">
+            Đã chọn {selectedRows.length} dòng · {selectedPackageTotal} kiện
+            {rows.length ? ` · ${rows.length}/Tổng:${total}` : ` · 0/Tổng:${total}`}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={formState.limit}
+              onChange={(e) => onChange({ limit: Number(e.target.value), page: 1 })}
+              className="h-9 rounded-lg border border-border bg-white px-3 text-[13px] text-muted-foreground outline-none"
+            >
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+            </select>
             <button
+              type="button"
+              disabled={formState.page <= 1}
+              onClick={() => onChange({ page: formState.page - 1 })}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              disabled={formState.page >= totalPages}
+              onClick={() => onChange({ page: formState.page + 1 })}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <span className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-primary px-2 text-[13px] font-bold text-white">
+              {formState.page}
+            </span>
+            <span className="text-[13px] font-bold text-foreground">/ {totalPages}</span>
+            <button
+              type="button"
               onClick={onClose}
-              className="h-10 rounded-xl border border-border bg-white px-4 text-[13px] font-bold text-muted-foreground"
+              className="h-11 rounded-lg border border-border px-5 text-[14px] font-bold text-muted-foreground hover:bg-muted"
             >
               Hủy
             </button>
             <button
-              disabled={!formState.selectedIds.length || isSubmitting}
-              onClick={onSubmit}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-[13px] font-extrabold text-white disabled:opacity-60"
+              type="button"
+              disabled={!selectedRows.length || isSubmitting || isLoading}
+              onClick={handleSubmit}
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-violet-700 px-5 text-[14px] font-bold text-white hover:bg-violet-800 disabled:opacity-50"
             >
-              {isSubmitting ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                <Plus size={16} />
-              )}
+              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
               Thêm vào bảng kê
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

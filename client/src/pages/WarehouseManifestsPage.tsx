@@ -16,6 +16,11 @@ import AssignManifestTripDialog from './warehouse/manifests/dialogs/AssignManife
 import ManifestDetailDialog from './warehouse/manifests/dialogs/ManifestDetailDialog';
 import type { AddWaybillsFormState, AssignTripFormState, BadgeConfig, FilterOption, HubSummary, LoadPlanningFilters, LoadPlanningManifest, ManifestFormState, ManifestListResponse, ManifestWaybill, TripListResponse, TripSummary } from './warehouse/manifests/types';
 import { canAddWaybillsToManifest } from './warehouse/manifests/types';
+import {
+  buildInventoryTripLinesQuery,
+  filterManifestAddableInventoryRows,
+  isIncompleteSplitRow,
+} from './warehouse/inventory/inventoryTripLines';
 
 const USER_PROFILE_KEY = 'eco_user_profile';
 const DISPATCHER = 8;
@@ -154,7 +159,7 @@ export default function WarehouseManifestsPage() {
   const [waybillTotal, setWaybillTotal] = useState(0);
   const [isWaybillLoading, setIsWaybillLoading] = useState(false);
   const [addWaybillsManifest, setAddWaybillsManifest] = useState<LoadPlanningManifest | null>(null);
-  const [addWaybillsForm, setAddWaybillsForm] = useState<AddWaybillsFormState>({ keyword: '', selectedIds: [], page: 1, limit: 20 });
+  const [addWaybillsForm, setAddWaybillsForm] = useState<AddWaybillsFormState>({ keyword: '', page: 1, limit: 200 });
   const [addWaybillsError, setAddWaybillsError] = useState('');
   const [printManifest, setPrintManifest] = useState<LoadPlanningManifest | null>(null);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
@@ -272,7 +277,7 @@ export default function WarehouseManifestsPage() {
   function closeAddWaybills() { setIsAddWaybillsClosing(true); window.setTimeout(() => { setIsAddWaybillsOpen(false); setAddWaybillsManifest(null); setIsAddWaybillsClosing(false); }, 180); }
   async function openAddWaybills(manifest: LoadPlanningManifest) {
     if (!canManageManifest || !canAddWaybillsToManifest(manifest)) return;
-    setAddWaybillsForm({ keyword: '', selectedIds: [], page: 1, limit: 100 });
+    setAddWaybillsForm({ keyword: '', page: 1, limit: 200 });
     setAddWaybillsError('');
     setAddWaybillsManifest(manifest);
     setIsAddWaybillsOpen(true);
@@ -284,52 +289,47 @@ export default function WarehouseManifestsPage() {
   }
   async function fetchWaybillChoices() {
     if (!addWaybillsManifest) return;
-    const originHubId = resolveManifestOriginHubId(addWaybillsManifest, hubs);
-    if (!originHubId) {
-      setWaybillChoices([]);
-      setWaybillTotal(0);
-      const message = 'Bảng kê chưa có hub khởi hành. Vui lòng sửa bảng kê trước khi thêm đơn.';
-      setAddWaybillsError(message);
-      setActionError(message);
-      return;
-    }
     setIsWaybillLoading(true);
     setActionError('');
     setAddWaybillsError('');
     try {
-      const params = new URLSearchParams({
-        only_incomplete_split: '1',
-        hub_id: originHubId,
-        keyword: addWaybillsForm.keyword,
-        page: String(addWaybillsForm.page),
-        limit: String(addWaybillsForm.limit),
-      });
+      const query = buildInventoryTripLinesQuery(
+        {
+          page: addWaybillsForm.page,
+          limit: addWaybillsForm.limit,
+          keyword: addWaybillsForm.keyword,
+          ma_kh: '',
+          statuses: [],
+          hubIds: [],
+          paymentTypes: [],
+          priorities: [],
+          receivedFrom: '',
+          receivedTo: '',
+        },
+        { onlyIncompleteSplit: true },
+      );
       const response = await apiRequest<{
         items?: ManifestWaybill[];
         data?: ManifestWaybill[];
         waybills?: ManifestWaybill[];
         meta?: { total?: number; total_lines?: number; total_waybills?: number };
         total?: number;
-      }>(`/waybills/inventory/trip-lines?${params.toString()}`);
+      }>(`/waybills/inventory/trip-lines?${query}`);
       const raw = Array.isArray(response) ? response : response.items || response.data || response.waybills || [];
       const manifestId = String(addWaybillsManifest.id);
       const existingIds = new Set(
         (addWaybillsManifest.waybills ?? addWaybillsManifest.manifest_waybills?.map((link) => link.waybill).filter(Boolean) ?? [])
           .map((waybill) => String(waybill?.id)),
       );
-      const seen = new Set<string>();
-      const list = raw.filter((waybill) => {
-        const id = String(waybill.id);
-        if (!id || seen.has(id) || existingIds.has(id)) return false;
-        if (waybill.manifest_id && String(waybill.manifest_id) !== manifestId) return false;
-        seen.add(id);
-        return true;
+      const list = filterManifestAddableInventoryRows(raw.filter(isIncompleteSplitRow), {
+        manifestId,
+        existingWaybillIds: existingIds,
       });
       setWaybillChoices(list);
       setWaybillTotal(
         Array.isArray(response)
           ? list.length
-          : response.meta?.total_lines ?? response.meta?.total_waybills ?? response.meta?.total ?? response.total ?? list.length,
+          : response.meta?.total_waybills ?? response.meta?.total_lines ?? response.meta?.total ?? list.length,
       );
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Không thể tải đơn tồn khả dụng.';
@@ -341,13 +341,13 @@ export default function WarehouseManifestsPage() {
       setIsWaybillLoading(false);
     }
   }
-  async function submitAddWaybills() {
-    if (!addWaybillsManifest || !addWaybillsForm.selectedIds.length) return;
+  async function submitAddWaybills(items: Array<{ waybill_id: string; package_count: number; loading_position?: number }>) {
+    if (!addWaybillsManifest || !items.length) return;
     setIsSubmitting(true);
     setAddWaybillsError('');
     setActionError('');
     try {
-      const updated = await apiRequest<LoadPlanningManifest>(`/manifests/${addWaybillsManifest.id}/waybills`, { method: 'POST', body: { waybill_ids: addWaybillsForm.selectedIds } });
+      const updated = await apiRequest<LoadPlanningManifest>(`/manifests/${addWaybillsManifest.id}/waybills`, { method: 'POST', body: { items } });
       closeAddWaybills();
       await fetchManifests();
       if (detailManifest && String(detailManifest.id) === String(updated.id)) setDetailManifest(updated);

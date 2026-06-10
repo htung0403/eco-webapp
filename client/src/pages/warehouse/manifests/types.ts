@@ -12,7 +12,7 @@ export interface TripListResponse { data?: TripSummary[]; items?: TripSummary[];
 export interface AssignTripFormState { trip_id: string; }
 export interface ManifestFormState { origin_hub_id: string; dest_hub_id: string; seal_code: string; note: string; }
 export interface CloseManifestFormState { seal_code: string; note: string; }
-export interface AddWaybillsFormState { keyword: string; selectedIds: string[]; page: number; limit: number; }
+export interface AddWaybillsFormState { keyword: string; page: number; limit: number; }
 
 export function canAddWaybillsToManifest(manifest?: Pick<LoadPlanningManifest, 'status'> | null) {
   return manifest?.status === 'DRAFT' || manifest?.status === 'CLOSED';
