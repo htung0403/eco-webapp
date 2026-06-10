@@ -69,7 +69,7 @@ function mapLinkToRow(link: ManifestLink, index: number, showPricing: boolean): 
 
   return {
     viTriHang: fmt(link.loading_position ?? index + 1),
-    ngayBoc: dispatchValue(fields, 'ngay_boc') || formatShortDate(link.loaded_at ?? waybill?.created_at ?? null),
+    ngayBoc: dispatchValue(fields, 'ngay_boc') || formatShortDate(link.loaded_at ?? null),
     maTinh: dispatchValue(fields, 'ma_tinh') || fmt(waybill?.noi_den || waybill?.dest_hub?.code || waybill?.dest_hub_id),
     tenCtv: dispatchValue(fields, 'ten_cty') || parseSenderName(waybill?.sender_info),
     dv: dispatchValue(fields, 'dv') || 'TC',
