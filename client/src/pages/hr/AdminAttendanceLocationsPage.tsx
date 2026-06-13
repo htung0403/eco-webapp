@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Edit3, Loader2, MapPin, Plus, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, Crosshair, Edit3, Loader2, MapPin, Plus, Search, Trash2 } from 'lucide-react';
 import { ApiError, apiRequest } from '../../lib/api';
 
 type AttendanceLocation = {
@@ -35,6 +35,19 @@ type Filters = { date: string; userId: string; locationId: string };
 const emptyForm: FormState = { name: '', address: '', latitude: '', longitude: '', radius_meters: '100', is_active: true };
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+const geolocationOptions: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 15_000,
+  maximumAge: 0,
+};
+
+const gpsErrorMessage = (error: GeolocationPositionError) => {
+  if (error.code === error.PERMISSION_DENIED) return 'Trình duyệt đã từ chối quyền GPS. Vui lòng cấp quyền vị trí rồi thử lại.';
+  if (error.code === error.POSITION_UNAVAILABLE) return 'Không lấy được vị trí hiện tại. Vui lòng kiểm tra GPS/mạng.';
+  if (error.code === error.TIMEOUT) return 'Lấy vị trí quá thời gian chờ. Vui lòng thử lại ở nơi tín hiệu tốt hơn.';
+  return 'Không thể lấy vị trí GPS.';
+};
+
 export default function AdminAttendanceLocationsPage() {
   const [locations, setLocations] = useState<AttendanceLocation[]>([]);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
@@ -43,6 +56,7 @@ export default function AdminAttendanceLocationsPage() {
   const [editing, setEditing] = useState<AttendanceLocation | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -96,7 +110,45 @@ export default function AdminAttendanceLocationsPage() {
     setForm(emptyForm);
   }
 
+  const getPosition = () => new Promise<GeolocationPosition>((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Trình duyệt không hỗ trợ GPS.'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, geolocationOptions);
+  });
+
+  async function captureCurrentLocation() {
+    setLocating(true);
+    setError('');
+    setNotice('Đang xin quyền GPS và lấy vị trí hiện tại của admin...');
+    try {
+      const position = await getPosition();
+      setForm((prev) => ({
+        ...prev,
+        latitude: String(position.coords.latitude),
+        longitude: String(position.coords.longitude),
+      }));
+      setNotice(`Đã lấy vị trí hiện tại. Độ chính xác khoảng ${Math.round(position.coords.accuracy)}m.`);
+    } catch (locationError) {
+      setNotice('');
+      if (locationError instanceof GeolocationPositionError) {
+        setError(gpsErrorMessage(locationError));
+      } else if (locationError instanceof Error) {
+        setError(locationError.message);
+      } else {
+        setError('Không thể lấy vị trí GPS.');
+      }
+    } finally {
+      setLocating(false);
+    }
+  }
+
   async function submitForm() {
+    if (!form.latitude || !form.longitude) {
+      setError('Vui lòng bấm “Lấy vị trí hiện tại” trước khi lưu điểm chấm công.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     setNotice('');
@@ -160,13 +212,13 @@ export default function AdminAttendanceLocationsPage() {
             <Input label="Tên điểm" value={form.name} onChange={(value) => setForm((prev) => ({ ...prev, name: value }))} />
             <Input label="Địa chỉ" value={form.address} onChange={(value) => setForm((prev) => ({ ...prev, address: value }))} />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Input label="Latitude" value={form.latitude} onChange={(value) => setForm((prev) => ({ ...prev, latitude: value }))} />
-              <Input label="Longitude" value={form.longitude} onChange={(value) => setForm((prev) => ({ ...prev, longitude: value }))} />
+              <button type="button" disabled={locating} onClick={() => void captureCurrentLocation()} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 text-sm font-black text-primary hover:bg-primary/10 disabled:opacity-50">{locating ? <Loader2 className="animate-spin" size={18} /> : <Crosshair size={18} />} Lấy vị trí hiện tại</button>
+              <div className="flex min-h-11 items-center rounded-xl border border-border bg-slate-50 px-3 text-sm font-semibold text-muted-foreground">{form.latitude && form.longitude ? 'Đã lấy vị trí GPS' : 'Chưa lấy vị trí GPS'}</div>
             </div>
             <label className="grid gap-2 text-sm font-bold text-foreground">Bán kính: {form.radius_meters}m<input type="range" min="50" max="500" step="10" value={form.radius_meters} onChange={(event) => setForm((prev) => ({ ...prev, radius_meters: event.target.value }))} /></label>
             <label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.checked }))} /> Đang hoạt động</label>
             <div className="flex gap-2">
-              <button type="button" disabled={submitting} onClick={() => void submitForm()} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-black text-white hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Lưu</button>
+              <button type="button" disabled={submitting || locating} onClick={() => void submitForm()} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-black text-white hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Lưu</button>
               {editing && <button type="button" onClick={resetForm} className="h-11 rounded-xl border border-border px-4 text-sm font-bold hover:bg-muted">Hủy</button>}
             </div>
           </div>
@@ -176,7 +228,7 @@ export default function AdminAttendanceLocationsPage() {
           <div className="border-b border-border px-5 py-4"><h2 className="text-lg font-black">Danh sách điểm</h2></div>
           <div className="overflow-auto">
             <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-muted-foreground"><tr>{['Tên', 'Tọa độ', 'Bán kính', 'Trạng thái', 'Hành động'].map((h) => <th key={h} className="px-4 py-3 font-black">{h}</th>)}</tr></thead>
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-muted-foreground"><tr>{['Tên', 'Bán kính', 'Trạng thái', 'Hành động'].map((h) => <th key={h} className="px-4 py-3 font-black">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-border">{locations.map((location) => <LocationRow key={location.id} location={location} onEdit={openEdit} onToggle={toggleLocation} onDelete={deleteLocation} />)}</tbody>
             </table>
             {!locations.length && <EmptyState text={loading ? 'Đang tải điểm chấm công...' : 'Chưa có điểm chấm công.'} />}
@@ -214,7 +266,7 @@ function Input({ label, value, onChange }: { label: string; value: string; onCha
 }
 
 function LocationRow({ location, onEdit, onToggle, onDelete }: { location: AttendanceLocation; onEdit: (location: AttendanceLocation) => void; onToggle: (location: AttendanceLocation) => void; onDelete: (location: AttendanceLocation) => void }) {
-  return <tr className="hover:bg-muted/40"><td className="px-4 py-3"><p className="font-black">{location.name}</p><p className="text-xs text-muted-foreground">{location.address || 'Chưa có địa chỉ'}</p></td><td className="px-4 py-3 font-mono text-xs">{location.latitude}, {location.longitude}</td><td className="px-4 py-3">{location.radius_meters}m</td><td className="px-4 py-3"><button type="button" onClick={() => void onToggle(location)} className={`rounded-full px-3 py-1 text-xs font-black ${location.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{location.is_active ? 'Đang bật' : 'Tạm tắt'}</button></td><td className="px-4 py-3"><div className="flex gap-2"><button type="button" onClick={() => onEdit(location)} className="rounded-lg border border-border p-2 hover:bg-muted"><Edit3 size={16} /></button><button type="button" onClick={() => void onDelete(location)} className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50"><Trash2 size={16} /></button></div></td></tr>;
+  return <tr className="hover:bg-muted/40"><td className="px-4 py-3"><p className="font-black">{location.name}</p><p className="text-xs text-muted-foreground">{location.address || 'Chưa có địa chỉ'}</p></td><td className="px-4 py-3">{location.radius_meters}m</td><td className="px-4 py-3"><button type="button" onClick={() => void onToggle(location)} className={`rounded-full px-3 py-1 text-xs font-black ${location.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{location.is_active ? 'Đang bật' : 'Tạm tắt'}</button></td><td className="px-4 py-3"><div className="flex gap-2"><button type="button" onClick={() => onEdit(location)} className="rounded-lg border border-border p-2 hover:bg-muted"><Edit3 size={16} /></button><button type="button" onClick={() => void onDelete(location)} className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50"><Trash2 size={16} /></button></div></td></tr>;
 }
 
 function LogRow({ log }: { log: AttendanceLog }) {
