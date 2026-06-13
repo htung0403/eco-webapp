@@ -225,17 +225,23 @@ export default function HrAttendancePage() {
         <div className="border-b border-border px-5 py-4">
           <h2 className="text-lg font-black">Lịch sử gần đây</h2>
         </div>
-        <div className="overflow-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-muted-foreground">
-              <tr>{['Thời gian', 'Loại', 'Địa điểm', 'Khoảng cách', 'GPS', 'Trạng thái'].map((h) => <th key={h} className="px-4 py-3 font-black">{h}</th>)}</tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {logs.map((log) => <LogRow key={log.id} log={log} />)}
-            </tbody>
-          </table>
-          {!logs.length && <EmptyState text="Chưa có lịch sử chấm công." />}
-        </div>
+        {logs.length ? (
+          <>
+            <div className="space-y-3 p-4 md:hidden">
+              {logs.map((log) => <LogCard key={log.id} log={log} />)}
+            </div>
+            <div className="hidden overflow-auto md:block">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <tr>{['Thời gian', 'Loại', 'Địa điểm', 'Khoảng cách', 'GPS', 'Trạng thái'].map((h) => <th key={h} className="px-4 py-3 font-black">{h}</th>)}</tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {logs.map((log) => <LogRow key={log.id} log={log} />)}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : <EmptyState text="Chưa có lịch sử chấm công." />}
       </section>
     </div>
   );
@@ -253,6 +259,32 @@ function StepPill({ label, done, active }: { label: string; done: boolean; activ
 
 function StatusCard({ title, value, done }: { title: string; value: string; done: boolean }) {
   return <div className="rounded-2xl border border-border bg-slate-50 p-4"><div className="flex items-center gap-2 text-sm font-bold text-muted-foreground">{done ? <CheckCircle2 className="text-emerald-600" size={18} /> : <AlertTriangle className="text-amber-500" size={18} />}{title}</div><p className="mt-2 text-2xl font-black text-foreground">{value}</p></div>;
+}
+
+
+function LogCard({ log }: { log: AttendanceLog }) {
+  const success = log.status === 'success';
+  return (
+    <article className="rounded-2xl border border-border bg-slate-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-foreground">{logTypeLabel(log.type)}</p>
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">{new Date(log.created_at).toLocaleString('vi-VN')}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${success ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{success ? 'Thành công' : 'Thất bại'}</span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+        <InfoChip label="Địa điểm" value={log.location?.name ?? '—'} />
+        <InfoChip label="Khoảng cách" value={log.distance_meters == null ? '—' : `${Math.round(log.distance_meters)}m`} />
+        <InfoChip label="GPS" value={log.accuracy == null ? '—' : `${Math.round(log.accuracy)}m`} />
+        <InfoChip label="Cảnh báo" value={log.accuracy_warning ? 'Có' : 'Không'} />
+      </div>
+    </article>
+  );
+}
+
+function InfoChip({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border border-border bg-white px-3 py-2"><p className="font-bold text-muted-foreground">{label}</p><p className="mt-0.5 truncate font-black text-foreground">{value}</p></div>;
 }
 
 function LogRow({ log }: { log: AttendanceLog }) {
