@@ -137,13 +137,13 @@ export default function HrAttendancePage() {
 
   return (
     <div className="h-full min-h-0 flex flex-col gap-4 p-4 md:p-6 overflow-auto custom-scrollbar">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
         <div>
           <p className="text-[12px] font-bold uppercase tracking-wide text-primary">GPS Attendance</p>
           <h1 className="text-2xl font-black text-foreground">Chấm công theo vị trí</h1>
           <p className="text-sm text-muted-foreground">Hệ thống lấy GPS trực tiếp, không dùng vị trí cache.</p>
         </div>
-        <button type="button" onClick={() => void loadData()} className="h-10 rounded-xl border border-border px-4 text-[13px] font-bold hover:bg-muted">
+        <button type="button" onClick={() => void loadData()} className="h-11 rounded-xl border border-border px-4 text-[13px] font-bold hover:bg-muted sm:h-10">
           Làm mới
         </button>
       </div>
@@ -155,7 +155,7 @@ export default function HrAttendancePage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-3xl border border-border bg-white p-5 shadow-sm">
+        <section className="rounded-3xl border border-border bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Clock size={24} /></div>
             <div>
@@ -164,32 +164,45 @@ export default function HrAttendancePage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
             <StatusCard title="Check-in" value={formatTime(today?.check_in?.created_at)} done={Boolean(today?.check_in)} />
             <StatusCard title="Check-out" value={formatTime(today?.check_out?.created_at)} done={Boolean(today?.check_out)} />
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              disabled={loading || checking !== null || nextAction !== 'check_in'}
-              onClick={() => void submitCheck('check_in')}
-              className="inline-flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-black text-white shadow-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {checking === 'check_in' ? <Loader2 className="animate-spin" size={20} /> : <LogIn size={20} />} Check-in
-            </button>
-            <button
-              type="button"
-              disabled={loading || checking !== null || nextAction !== 'check_out'}
-              onClick={() => void submitCheck('check_out')}
-              className="inline-flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-card px-5 text-sm font-black text-foreground shadow-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {checking === 'check_out' ? <Loader2 className="animate-spin" size={20} /> : <LogOut size={20} />} Check-out
-            </button>
+          <div className="mt-6 space-y-3">
+            {nextAction ? (
+              <button
+                type="button"
+                disabled={loading || checking !== null}
+                onClick={() => void submitCheck(nextAction)}
+                className="group flex min-h-[72px] w-full items-center gap-4 rounded-3xl bg-primary px-5 py-4 text-left text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none"
+              >
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30 group-disabled:bg-white/40 group-disabled:ring-white/20">
+                  {checking ? <Loader2 className="animate-spin" size={24} /> : nextAction === 'check_in' ? <LogIn size={24} /> : <LogOut size={24} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-black uppercase tracking-wide text-white/75 group-disabled:text-slate-500">{nextAction === 'check_in' ? 'Bước 1' : 'Bước 2'}</span>
+                  <span className="block text-lg font-black leading-tight">{checking ? 'Đang lấy vị trí GPS...' : nextAction === 'check_in' ? 'Check-in ngay' : 'Check-out ngay'}</span>
+                  <span className="mt-1 block text-xs font-semibold text-white/80 group-disabled:text-slate-500">Hệ thống sẽ xin quyền vị trí và kiểm tra bán kính tự động.</span>
+                </span>
+              </button>
+            ) : (
+              <div className="flex min-h-[72px] items-center gap-4 rounded-3xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-700">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100"><CheckCircle2 size={24} /></span>
+                <span>
+                  <span className="block text-lg font-black leading-tight">Đã hoàn tất hôm nay</span>
+                  <span className="mt-1 block text-xs font-semibold text-emerald-700/80">Bạn đã check-in và check-out thành công.</span>
+                </span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <StepPill label="Check-in" done={Boolean(today?.check_in)} active={nextAction === 'check_in'} />
+              <StepPill label="Check-out" done={Boolean(today?.check_out)} active={nextAction === 'check_out'} />
+            </div>
           </div>
         </section>
 
-        <section className="rounded-3xl border border-border bg-white p-5 shadow-sm">
+        <section className="rounded-3xl border border-border bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><MapPin size={24} /></div>
             <div>
@@ -224,6 +237,16 @@ export default function HrAttendancePage() {
           {!logs.length && <EmptyState text="Chưa có lịch sử chấm công." />}
         </div>
       </section>
+    </div>
+  );
+}
+
+
+function StepPill({ label, done, active }: { label: string; done: boolean; active: boolean }) {
+  return (
+    <div className={`flex min-h-11 items-center justify-center gap-2 rounded-2xl border px-3 text-sm font-black ${done ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : active ? 'border-primary/30 bg-primary/5 text-primary' : 'border-border bg-slate-50 text-muted-foreground'}`}>
+      {done ? <CheckCircle2 size={17} /> : active ? <Clock size={17} /> : <AlertTriangle size={17} />}
+      {label}
     </div>
   );
 }
