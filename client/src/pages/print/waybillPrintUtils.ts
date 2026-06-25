@@ -48,6 +48,31 @@ function parseNoteField(note: string, key: string) {
   return match?.[1]?.trim() || '';
 }
 
+const NOTE_METADATA_KEYS = new Set([
+  'ma_kh',
+  'content',
+  'loai_bp',
+  'dich_vu',
+  'dich_vu_gia_tang',
+  'phuong_thuc',
+  'billing_unit',
+  'unit_price',
+  'dimensions_cm',
+  'volumetric_weight',
+  'the_tich_m3',
+]);
+
+function stripNoteMetadata(note: string) {
+  return note
+    .split('|')
+    .map((part) => part.trim())
+    .filter((part) => {
+      const key = part.split('=')[0]?.trim();
+      return !NOTE_METADATA_KEYS.has(key);
+    })
+    .join(' | ');
+}
+
 function formatNum(v: unknown, digits = 0) {
   const n = Number(v);
   if (!Number.isFinite(n)) return '';
@@ -78,7 +103,8 @@ export function buildWaybillPrintData(waybill: WaybillDetail, showPricing: boole
   const sender = parseContact(waybill.sender_info);
   const receiver = parseContact(waybill.receiver_info);
   const maKh = parseNoteField(note, 'ma_kh');
-  const noiDung = parseNoteField(note, 'content') || note.split('|').pop()?.trim() || '';
+  const noiDung = parseNoteField(note, 'content');
+  const ghiChu = stripNoteMetadata(note);
   const dichVu = parseNoteField(note, 'dich_vu');
   const loaiBp = parseNoteField(note, 'loai_bp');
 
@@ -108,18 +134,18 @@ export function buildWaybillPrintData(waybill: WaybillDetail, showPricing: boole
     tenKhGui: (waybill as { sender_name?: string }).sender_name || sender.name,
     diaChiGui: (waybill as { sender_address?: string }).sender_address || sender.address,
     quanHuyenGui: '',
-    tinhGui: waybill.origin_hub?.name || waybill.origin_hub?.code?.toUpperCase() || '',
+    tinhGui: waybill.origin_hub?.code?.toUpperCase() || waybill.origin_hub?.name || '',
     sdtGui: (waybill as { sender_phone?: string }).sender_phone || sender.phone,
     maBcNhan: waybill.dest_hub?.code?.toUpperCase() || '',
     tenKhNhan: receiverName,
     diaChiNhan: receiverAddress,
-    tinhNhan: waybill.dest_hub?.name || waybill.dest_hub?.code?.toUpperCase() || '',
+    tinhNhan: waybill.dest_hub?.code?.toUpperCase() || waybill.dest_hub?.name || '',
     sdtNhan: (waybill as { receiver_phone?: string }).receiver_phone || receiver.phone,
     moTaHang: noiDung,
     soKien: String(waybill.package_count ?? 1),
     trongLuong: formatNum(weight, 0) || '0',
     tongLuong: formatNum(m3, 2) || '0.00',
-    ghiChu: noiDung,
+    ghiChu,
     noiDungHang: noiDung,
     hinhThucThanhToan: phuongThucToPrintLabel(phuongThuc, waybill.payment_type),
     thuHo: formatNum(cod, 0) || '0',

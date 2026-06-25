@@ -2,8 +2,13 @@ export type OrderWorkbenchTab = 'khach-hang' | 'hang-hoa' | 'thanh-toan';
 
 export interface BillListItem {
   id: string;
+  date: string;
   waybill_code: string;
   package_count: number;
+  destination: string;
+  senderName: string;
+  customerCode: string;
+  collectOnDelivery: number;
 }
 
 export interface NewOrderFormState {

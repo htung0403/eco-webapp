@@ -61,6 +61,7 @@ export interface WaybillDetail {
   receiving_hub?: HubSummary | null;
   delivery_photo_url?: string | null;
   received_at?: string | null;
+  created_at?: string | null;
   received_by?: UserSummary | null;
 }
 

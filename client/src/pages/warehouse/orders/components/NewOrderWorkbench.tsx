@@ -32,6 +32,8 @@ interface Props {
   onPrintA5: () => void;
   onPrintRegular: () => void;
   printableBillId: string | null;
+  showPricingOnPrint: boolean;
+  onShowPricingOnPrintChange: (value: boolean) => void;
   canManage: boolean;
   isSubmitting: boolean;
   error?: string;
@@ -55,6 +57,8 @@ export default function NewOrderWorkbench({
   onPrintA5,
   onPrintRegular,
   printableBillId,
+  showPricingOnPrint,
+  onShowPricingOnPrintChange,
   canManage,
   isSubmitting,
   error,
@@ -67,8 +71,8 @@ export default function NewOrderWorkbench({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#e8eef5]">
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
-          <div className="mb-3 rounded-lg border border-slate-300 bg-slate-200/80 px-4 py-2.5 text-center text-[15px] font-extrabold text-slate-800">
+        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto p-2.5">
+          <div className="mb-2 rounded-lg border border-slate-300 bg-gradient-to-b from-slate-100 to-slate-200 px-4 py-1.5 text-center text-[14px] font-black text-slate-800 shadow-sm">
             Thông tin đơn hàng
           </div>
 
@@ -79,59 +83,8 @@ export default function NewOrderWorkbench({
           )}
 
           <FormSection title="Thông tin đơn hàng">
-            <div className="space-y-3">
-              <GroupTitle>Khách hàng</GroupTitle>
-              <div className="grid grid-cols-12 items-end gap-x-3 gap-y-3">
-                <CompactField label="Mã KH" className="col-span-12 sm:col-span-4 xl:col-span-2">
-                  <CustomerMaKhCombobox
-                    value={form.maKh}
-                    onValueChange={(code) => setField('maKh', code)}
-                    onCustomerSelect={onCustomerSelect}
-                    hubs={hubs}
-                    disabled={isSubmitting}
-                  />
-                </CompactField>
-                <CompactField label="Điện thoại KH" className="col-span-6 sm:col-span-4 xl:col-span-2">
-                  <CompactInput value={form.dienThoaiKh} onChange={(e) => setField('dienThoaiKh', e.target.value)} />
-                </CompactField>
-                <CompactField label="Người gửi" className="col-span-6 sm:col-span-4 xl:col-span-2">
-                  <CompactInput value={form.nguoiGui} onChange={(e) => setField('nguoiGui', e.target.value)} />
-                </CompactField>
-                <CompactField label="Địa chỉ gửi" className="col-span-12 xl:col-span-6">
-                  <CompactInput value={form.diaChiGui} onChange={(e) => setField('diaChiGui', e.target.value)} />
-                </CompactField>
-
-                <CompactField label="ĐT người nhận" className="col-span-6 sm:col-span-4 xl:col-span-2">
-                  <CompactInput value={form.dienThoaiNhan} onChange={(e) => setField('dienThoaiNhan', e.target.value)} />
-                </CompactField>
-                <CompactField label="Nơi đến" className="col-span-6 sm:col-span-4 xl:col-span-2">
-                  <CompactSelect
-                    value={form.destHubId}
-                    onChange={(e) => {
-                      const hub = hubOptions.find((o) => o.value === e.target.value);
-                      const code = hub?.label.split(' · ')[0] || '';
-                      const huyen = hub?.label.split(' · ').slice(1).join(' · ') || form.huyen;
-                      onDestinationChange(e.target.value, code, huyen);
-                    }}
-                  >
-                    <option value="">Chọn nơi đến</option>
-                    {hubOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label.split(' · ')[0] || o.label}
-                      </option>
-                    ))}
-                  </CompactSelect>
-                </CompactField>
-                <CompactField label="Huyện" className="col-span-6 sm:col-span-4 xl:col-span-2">
-                  <CompactInput value={form.huyen} onChange={(e) => setField('huyen', e.target.value)} />
-                </CompactField>
-                <CompactField label="Người nhận" className="col-span-6 sm:col-span-4 xl:col-span-2">
-                  <CompactInput value={form.nguoiNhan} onChange={(e) => setField('nguoiNhan', e.target.value)} />
-                </CompactField>
-                <CompactField label="Địa chỉ nhận" className="col-span-12 xl:col-span-4">
-                  <CompactInput value={form.diaChiNhan} onChange={(e) => setField('diaChiNhan', e.target.value)} />
-                </CompactField>
-
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-12 items-end gap-x-2.5 gap-y-2">
                 <CompactField label="BC gửi" className="col-span-12 xl:col-span-6">
                   <CompactSelect value={form.originHubId} onChange={(e) => setField('originHubId', e.target.value)}>
                     <option value="">Chọn bưu cục gửi</option>
@@ -162,8 +115,61 @@ export default function NewOrderWorkbench({
                 </CompactField>
               </div>
 
+              <GroupTitle>Khách hàng</GroupTitle>
+              <div className="grid grid-cols-12 items-end gap-x-2.5 gap-y-2">
+                <CompactField label="Mã KH" className="col-span-12 sm:col-span-4 xl:col-span-2">
+                  <CustomerMaKhCombobox
+                    value={form.maKh}
+                    onValueChange={(code) => setField('maKh', code)}
+                    onCustomerSelect={onCustomerSelect}
+                    hubs={hubs}
+                    disabled={isSubmitting}
+                  />
+                </CompactField>
+                <CompactField label="Điện thoại KH" className="col-span-6 sm:col-span-4 xl:col-span-2">
+                  <CompactInput value={form.dienThoaiKh} onChange={(e) => setField('dienThoaiKh', e.target.value)} />
+                </CompactField>
+                <CompactField label="Người gửi" className="col-span-6 sm:col-span-4 xl:col-span-2">
+                  <CompactInput value={form.nguoiGui} onChange={(e) => setField('nguoiGui', e.target.value)} />
+                </CompactField>
+                <CompactField label="Địa chỉ gửi" className="col-span-12 xl:col-span-6">
+                  <CompactInput value={form.diaChiGui} onChange={(e) => setField('diaChiGui', e.target.value)} />
+                </CompactField>
+
+                <CompactField label="Người nhận" className="col-span-6 sm:col-span-4 xl:col-span-2">
+                  <CompactInput value={form.nguoiNhan} onChange={(e) => setField('nguoiNhan', e.target.value)} />
+                </CompactField>
+                <CompactField label="ĐT người nhận" className="col-span-6 sm:col-span-4 xl:col-span-2">
+                  <CompactInput value={form.dienThoaiNhan} onChange={(e) => setField('dienThoaiNhan', e.target.value)} />
+                </CompactField>
+                <CompactField label="Địa chỉ nhận" className="col-span-12 xl:col-span-4">
+                  <CompactInput value={form.diaChiNhan} onChange={(e) => setField('diaChiNhan', e.target.value)} />
+                </CompactField>
+                <CompactField label="Nơi đến" className="col-span-6 sm:col-span-4 xl:col-span-2">
+                  <CompactSelect
+                    value={form.destHubId}
+                    onChange={(e) => {
+                      const hub = hubOptions.find((o) => o.value === e.target.value);
+                      const code = hub?.label.split(' · ')[0] || '';
+                      const huyen = hub?.label.split(' · ').slice(1).join(' · ') || form.huyen;
+                      onDestinationChange(e.target.value, code, huyen);
+                    }}
+                  >
+                    <option value="">Chọn nơi đến</option>
+                    {hubOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label.split(' · ')[0] || o.label}
+                      </option>
+                    ))}
+                  </CompactSelect>
+                </CompactField>
+                <CompactField label="Huyện" className="col-span-6 sm:col-span-4 xl:col-span-2">
+                  <CompactInput value={form.huyen} onChange={(e) => setField('huyen', e.target.value)} />
+                </CompactField>
+              </div>
+
               <GroupTitle>Hàng hóa</GroupTitle>
-              <div className="grid grid-cols-12 items-end gap-x-3 gap-y-3">
+              <div className="grid grid-cols-12 items-end gap-x-2.5 gap-y-2">
                 <CompactField label="Số kiện" className="col-span-4 sm:col-span-2 xl:col-span-2">
                   <CompactInput value={form.soKien} onChange={(e) => setField('soKien', e.target.value)} />
                 </CompactField>
@@ -243,7 +249,7 @@ export default function NewOrderWorkbench({
               </div>
 
               <GroupTitle>Thanh toán</GroupTitle>
-              <div className="grid grid-cols-12 items-end gap-x-3 gap-y-3">
+              <div className="grid grid-cols-12 items-end gap-x-2.5 gap-y-2">
                 <CompactField label="Phương thức" className="col-span-12 sm:col-span-6 xl:col-span-2">
                   <CompactSelect value={form.phuongThuc} onChange={(e) => setField('phuongThuc', e.target.value)}>
                     {PHUONG_THUC_OPTIONS.map((o) => (
@@ -279,7 +285,7 @@ export default function NewOrderWorkbench({
                     title="Thành tiền + COD"
                   />
                 </CompactField>
-                <CompactField label="Giảm giá" className="col-span-6 sm:col-span-4 xl:col-span-2">
+                <CompactField label="Phụ phí (công)" className="col-span-6 sm:col-span-4 xl:col-span-2">
                   <CompactInput
                     value={form.giamGia}
                     onChange={(e) => setField('giamGia', e.target.value)}
@@ -293,20 +299,29 @@ export default function NewOrderWorkbench({
                     value={pricing.thanhToan}
                     readOnly
                     className="bg-slate-50 text-right font-bold tabular-nums"
-                    title="Tổng cước - Giảm giá"
+                    title="Tổng cước - Phụ phí (công)"
                   />
                 </CompactField>
               </div>
             </div>
           </FormSection>
 
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-3 border-t border-slate-300 pt-4">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 border-t border-slate-300 pt-3">
             <ActionButton label="Nhập" onClick={onSave} disabled={!canManage || isSubmitting} primary />
             <ActionButton label="Mới" onClick={onNew} disabled={isSubmitting} />
             <ActionButton label="Xóa" onClick={onDelete} disabled={!canManage || !selectedBillId || isSubmitting} danger />
             <ActionButton label="Xem A5" onClick={onPreviewA5} disabled={!printableBillId} />
             <ActionButton label="In A5" onClick={onPrintA5} disabled={!printableBillId} />
             <ActionButton label="In thường" onClick={onPrintRegular} disabled={!printableBillId} />
+            <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-[12px] font-extrabold text-slate-700 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={showPricingOnPrint}
+                onChange={(event) => onShowPricingOnPrintChange(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              Hiện cước khi in
+            </label>
           </div>
         </div>
 
@@ -325,8 +340,8 @@ export default function NewOrderWorkbench({
 
 function GroupTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 pt-1 first:pt-0">
-      <span className="text-[12px] font-extrabold uppercase tracking-wide text-primary">{children}</span>
+    <div className="flex items-center gap-2 pt-0.5 first:pt-0">
+      <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-black uppercase tracking-wide text-primary">{children}</span>
       <span className="h-px flex-1 bg-slate-200" />
     </div>
   );
@@ -351,10 +366,10 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        'min-w-[88px] rounded-lg border px-5 py-2.5 text-[14px] font-extrabold shadow-sm disabled:cursor-not-allowed disabled:opacity-50',
+        'h-9 min-w-[86px] rounded-lg border px-4 text-[13px] font-black shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
         primary && 'border-primary bg-primary text-white hover:bg-primary/90',
         danger && 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100',
-        !primary && !danger && 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50',
+        !primary && !danger && 'border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50',
       )}
     >
       {label}

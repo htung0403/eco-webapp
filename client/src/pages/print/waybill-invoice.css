@@ -10,16 +10,16 @@
 }
 
 .waybill-invoice {
-  --fs-xs: 7.5pt;
-  --fs-sm: 8pt;
-  --fs-base: 8.5pt;
-  --fs-md: 9pt;
-  --fs-lg: 9.5pt;
-  --fs-xl: 10.5pt;
-  --fs-2xl: 11.5pt;
-  --fs-3xl: 13pt;
-  --fs-title: 14.5pt;
-  --fs-money: 15pt;
+  --fs-xs: 6.6pt;
+  --fs-sm: 7pt;
+  --fs-base: 7.5pt;
+  --fs-md: 8pt;
+  --fs-lg: 8.5pt;
+  --fs-xl: 9.5pt;
+  --fs-2xl: 11pt;
+  --fs-3xl: 12pt;
+  --fs-title: 13pt;
+  --fs-money: 16pt;
 }
 
 .waybill-invoice-wrap {
@@ -36,11 +36,11 @@
   max-width: 100%;
   margin: 0 auto;
   background: #fff;
-  border: 2px solid #222;
+  border: 1.5px solid #222;
   box-shadow: 0 8px 24px rgb(15 23 42 / 10%);
   font-family: 'Times New Roman', Times, serif;
   font-size: var(--fs-base);
-  line-height: 1.25;
+  line-height: 1.18;
   color: #111;
   box-sizing: border-box;
   -webkit-print-color-adjust: exact;
@@ -51,8 +51,9 @@
 
 .eco-header {
   display: grid;
-  grid-template-columns: 48mm 1fr 54mm;
-  border-bottom: 2px solid #222;
+  grid-template-columns: 32mm 1fr 56mm;
+  border-bottom: 1.5px solid #222;
+  min-height: 28mm;
 }
 
 .eco-header-left {
@@ -60,29 +61,29 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2mm 3mm;
-  border-right: 2px solid #222;
+  padding: 1.2mm 2mm;
+  border-right: 1.5px solid #222;
   text-align: center;
 }
 
 .eco-logo {
   display: block;
-  width: 24mm;
-  height: 18mm;
+  width: 20mm;
+  height: 14mm;
   object-fit: contain;
-  margin: 0 auto 0.6mm;
+  margin: 0 auto 0.2mm;
 }
 
 .eco-company-small {
   font-size: var(--fs-xs);
-  color: #555;
-  margin-bottom: 0.4mm;
+  color: #d91f26;
+  margin-bottom: 0.2mm;
   line-height: 1.15;
 }
 
 .eco-phone {
   margin-top: 0;
-  font-size: var(--fs-md);
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: #222;
   line-height: 1.2;
@@ -91,14 +92,14 @@
 
 .eco-header-center {
   text-align: center;
-  padding: 3mm 2mm;
+  padding: 2mm 2mm;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 
 .eco-header-center h1 {
-  margin: 0 0 1.2mm;
+  margin: 0 0 0.8mm;
   font-size: var(--fs-title);
   font-weight: 900;
   line-height: 1.1;
@@ -112,8 +113,8 @@
 }
 
 .eco-header-right {
-  padding: 2.5mm;
-  border-left: 2px solid #222;
+  padding: 1.6mm 2mm;
+  border-left: 1.5px solid #222;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -123,9 +124,9 @@
 .eco-barcode-img {
   display: block;
   width: 100%;
-  max-width: 48mm;
-  height: 8.5mm;
-  margin: 0 auto 1.2mm;
+  max-width: 52mm;
+  height: 10mm;
+  margin: 0 auto 0.8mm;
   object-fit: contain;
 }
 
@@ -137,10 +138,15 @@
 }
 
 .eco-ma-bc-nhan {
-  margin-top: 1.2mm;
+  margin-top: 0.4mm;
   font-size: var(--fs-sm);
   font-weight: bold;
   line-height: 1.2;
+}
+
+.eco-ma-kh-nhan {
+  margin-top: 0.4mm;
+  font-size: var(--fs-sm);
 }
 
 /* ================= INFO ================= */
@@ -148,12 +154,12 @@
 .eco-info {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border-bottom: 2px solid #222;
+  border-bottom: 1.5px solid #222;
 }
 
 .eco-box {
-  padding: 2mm 3mm;
-  border-right: 2px solid #222;
+  padding: 1.2mm 2mm;
+  border-right: 1.5px solid #222;
 }
 
 .eco-box:last-child {
@@ -162,15 +168,15 @@
 
 .eco-box-title {
   font-weight: bold;
-  margin-bottom: 1.2mm;
+  margin-bottom: 0.6mm;
   font-size: var(--fs-lg);
   line-height: 1.2;
 }
 
 .eco-line {
   display: grid;
-  grid-template-columns: 28mm 1fr;
-  margin-bottom: 0.8mm;
+  grid-template-columns: 24mm 1fr;
+  margin-bottom: 0.35mm;
   font-size: var(--fs-sm);
   line-height: 1.25;
 }
@@ -184,12 +190,12 @@
 .eco-product {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  border-bottom: 2px solid #222;
+  border-bottom: 1.5px solid #222;
 }
 
 .eco-product-box {
-  padding: 2mm 3mm;
-  border-right: 2px solid #222;
+  padding: 1.2mm 2mm;
+  border-right: 1.5px solid #222;
   font-size: var(--fs-base);
 }
 
@@ -205,7 +211,29 @@
 }
 
 .eco-product-gap {
-  margin: 1mm 0;
+  margin: 0.6mm 0;
+}
+
+.eco-product-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 0;
+}
+
+.eco-product-stats > div {
+  min-height: 12mm;
+  padding: 1.2mm 1.5mm;
+  text-align: center;
+  border-right: 1.5px solid #222;
+}
+
+.eco-product-stats > div:last-child {
+  border-right: none;
+}
+
+.eco-product-stats b,
+.eco-product-stats strong {
+  display: block;
 }
 
 .eco-product-box strong {
@@ -239,13 +267,13 @@
 .eco-payment {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  border-bottom: 2px solid #222;
+  border-bottom: 1.5px solid #222;
 }
 
 .eco-pay-box {
   position: relative;
-  padding: 2mm 3mm;
-  border-right: 2px solid #222;
+  padding: 1.2mm 2mm;
+  border-right: 1.5px solid #222;
   font-size: var(--fs-base);
   line-height: 1.3;
 }
@@ -255,10 +283,11 @@
 }
 
 .eco-total {
-  background: #d9ff3f;
+  background: #fff;
   text-align: center;
-  padding: 1.2mm 2mm 1.8mm;
-  margin-top: 1mm;
+  padding: 0.8mm 1mm 1.2mm;
+  margin-top: 0.8mm;
+  border-top: 1.5px solid #222;
 }
 
 .eco-total-label {
@@ -298,8 +327,8 @@
 }
 
 .eco-footer-box {
-  padding: 2mm 3mm;
-  border-right: 2px solid #222;
+  padding: 1.2mm 2mm;
+  border-right: 1.5px solid #222;
   font-size: var(--fs-base);
   line-height: 1.25;
 }
@@ -469,4 +498,398 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+}
+
+/* ================= A5 reference-like table layout ================= */
+.eco-a5-template {
+  --fs-xs: 6.4pt;
+  --fs-sm: 6.8pt;
+  --fs-base: 7.2pt;
+  --fs-md: 7.8pt;
+  --fs-lg: 8.6pt;
+  --fs-title: 12.5pt;
+  --fs-money: 18pt;
+  --eco-a5-split: 102mm;
+  width: 204mm;
+  height: 143mm;
+  display: flex;
+  flex-direction: column;
+  border: 1.2px solid #222;
+  font-size: var(--fs-base);
+  line-height: 1.12;
+  overflow: hidden;
+}
+
+.eco-a5-template p {
+  margin: 0;
+}
+
+.eco-a5-header {
+  display: grid;
+  grid-template-columns: 38mm 1fr 55mm;
+  min-height: 26mm;
+  border-bottom: 1.2px solid #222;
+}
+
+.eco-a5-brand,
+.eco-a5-title,
+.eco-a5-barcode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1mm 1.5mm;
+}
+
+.eco-a5-brand,
+.eco-a5-title {
+  border-right: 1.2px solid #222;
+}
+
+.eco-a5-template .eco-logo {
+  width: 18mm;
+  height: 12mm;
+  margin: 0 0 0.2mm;
+  object-fit: contain;
+}
+
+.eco-a5-template .eco-company-small {
+  color: #d91f26;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.eco-a5-template .eco-phone {
+  margin-top: 0.3mm;
+  width: 100%;
+  max-width: 35mm;
+  font-size: 6.2pt;
+  font-weight: 900;
+  line-height: 1.05;
+  white-space: nowrap;
+  letter-spacing: -0.08mm;
+}
+
+.eco-a5-title h1 {
+  margin: 0 0 1mm;
+  font-size: var(--fs-title);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.eco-a5-title h2 {
+  margin: 0;
+  font-size: 10pt;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.eco-a5-template .eco-barcode-img {
+  width: 51mm;
+  height: 10mm;
+  object-fit: fill;
+  margin-bottom: 1mm;
+}
+
+.eco-a5-template .eco-code {
+  font-size: 12pt;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 1mm;
+}
+
+.eco-a5-row {
+  border-bottom: 1.2px solid #222;
+}
+
+.eco-a5-meta-row {
+  display: grid;
+  grid-template-columns: 43mm 59mm 1fr;
+  min-height: 5.5mm;
+  font-size: 7.8pt;
+  line-height: 1.14;
+}
+
+.eco-a5-meta-row .eco-mini-line {
+  border-right: 1.2px solid #222;
+  padding: 0.8mm 1.2mm;
+}
+
+.eco-a5-meta-row .eco-mini-line:last-child {
+  border-right: none;
+}
+
+.eco-a5-people-row {
+  display: grid;
+  grid-template-columns: var(--eco-a5-split) 1fr;
+  min-height: 23mm;
+  font-size: 8pt;
+  line-height: 1.15;
+}
+
+.eco-a5-cell {
+  padding: 0.8mm 1.2mm;
+  border-right: 1.2px solid #222;
+}
+
+.eco-a5-cell:last-child {
+  border-right: none;
+}
+
+.eco-a5-receiver-cell {
+  position: relative;
+  z-index: 1;
+  min-height: 28.5mm;
+  margin-top: -5.5mm;
+  margin-left: -1.2px;
+  background: #fff;
+  border-left: 1.2px solid #222;
+}
+
+.eco-mini-line {
+  display: grid;
+  grid-template-columns: 23mm 1fr;
+  align-items: start;
+  min-height: 3.8mm;
+}
+
+.eco-a5-people-row .eco-mini-line--address {
+  min-height: 7.6mm;
+  max-height: 7.6mm;
+  overflow: hidden;
+}
+
+.eco-a5-people-row .eco-mini-line--address .eco-mini-value {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.eco-a5-people-row .eco-mini-line--receiver-address {
+  min-height: 11.4mm;
+  max-height: 11.4mm;
+}
+
+.eco-a5-people-row .eco-mini-line--receiver-address .eco-mini-value {
+  -webkit-line-clamp: 3;
+}
+
+.eco-mini-label,
+.eco-mini-value--strong {
+  font-weight: 900;
+}
+
+.eco-two-col-line {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 2mm;
+}
+
+.eco-a5-main-row {
+  display: grid;
+  grid-template-columns: var(--eco-a5-split) 1fr;
+  flex: 1;
+  min-height: 52mm;
+}
+
+.eco-a5-left-panel {
+  display: grid;
+  grid-template-rows: 5.5mm 12mm 1fr;
+  border-right: 1.2px solid #222;
+}
+
+.eco-a5-goods-code {
+  padding: 1mm 1.2mm;
+  border-bottom: 1.2px solid #222;
+  font-weight: 700;
+}
+
+.eco-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border-bottom: 1.2px solid #222;
+}
+
+.eco-stat-cell {
+  text-align: center;
+  padding: 1mm;
+  border-right: 1.2px solid #222;
+  font-size: var(--fs-sm);
+}
+
+.eco-stat-cell:last-child {
+  border-right: none;
+}
+
+.eco-stat-cell strong {
+  display: block;
+  margin-top: 0.8mm;
+  font-size: var(--fs-base);
+}
+
+.eco-note-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.08fr;
+  min-height: 100%;
+}
+
+.eco-note-cell {
+  position: relative;
+  padding: 1.5mm;
+  text-align: center;
+  border-right: 1.2px solid #222;
+}
+
+.eco-note-cell:last-child {
+  border-right: none;
+}
+
+.eco-note-cell b {
+  display: block;
+  margin-bottom: 1.5mm;
+}
+
+.eco-a5-right-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 12mm 11mm 8mm 1fr;
+}
+
+.eco-payment-method-box,
+.eco-charge-box,
+.eco-extra-info-box,
+.eco-sign-box {
+  padding: 1mm 1.2mm;
+  border-right: 1.2px solid #222;
+  border-bottom: 1.2px solid #222;
+}
+
+.eco-payment-method-box {
+  text-align: center;
+}
+
+.eco-payment-method-box strong {
+  display: block;
+  margin-top: 1.5mm;
+  font-size: var(--fs-md);
+}
+
+.eco-charge-box {
+  grid-row: span 3;
+  border-right: none;
+}
+
+.eco-charge-box p {
+  margin-bottom: 1mm;
+}
+
+.eco-extra-info-box {
+  grid-column: 1;
+}
+
+.eco-sign-sender {
+  grid-column: 1;
+  text-align: center;
+  border-bottom: none;
+}
+
+.eco-sign-receiver {
+  grid-column: 2;
+  text-align: center;
+  border-right: none;
+  border-bottom: none;
+}
+
+.eco-sign-box p {
+  margin-top: 1mm;
+  font-size: var(--fs-sm);
+}
+
+.eco-a5-template .eco-total {
+  margin-top: 2mm;
+  padding-top: 1mm;
+  background: #fff;
+  border-top: none;
+  text-align: center;
+}
+
+.eco-a5-template .eco-total-label {
+  font-weight: 900;
+  font-size: var(--fs-sm);
+}
+
+.eco-a5-template .eco-total strong {
+  margin-top: 1mm;
+  font-size: var(--fs-money);
+  line-height: 1;
+}
+
+.eco-a5-footer {
+  display: grid;
+  grid-template-columns: var(--eco-a5-split) calc((204mm - var(--eco-a5-split)) / 2) 1fr;
+  min-height: 21mm;
+  border-top: 1.2px solid #222;
+}
+
+.eco-footer-service,
+.eco-footer-staff {
+  border-right: 1.2px solid #222;
+  padding: 1mm 1.2mm;
+}
+
+.eco-footer-staff:last-child {
+  border-right: none;
+}
+
+.eco-footer-service {
+  display: grid;
+  grid-template-columns: 1fr 18mm;
+  gap: 1.5mm;
+}
+
+.eco-a5-template .eco-qr {
+  width: 16mm;
+  height: 16mm;
+  border: 1px solid #222;
+  align-self: center;
+}
+
+.eco-footer-text p {
+  margin: 0 0 0.8mm;
+}
+
+.eco-footer-text i {
+  font-size: 5.8pt;
+  line-height: 1;
+}
+
+.eco-footer-staff {
+  position: relative;
+  text-align: center;
+}
+
+.eco-footer-staff label {
+  position: absolute;
+  left: 1mm;
+  bottom: 1mm;
+  display: flex;
+  align-items: center;
+  gap: 1mm;
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+.eco-footer-staff label span {
+  width: 3.5mm;
+  height: 3.5mm;
+  border: 1px solid #222;
+  display: inline-block;
+}
+
+.eco-a5-template .eco-cod-stamp {
+  left: 2mm;
+  top: 8mm;
 }

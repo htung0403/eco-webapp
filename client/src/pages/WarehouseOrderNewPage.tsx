@@ -82,6 +82,7 @@ export default function WarehouseOrderNewPage() {
   const [createdWaybill, setCreatedWaybill] = useState<CreatedWaybill | null>(null);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isSuccessClosing, setIsSuccessClosing] = useState(false);
+  const [showPricingOnPrint, setShowPricingOnPrint] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
 
   const canCreate = hasCreateRole(user?.role_mask ?? 0);
@@ -362,7 +363,7 @@ export default function WarehouseOrderNewPage() {
 
   const openPrintBill = (params: Record<string, string> = {}) => {
     if (!printableBillId) return;
-    const query = new URLSearchParams(params).toString();
+    const query = new URLSearchParams({ ...params, pricing: showPricingOnPrint ? 'show' : 'hide' }).toString();
     window.open(`/print/waybill/${printableBillId}${query ? `?${query}` : ''}`, '_blank', 'noopener');
   };
 
@@ -440,6 +441,8 @@ export default function WarehouseOrderNewPage() {
             onPrintA5={() => openPrintBill()}
             onPrintRegular={() => openPrintBill({ print: '1', format: 'standard' })}
             printableBillId={printableBillId}
+            showPricingOnPrint={showPricingOnPrint}
+            onShowPricingOnPrintChange={setShowPricingOnPrint}
             canManage={canCreate}
             isSubmitting={isSubmitting}
             error={actionError}

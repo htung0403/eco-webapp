@@ -23,7 +23,7 @@ interface Props {
 }
 
 const inputClass =
-  'h-9 w-full min-w-0 rounded-md border border-slate-300 bg-white pr-9 pl-3 text-[13px] font-medium text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20';
+  'h-8 w-full min-w-0 rounded-md border border-slate-300 bg-white pr-8 pl-2.5 text-[12px] font-semibold text-slate-950 outline-none transition-colors hover:border-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/15';
 
 const normalizeList = (payload: CustomerListResponse | CustomerListItem[]) =>
   Array.isArray(payload) ? payload : payload.items || [];
@@ -304,7 +304,7 @@ export default function CustomerMaKhCombobox({
           title="Thêm khách hàng mới"
           disabled={disabled || isSubmitting}
           onClick={openCreateModal}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-primary bg-primary text-white shadow-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 xl:w-auto xl:gap-1 xl:px-2.5"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-primary bg-primary text-white shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 xl:w-auto xl:gap-1 xl:px-2.5"
         >
           <Plus size={15} strokeWidth={2.5} />
           <span className="hidden whitespace-nowrap text-[12px] font-bold xl:inline">Thêm</span>

@@ -19,6 +19,7 @@ export default function PrintWaybillPage() {
   const preview = searchParams.get('preview') === '1';
   const autoPrint = searchParams.get('print') === '1';
   const printFormat = searchParams.get('format') === 'standard' ? 'standard' : 'a5';
+  const pricingParam = searchParams.get('pricing');
 
   const [waybill, setWaybill] = useState<WaybillDetail | null>(null);
   const [customer, setCustomer] = useState<CustomerListItem | null>(null);
@@ -27,8 +28,10 @@ export default function PrintWaybillPage() {
 
   const showPricing = useMemo(() => {
     const user = getStoredAuthUser();
-    return ((user?.role_mask ?? 0) & MANAGER_ROLES) !== 0;
-  }, []);
+    const canViewPricing = ((user?.role_mask ?? 0) & MANAGER_ROLES) !== 0;
+    if (!canViewPricing) return false;
+    return pricingParam !== 'hide';
+  }, [pricingParam]);
 
   useEffect(() => {
     if (!id) return;

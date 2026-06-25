@@ -143,6 +143,47 @@ function parseContactInfo(info?: string | null) {
   };
 }
 
+const NOTE_METADATA_KEYS = new Set([
+  'ma_kh',
+  'content',
+  'loai_bp',
+  'dich_vu',
+  'phuong_thuc',
+  'billing_unit',
+  'unit_price',
+  'dimensions_cm',
+  'volumetric_weight',
+  'the_tich_m3',
+]);
+
+function stripNoteMetadata(note: string) {
+  return note
+    .split('|')
+    .map((part) => part.trim())
+    .filter((part) => {
+      const key = part.split('=')[0]?.trim();
+      return !NOTE_METADATA_KEYS.has(key);
+    })
+    .join(' | ');
+}
+
+const hubCodeLabel = (hub?: HubSummary | null, fallbackId?: string | number | null) =>
+  hub?.code?.trim().toUpperCase() || (fallbackId ? `#${fallbackId}` : '');
+
+const collectOnDeliveryAmount = (waybill: WaybillDetail) => {
+  const cod = Number(waybill.cod_amount ?? 0) || 0;
+  const cc = Number(waybill.cc_amount ?? 0) || 0;
+  if (cc || cod) return cc + cod;
+  return waybill.payment_type === 'CC' ? Number(waybill.freight_amount ?? waybill.cost_amount ?? 0) || 0 : cod;
+};
+
+const formatBillDate = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+};
+
 function waybillToOrderFormBase(waybill: WaybillDetail, hubs: HubSummary[]): NewOrderFormState {
   const destId = waybill.dest_hub_id ? String(waybill.dest_hub_id) : '';
   const originId = waybill.origin_hub_id ? String(waybill.origin_hub_id) : '';
@@ -151,10 +192,11 @@ function waybillToOrderFormBase(waybill: WaybillDetail, hubs: HubSummary[]): New
   const receiver = parseContactInfo(waybill.receiver_info);
   const billingUnit = resolveBillingUnit(waybill);
   const unitPrice = resolveUnitPrice(waybill, billingUnit);
+  const note = waybill.note || waybill.notes || '';
 
   return {
     ...emptyOrderForm(),
-    maKh: waybill.ma_kh?.trim() || '',
+    maKh: waybill.ma_kh?.trim() || parseNoteField(note, 'ma_kh'),
     nguoiGui: waybill.sender_name?.trim() || sender.name || waybill.sender_info || '',
     diaChiGui: waybill.sender_address?.trim() || sender.address || '',
     dienThoaiKh: waybill.sender_phone?.trim() || sender.phone || '',
@@ -176,7 +218,8 @@ function waybillToOrderFormBase(waybill: WaybillDetail, hubs: HubSummary[]): New
     cod: formatDonGia(String(waybill.cod_amount ?? '0')),
     giamGia: '0',
     phuongThuc: phuongThucFromWaybill(waybill),
-    ghiChu: waybill.note || waybill.notes || '',
+    noiDung: parseNoteField(note, 'content'),
+    ghiChu: stripNoteMetadata(note),
     xeLay: String((waybill as { xe_lay?: string }).xe_lay ?? ''),
     xePhat: String((waybill as { xe_phat?: string }).xe_phat ?? ''),
     trangThai: String(waybill.current_state || waybill.status || 'RECEIVED'),
@@ -189,10 +232,17 @@ export function waybillToOrderForm(waybill: WaybillDetail, hubs: HubSummary[]): 
 }
 
 export function waybillToBillItem(waybill: WaybillDetail): BillListItem {
+  const note = waybill.note || waybill.notes || '';
+  const sender = parseContactInfo(waybill.sender_info);
   return {
     id: String(waybill.id),
+    date: formatBillDate(waybill.created_at || waybill.received_at),
     waybill_code: waybill.waybill_code || waybill.code || `#${waybill.id}`,
     package_count: Number(waybill.package_count) || 1,
+    destination: hubCodeLabel(waybill.dest_hub, waybill.dest_hub_id),
+    senderName: waybill.sender_name?.trim() || sender.name || waybill.sender_info || '',
+    customerCode: waybill.ma_kh?.trim() || parseNoteField(note, 'ma_kh'),
+    collectOnDelivery: collectOnDeliveryAmount(waybill),
   };
 }
 
