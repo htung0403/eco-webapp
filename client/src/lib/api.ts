@@ -24,7 +24,8 @@ export class ApiError extends Error {
   }
 }
 
-const DEV_API_ORIGIN = 'http://127.0.0.1:3001';
+const DEV_API_PORT = 3001;
+const DEV_API_ORIGIN = `http://127.0.0.1:${DEV_API_PORT}`;
 
 const STATUS_MESSAGES: Record<number, string> = {
   401: 'Phiên đăng nhập hết hạn hoặc chưa đăng nhập. Vui lòng đăng nhập lại.',

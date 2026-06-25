@@ -21,6 +21,7 @@ export type DispatchLink = {
     weight?: number | string | null;
     the_tich_m3?: number | string | null;
     volumetric_weight?: number | string | null;
+    dispatch_fields?: ManifestDispatchFields | null;
     dest_hub?: { code?: string | null; name?: string | null } | null;
     dest_hub_id?: string | number | null;
   } | null;

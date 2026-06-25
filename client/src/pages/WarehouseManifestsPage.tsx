@@ -288,7 +288,6 @@ export default function WarehouseManifestsPage() {
     finally { setIsSubmitting(false); }
   }
 
-  function openAssign(manifest: LoadPlanningManifest) { if (!mayAssign) return; setAssignManifest(manifest); setAssignForm({ trip_id: manifest.trip_id ? String(manifest.trip_id) : '' }); setIsAssignOpen(true); }
   async function submitAssign() {
     if (!assignManifest || !assignForm.trip_id) return;
     setIsSubmitting(true); setActionError('');
@@ -402,7 +401,6 @@ export default function WarehouseManifestsPage() {
     finally { setIsSubmitting(false); }
   }
   function confirmRemoveWaybill(waybill: ManifestWaybill) { if (!detailManifest) return; setConfirmDialog({ title: 'Gỡ vận đơn', message: `Gỡ vận đơn ${waybill.waybill_code || waybill.id} khỏi bảng kê?`, confirmLabel: 'Gỡ', danger: true, onConfirm: async () => { try { await apiRequest(`/manifests/${detailManifest.id}/waybills/${waybill.id}`, { method: 'DELETE' }); await openDetail(detailManifest); await fetchManifests(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể gỡ vận đơn.'); } } }); }
-  function confirmCloseManifest(manifest: LoadPlanningManifest) { if (!canManageManifest) return; setConfirmDialog({ title: 'Đóng bảng kê', message: `Đóng bảng kê ${manifestCode(manifest)} và chuyển vận đơn sang MANIFEST_CLOSED?`, confirmLabel: 'Đóng bảng kê', onConfirm: async () => { try { await apiRequest(`/manifests/${manifest.id}/close`, { method: 'PATCH', body: { seal_code: manifest.seal_code || 'SEAL-' + manifest.id } }); await fetchManifests(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể đóng bảng kê.'); } } }); }
   function confirmDeleteManifest(manifest: LoadPlanningManifest) { if (!canManageManifest) return; setConfirmDialog({ title: 'Xóa bảng kê', message: `Xóa bảng kê nháp ${manifestCode(manifest)}?`, confirmLabel: 'Xóa', danger: true, onConfirm: async () => { try { await apiRequest(`/manifests/${manifest.id}`, { method: 'DELETE' }); await fetchManifests(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể xóa bảng kê.'); } } }); }
   function closePrint() { setIsPrintClosing(true); window.setTimeout(() => { setIsPrintOpen(false); setPrintManifest(null); setIsPrintClosing(false); }, 180); }
   async function openPrint(manifest: LoadPlanningManifest) {

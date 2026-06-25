@@ -30,6 +30,8 @@ export interface ManifestWaybill {
   cost_amount?: number | string | null;
   origin_hub_id?: string | number | null;
   dest_hub_id?: string | number | null;
+  loading_position?: number | string | null;
+  dispatch_fields?: Record<string, string | number | null | undefined> | null;
 }
 
 export interface LoadPlanningManifest {
@@ -53,6 +55,12 @@ export interface LoadPlanningManifest {
   closed_by?: UserSummary | null;
   created_by?: UserSummary | null;
   waybills?: ManifestWaybill[];
+  manifest_waybills?: Array<{
+    waybill_id?: string | number | null;
+    loading_position?: number | string | null;
+    dispatch_fields?: Record<string, string | number | null | undefined> | null;
+    waybill?: ManifestWaybill | null;
+  }>;
 }
 
 export interface LoadPlanningFilters {
