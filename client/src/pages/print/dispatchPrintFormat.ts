@@ -13,6 +13,7 @@ export interface DispatchPrintRow {
   donVi: string;
   nguoiNhanPhone: string;
   nguoiNhanDiaChi: string;
+  diaChiNhan: string;
   tinhTrangGiaoHang: string;
   ngayHoanThanh: string;
   keHoach: string;
@@ -62,6 +63,7 @@ export function buildEmptyDispatchRow(position: number): DispatchPrintRow {
     donVi: '',
     nguoiNhanPhone: '',
     nguoiNhanDiaChi: '',
+    diaChiNhan: '',
     tinhTrangGiaoHang: '',
     ngayHoanThanh: '',
     keHoach: '',

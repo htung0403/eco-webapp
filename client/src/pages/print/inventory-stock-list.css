@@ -126,6 +126,7 @@
 .inventory-stock-table--dispatch tbody td.col-company,
 .inventory-stock-table--dispatch tbody td.col-item,
 .inventory-stock-table--dispatch tbody td.col-place,
+.inventory-stock-table--dispatch tbody td.col-recipient-address,
 .inventory-stock-table--dispatch tbody td.col-note,
 .inventory-stock-table--dispatch tbody td.col-driver,
 .inventory-stock-table--dispatch tbody td.col-post {
@@ -179,6 +180,11 @@
   line-height: 1.2;
 }
 
+.inventory-stock-table .col-recipient-address {
+  text-align: right;
+  vertical-align: top;
+}
+
 .inventory-stock-table tbody .col-date,
 .inventory-stock-table tbody .col-qty {
   white-space: nowrap;
@@ -196,6 +202,7 @@
 .inventory-stock-table tbody .col-company,
 .inventory-stock-table tbody .col-item,
 .inventory-stock-table tbody .col-place,
+.inventory-stock-table tbody .col-recipient-address,
 .inventory-stock-table tbody .col-bill,
 .inventory-stock-table tbody .col-note,
 .inventory-stock-table tbody .col-driver,
@@ -243,9 +250,10 @@
 .inventory-stock-table .col-province { width: 4.5%; }
 .inventory-stock-table .col-company { width: 9.5%; }
 .inventory-stock-table .col-service { width: 2.5%; }
-.inventory-stock-table .col-item { width: 9%; }
-.inventory-stock-table .col-place { width: 12.5%; }
+.inventory-stock-table .col-item { width: 10.5%; }
+.inventory-stock-table .col-place { width: 11%; }
 .inventory-stock-table .col-qty { width: 5.5%; }
+.inventory-stock-table .col-recipient-address { width: 25%; }
 .inventory-stock-table .col-delivery-status { width: 5.5%; }
 .inventory-stock-table .col-completion-date { width: 4.5%; }
 .inventory-stock-table .col-plan { width: 4%; }

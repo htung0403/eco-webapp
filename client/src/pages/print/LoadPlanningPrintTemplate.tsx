@@ -68,6 +68,13 @@ function renderDispatchCell(id: DispatchPrintColumnId, row: DispatchPrintRow): R
         </td>
       );
     }
+    case 'diaChiNhan':
+      return (
+        <td className={def.cssClass}>
+          {row.nguoiNhanPhone ? <div className="phone">{row.nguoiNhanPhone}</div> : null}
+          {row.diaChiNhan ? <div className="dispatch-cell-inner">{row.diaChiNhan}</div> : null}
+        </td>
+      );
     case 'tinhTrangGiaoHang':
       return <td className={`${def.cssClass} col-center`}>{row.tinhTrangGiaoHang}</td>;
     case 'ngayHoanThanh':

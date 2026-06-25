@@ -12,6 +12,11 @@ export class BulkStackOntoTruckLineDto {
   @IsNumber()
   @Min(0)
   vendor_cost?: number;
+
+  @ApiPropertyOptional({ description: 'Hướng dẫn phát / ghi chú cho dòng xếp hàng' })
+  @IsOptional()
+  @IsString()
+  note?: string;
 }
 
 export class BulkStackOntoTruckDto {

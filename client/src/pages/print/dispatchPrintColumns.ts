@@ -9,6 +9,7 @@ export type DispatchPrintColumnId =
   | 'matHang'
   | 'noiTra'
   | 'soLuong'
+  | 'diaChiNhan'
   | 'tinhTrangGiaoHang'
   | 'ngayHoanThanh'
   | 'keHoach'
@@ -38,20 +39,21 @@ export const DISPATCH_PRINT_COLUMN_DEFS: DispatchPrintColumnDef[] = [
   { id: 'tenCtv', label: 'Tên CTY', header: 'Tên CTY', cssClass: 'col-company', defaultVisible: true },
   { id: 'dv', label: 'DV', header: 'DV', cssClass: 'col-service', align: 'center', defaultVisible: true },
   { id: 'matHang', label: 'Mặt Hàng', header: 'Mặt Hàng', cssClass: 'col-item', defaultVisible: true },
-  { id: 'noiTra', label: 'Nơi Trả', header: 'Nơi Trả', cssClass: 'col-place', defaultVisible: true },
+  { id: 'noiTra', label: 'Hướng dẫn phát', header: 'Hướng dẫn phát', cssClass: 'col-place', defaultVisible: true },
   { id: 'soLuong', label: 'Số Lượng', header: 'Số Lượng', cssClass: 'col-qty', align: 'center', defaultVisible: true, totalKey: 'soLuong' },
-  { id: 'tinhTrangGiaoHang', label: 'Tình trạng giao hàng', header: 'TÌNH TRẠNG\nGIAO HÀNG', cssClass: 'col-delivery-status', align: 'center', defaultVisible: true },
-  { id: 'ngayHoanThanh', label: 'Ngày hoàn thành', header: 'Ngày\nhoàn thành', cssClass: 'col-completion-date', align: 'center', defaultVisible: true },
-  { id: 'keHoach', label: 'Kế hoạch', header: 'Kế hoạch', cssClass: 'col-plan', defaultVisible: true },
-  { id: 'tangHaThuKhach', label: 'Tăng hạ thu khách', header: 'Tăng hạ\nthu khách', cssClass: 'col-surcharge', align: 'right', defaultVisible: true, totalKey: 'tangHaThuKhach' },
-  { id: 'cuoc', label: 'Cước', header: 'Cước', cssClass: 'col-fee', align: 'right', defaultVisible: true, managerOnly: true, totalKey: 'cuoc' },
-  { id: 'laiXeThuHo', label: 'Lái xe thu hộ', header: 'Lái xe\nthu hộ', cssClass: 'col-driver', defaultVisible: true },
-  { id: 'bcThuHo', label: 'BC thu hộ', header: 'BC thu hộ', cssClass: 'col-post', defaultVisible: true },
-  { id: 'maBill', label: 'Mã Bill', header: 'Mã Bill', cssClass: 'col-bill', align: 'center', defaultVisible: true },
-  { id: 'ghiChu', label: 'Ghi chú', header: 'Ghi chú', cssClass: 'col-note', defaultVisible: true },
+  { id: 'diaChiNhan', label: 'Địa chỉ nhận', header: 'Địa chỉ nhận', cssClass: 'col-recipient-address', defaultVisible: true },
+  { id: 'tinhTrangGiaoHang', label: 'Tình trạng giao hàng', header: 'TÌNH TRẠNG\nGIAO HÀNG', cssClass: 'col-delivery-status', align: 'center', defaultVisible: false },
+  { id: 'ngayHoanThanh', label: 'Ngày hoàn thành', header: 'Ngày\nhoàn thành', cssClass: 'col-completion-date', align: 'center', defaultVisible: false },
+  { id: 'keHoach', label: 'Kế hoạch', header: 'Kế hoạch', cssClass: 'col-plan', defaultVisible: false },
+  { id: 'tangHaThuKhach', label: 'Tăng hạ thu khách', header: 'Tăng hạ\nthu khách', cssClass: 'col-surcharge', align: 'right', defaultVisible: false, totalKey: 'tangHaThuKhach' },
+  { id: 'cuoc', label: 'Cước', header: 'Cước', cssClass: 'col-fee', align: 'right', defaultVisible: false, managerOnly: true, totalKey: 'cuoc' },
+  { id: 'laiXeThuHo', label: 'Lái xe thu hộ', header: 'Lái xe\nthu hộ', cssClass: 'col-driver', defaultVisible: false },
+  { id: 'bcThuHo', label: 'BC thu hộ', header: 'BC thu hộ', cssClass: 'col-post', defaultVisible: false },
+  { id: 'maBill', label: 'Mã Bill', header: 'Mã Bill', cssClass: 'col-bill', align: 'center', defaultVisible: false },
+  { id: 'ghiChu', label: 'Ghi chú', header: 'Ghi chú', cssClass: 'col-note', defaultVisible: false },
 ];
 
-export const DISPATCH_PRINT_COLUMN_STORAGE_KEY = 'eco_dispatch_print_visible_columns_v3';
+export const DISPATCH_PRINT_COLUMN_STORAGE_KEY = 'eco_dispatch_print_visible_columns_v4';
 
 const defMap = new Map(DISPATCH_PRINT_COLUMN_DEFS.map((def) => [def.id, def]));
 

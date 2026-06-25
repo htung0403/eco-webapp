@@ -572,6 +572,7 @@ export class WaybillsService {
         package_count: packageCount,
         loading_position: line.loading_position ?? null,
         carrier_label: carrierLabel,
+        note: line.note?.trim() || null,
         expected_arrival_at: expectedArrivalAt,
         load_status: WaybillSplitLoadStatus.DEPARTED,
         created_by: currentUser.id,

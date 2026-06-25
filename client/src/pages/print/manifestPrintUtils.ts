@@ -67,6 +67,8 @@ function mapLinkToRow(link: ManifestLink, index: number, showPricing: boolean): 
     .filter(Boolean)
     .join(' · ');
 
+  const receiverAddress = dispatchValue(fields, 'dia_chi') || parseAddress(waybill?.receiver_info, waybill?.receiver_address);
+
   return {
     viTriHang: fmt(link.loading_position ?? index + 1),
     ngayBoc: dispatchValue(fields, 'ngay_boc') || formatShortDate(link.loaded_at ?? null),
@@ -79,7 +81,8 @@ function mapLinkToRow(link: ManifestLink, index: number, showPricing: boolean): 
     soLuong: dispatchValue(fields, 'so_luong') || fmt(waybill?.package_count) || '1',
     donVi: dispatchValue(fields, 'loai') || 'kiện',
     nguoiNhanPhone: parsePhone(waybill?.receiver_info),
-    nguoiNhanDiaChi: dispatchValue(fields, 'dia_chi') || parseAddress(waybill?.receiver_info, waybill?.receiver_address),
+    nguoiNhanDiaChi: receiverAddress,
+    diaChiNhan: receiverAddress,
     tinhTrangGiaoHang: dispatchValue(fields, 'trang_thai_giao'),
     ngayHoanThanh: dispatchValue(fields, 'du_kien_toi_hcm'),
     keHoach: dispatchValue(fields, 'ke_hoach'),

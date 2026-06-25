@@ -7,13 +7,19 @@ export interface StackOntoTruckFormRow {
   max_package_count: number;
   loading_position: string;
   expected_arrival_label: string;
+  delivery_instruction: string;
 }
 
 export interface StackOntoTruckSharedFields {
   truck_id: string;
   nha_xe: string;
+  vendor_id: string;
   vendor_cost: string;
+  driver_name: string;
+  driver_phone: string;
 }
+
+export const DELIVERY_INSTRUCTION_OPTIONS = ['Kho HCM', 'Lái xe giao tận nơi', 'Về chành'] as const;
 
 export function computeExpectedArrivalDate(base?: string | null): Date {
   const date = base ? new Date(base) : new Date();
@@ -37,6 +43,7 @@ export function buildStackFormRows(waybills: WaybillInventoryItem[]): StackOntoT
       max_package_count: Math.max(1, Number(waybill.remaining_packages ?? waybill.package_count ?? 1)),
       loading_position: waybill.loading_position ? String(waybill.loading_position) : '',
       expected_arrival_label: formatExpectedArrivalLabel(orderDate),
+      delivery_instruction: 'Kho HCM',
     };
   });
 }
@@ -46,7 +53,10 @@ export function buildInitialSharedFields(waybills: WaybillInventoryItem[]): Stac
   return {
     truck_id: preset?.truck_id ? String(preset.truck_id) : '',
     nha_xe: preset?.trip_nha_xe || '',
+    vendor_id: '',
     vendor_cost: '',
+    driver_name: '',
+    driver_phone: '',
   };
 }
 

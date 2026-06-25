@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { AlertTriangle, Loader2, Printer, Save, X } from 'lucide-react';
+import { AlertTriangle, Loader2, Plus, Printer, Save, Trash2, X } from 'lucide-react';
+import { VendorCreatableSelect } from '../../../../components/ui/VendorCreatableSelect';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, apiRequest } from '../../../../lib/api';
 import TruckSearchSelect from '../../components/TruckSearchSelect';
@@ -14,6 +15,7 @@ import { mapStackOntoTruckToPrintPayload } from '../../../print/loadPlanningPrin
 import type { TruckPickOption } from '../types';
 import type { WaybillInventoryItem } from '../types';
 import {
+  DELIVERY_INSTRUCTION_OPTIONS,
   buildInitialSharedFields,
   buildStackFormRows,
   type StackOntoTruckFormRow,
@@ -44,6 +46,19 @@ interface Props {
   onSaved?: (result?: StackOntoTruckResult) => void;
 }
 
+interface VendorOption {
+  id: string;
+  code?: string | null;
+  name?: string | null;
+  phone?: string | null;
+}
+
+interface VendorListResponse {
+  data?: VendorOption[];
+  items?: VendorOption[];
+  vendors?: VendorOption[];
+}
+
 interface StackOntoTruckResult {
   saved_count?: number;
   manifest_id?: string | number | null;
@@ -72,8 +87,10 @@ export default function StackOntoTruckDialog({
   onSaved,
 }: Props) {
   const [rows, setRows] = useState<StackOntoTruckFormRow[]>([]);
-  const [shared, setShared] = useState<StackOntoTruckSharedFields>({ truck_id: '', nha_xe: '', vendor_cost: '' });
+  const [shared, setShared] = useState<StackOntoTruckSharedFields>({ truck_id: '', nha_xe: '', vendor_id: '', vendor_cost: '', driver_name: '', driver_phone: '' });
   const [truckOptions, setTruckOptions] = useState<TruckPickOption[]>([]);
+  const [vendorOptions, setVendorOptions] = useState<VendorOption[]>([]);
+  const [truckDraft, setTruckDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
@@ -88,6 +105,16 @@ export default function StackOntoTruckDialog({
     const truck = truckOptions.find((item) => item.id === shared.truck_id);
     return truck?.bks || truck?.license_plate || '';
   }, [shared.truck_id, truckOptions]);
+
+  const filteredTruckOptions = useMemo(() => {
+    const selectedVendorName = shared.nha_xe.trim().toLowerCase();
+    const keyword = truckDraft.trim().toLowerCase();
+    return truckOptions.filter((truck) => {
+      const vendorOk = !selectedVendorName || (truck.nha_xe || '').toLowerCase() === selectedVendorName;
+      const plate = (truck.bks || truck.license_plate || '').toLowerCase();
+      return vendorOk && (!keyword || plate.includes(keyword));
+    });
+  }, [shared.nha_xe, truckDraft, truckOptions]);
 
   const updatePrintColumnIds = (ids: DispatchPrintColumnId[]) => {
     saveVisibleDispatchColumnIds(ids);
@@ -110,6 +137,18 @@ export default function StackOntoTruckDialog({
   useEffect(() => {
     setPrintColumnIds(loadVisibleDispatchColumnIds(canViewPricing));
   }, [canViewPricing]);
+
+  const loadVendors = useCallback(async () => {
+    try {
+      const vendorsRes = await apiRequest<VendorListResponse | VendorOption[]>('/vendors/active?limit=200');
+      const vendors = (Array.isArray(vendorsRes) ? vendorsRes : vendorsRes.items || vendorsRes.data || vendorsRes.vendors || [])
+        .map((vendor) => ({ ...vendor, id: String(vendor.id) }))
+        .sort((a, b) => String(a.name || a.code || '').localeCompare(String(b.name || b.code || ''), 'vi'));
+      setVendorOptions(vendors);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Không tải được danh sách NCC.');
+    }
+  }, []);
 
   const loadTrucks = useCallback(async () => {
     setIsLoading(true);
@@ -134,8 +173,8 @@ export default function StackOntoTruckDialog({
     }
     setRows(buildStackFormRows(waybills));
     setShared(buildInitialSharedFields(waybills));
-    void loadTrucks();
-  }, [isOpen, waybills, loadTrucks]);
+    void Promise.all([loadTrucks(), loadVendors()]);
+  }, [isOpen, waybills, loadTrucks, loadVendors]);
 
   const updateRow = (waybillId: string, patch: Partial<StackOntoTruckFormRow>) => {
     setRows((prev) => prev.map((row) => (row.waybill_id === waybillId ? { ...row, ...patch } : row)));
@@ -146,8 +185,58 @@ export default function StackOntoTruckDialog({
     setShared((prev) => ({
       ...prev,
       truck_id: truckId,
-      nha_xe: truck?.nha_xe || '',
+      nha_xe: truck?.nha_xe || prev.nha_xe,
+      driver_name: truck?.ten_lai_xe || prev.driver_name,
     }));
+  };
+
+  const handleVendorChange = (vendorId: string) => {
+    const vendor = vendorOptions.find((item) => item.id === vendorId);
+    setShared((prev) => ({ ...prev, vendor_id: vendorId, nha_xe: vendor?.name || '', truck_id: '' }));
+  };
+
+  const handleCreateVendor = async (name: string) => {
+    const vendorName = name.trim();
+    if (!vendorName) return '';
+    setIsSaving(true);
+    setError('');
+    try {
+      const vendor = await apiRequest<VendorOption>('/vendors', { method: 'POST', body: { name: vendorName, code: vendorName.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || undefined, status: 'ACTIVE' } });
+      const option = { ...vendor, id: String(vendor.id) };
+      setVendorOptions((prev) => [...prev, option]);
+      setShared((prev) => ({ ...prev, vendor_id: option.id, nha_xe: option.name || vendorName, truck_id: '' }));
+      return option.id;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Không thêm được NCC.');
+      return '';
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCreateTruck = async () => {
+    const plate = truckDraft.trim().toUpperCase();
+    if (!plate || !shared.nha_xe.trim()) return;
+    setIsSaving(true);
+    setError('');
+    try {
+      const truck = await apiRequest<TruckRecord>('/trucks', { method: 'POST', body: { license_plate: plate, bks: plate, payload: 1, nha_xe: shared.nha_xe, vendor_id: shared.vendor_id || undefined, ten_lai_xe: shared.driver_name || undefined, status: 'AVAILABLE' } });
+      const option = toTruckOption(truck);
+      setTruckOptions((prev) => [...prev, option]);
+      setShared((prev) => ({ ...prev, truck_id: option.id }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Không thêm được BKS.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const removeRow = (waybillId: string) => setRows((prev) => prev.filter((row) => row.waybill_id !== waybillId));
+
+  const addBackRows = () => {
+    const existing = new Set(rows.map((row) => row.waybill_id));
+    const missing = buildStackFormRows(waybills).filter((row) => !existing.has(row.waybill_id));
+    if (missing.length) setRows((prev) => [...prev, ...missing]);
   };
 
   async function handleSubmit() {
@@ -173,6 +262,7 @@ export default function StackOntoTruckDialog({
         truck_id: shared.truck_id,
         loading_position: row.loading_position ? Number(row.loading_position) : undefined,
         package_count: Number(row.package_count),
+        note: row.delivery_instruction,
         ...(vendorCost != null && vendorCost > 0 && index === 0 ? { vendor_cost: vendorCost } : {}),
       })),
     };
@@ -256,80 +346,85 @@ export default function StackOntoTruckDialog({
           ) : (
             <>
               <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
-                <div className="grid grid-cols-12 items-start gap-x-3 gap-y-3">
-                  <div className="col-span-12 flex min-w-0 flex-col gap-1 md:col-span-5">
-                    <label className="min-h-[18px] text-[12px] font-bold uppercase leading-tight tracking-wide text-slate-700">Biển số xe</label>
-                    <div className="min-h-11">
-                      <TruckSearchSelect
-                        options={truckOptions}
-                        value={shared.truck_id}
-                        onChange={handleTruckChange}
-                        placeholder="Chọn xe..."
-                        searchPlaceholder="Tìm biển số..."
-                        className="h-11 text-[14px]"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-span-6 flex min-w-0 flex-col gap-1 md:col-span-3">
-                    <label className="min-h-[18px] text-[12px] font-bold uppercase leading-tight tracking-wide text-slate-700">NCC</label>
-                    <div className="flex h-11 min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 text-[14px] font-bold text-muted-foreground">
-                      {shared.nha_xe || '—'}
-                    </div>
-                  </div>
-                  <div className="col-span-6 flex min-w-0 flex-col gap-1 md:col-span-4">
-                    <label className="min-h-[18px] text-[12px] font-bold uppercase leading-tight tracking-wide text-slate-700">Cước NCC</label>
-                    <input
-                      value={shared.vendor_cost}
-                      onChange={(e) => setShared((prev) => ({ ...prev, vendor_cost: formatDonGia(e.target.value) }))}
-                      placeholder="Nhập sau..."
-                      className="h-11 w-full rounded-lg border border-amber-300 bg-amber-50/40 px-3 text-right text-[15px] font-bold outline-none focus:border-primary"
+                <div className="grid grid-cols-12 items-end gap-3">
+                  <div className="col-span-12 md:col-span-6">
+                    <label className="mb-1 block text-[12px] font-bold uppercase tracking-wide text-slate-700">NCC</label>
+                    <VendorCreatableSelect
+                      value={shared.vendor_id}
+                      options={vendorOptions.map((vendor) => ({ value: vendor.id, label: vendor.name || vendor.code || `NCC #${vendor.id}`, code: vendor.code }))}
+                      onValueChange={handleVendorChange}
+                      onCreate={handleCreateVendor}
+                      isCreating={isSaving}
+                      placeholder="Chọn NCC..."
+                      searchPlaceholder="Tìm NCC hoặc nhập NCC mới..."
+                      emptyMessage="Không tìm thấy NCC. Nhấn thêm để tạo mới."
+                      createLabel="Thêm NCC"
                     />
                   </div>
+                  <div className="col-span-12 md:col-span-3">
+                    <label className="mb-1 block text-[12px] font-bold uppercase tracking-wide text-slate-700">BKS theo NCC</label>
+                    <TruckSearchSelect options={filteredTruckOptions} value={shared.truck_id} onChange={handleTruckChange} disabled={!shared.nha_xe} placeholder={shared.nha_xe ? 'Chọn BKS...' : 'Chọn NCC trước'} searchPlaceholder="Tìm biển số..." className="h-11 text-[14px]" />
+                  </div>
+                  <div className="col-span-12 md:col-span-3">
+                    <label className="mb-1 block text-[12px] font-bold uppercase tracking-wide text-slate-700">Thêm BKS nếu chưa có</label>
+                    <div className="flex gap-2">
+                      <input value={truckDraft} onChange={(e) => setTruckDraft(e.target.value.toUpperCase())} disabled={!shared.nha_xe} placeholder="VD: 89H-09800" className="h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-[14px] font-bold outline-none focus:border-primary disabled:bg-slate-100" />
+                      <button type="button" disabled={isSaving || !shared.nha_xe || !truckDraft.trim()} onClick={() => void handleCreateTruck()} className="inline-flex h-11 items-center gap-1 rounded-lg border border-primary/20 bg-white px-3 text-[12px] font-black text-primary disabled:opacity-50"><Plus size={14} />BKS</button>
+                    </div>
+                  </div>
+                  <div className="col-span-12 md:col-span-3">
+                    <label className="mb-1 block text-[12px] font-bold uppercase tracking-wide text-slate-700">Tài xế</label>
+                    <input value={shared.driver_name} onChange={(e) => setShared((prev) => ({ ...prev, driver_name: e.target.value }))} placeholder="Nhập sau..." className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-[14px] font-bold outline-none focus:border-primary" />
+                  </div>
+                  <div className="col-span-12 md:col-span-3">
+                    <label className="mb-1 block text-[12px] font-bold uppercase tracking-wide text-slate-700">SĐT tài xế</label>
+                    <input value={shared.driver_phone} onChange={(e) => setShared((prev) => ({ ...prev, driver_phone: e.target.value }))} placeholder="Không bắt buộc" className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-[14px] font-bold outline-none focus:border-primary" />
+                  </div>
+                  <div className="col-span-12 md:col-span-3">
+                    <label className="mb-1 block text-[12px] font-bold uppercase tracking-wide text-slate-700">Cước NCC</label>
+                    <input value={shared.vendor_cost} onChange={(e) => setShared((prev) => ({ ...prev, vendor_cost: formatDonGia(e.target.value) }))} placeholder="Nhập sau..." className="h-11 w-full rounded-lg border border-amber-300 bg-amber-50/40 px-3 text-right text-[15px] font-bold outline-none focus:border-primary" />
+                  </div>
+                  <div className="col-span-12 flex justify-end md:col-span-3">
+                    <button type="button" onClick={addBackRows} disabled={rows.length === waybills.length} className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"><Plus size={15} />Thêm lại đơn đã bỏ</button>
+                  </div>
                 </div>
-                <p className="mt-2 text-right text-[10px] font-medium text-muted-foreground">
-                  Cước chuyến xe · ghi công nợ NCC một lần cho toàn bộ danh sách
-                </p>
+                <p className="mt-2 text-right text-[10px] font-medium text-muted-foreground">Cước chuyến xe · ghi công nợ NCC một lần cho toàn bộ danh sách</p>
               </div>
 
               <div className="overflow-x-auto rounded-xl border border-border">
-                <table className="w-full min-w-[720px] border-collapse text-[14px]">
+                <table className="w-full min-w-[1180px] border-collapse text-[13px]">
                   <thead>
-                    <tr className="bg-slate-100 text-[12px] font-bold uppercase tracking-wide text-slate-700">
-                      <th className="border-b border-r border-border px-4 py-3 text-left">Mã vận đơn</th>
-                      <th className="border-b border-r border-border px-4 py-3 text-center">Số kiện</th>
-                      <th className="border-b border-r border-border px-4 py-3 text-center">Vị trí xếp hàng</th>
-                      <th className="border-b border-border px-4 py-3 text-center">Ngày tới</th>
+                    <tr className="bg-slate-100 text-[11px] font-bold uppercase tracking-wide text-slate-700">
+                      <th className="border-b border-r border-border px-3 py-3 text-left">Mã bill</th>
+                      <th className="border-b border-r border-border px-3 py-3 text-left">Người nhận / nơi trả</th>
+                      <th className="border-b border-r border-border px-3 py-3 text-center">Số kiện</th>
+                      <th className="border-b border-r border-border px-3 py-3 text-center">Vị trí</th>
+                      <th className="border-b border-r border-border px-3 py-3 text-center">Ngày tới</th>
+                      <th className="border-b border-r border-border px-3 py-3 text-center">Hướng dẫn phát</th>
+                      <th className="border-b border-border px-3 py-3 text-center">DS đã khởi hành</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.waybill_id} className="border-b border-border align-top">
-                        <td className="border-r border-border px-4 py-3 text-[15px] font-extrabold text-primary">{row.waybill_code}</td>
-                        <td className="border-r border-border px-4 py-3">
-                          <input
-                            type="number"
-                            min={1}
-                            max={row.max_package_count}
-                            value={row.package_count}
-                            onChange={(e) => updateRow(row.waybill_id, { package_count: e.target.value })}
-                            title={`Tối đa ${row.max_package_count} kiện`}
-                            className="h-11 w-full min-w-[88px] rounded-lg border border-violet-300 bg-violet-50 px-2 text-center text-[15px] font-extrabold outline-none focus:border-primary"
-                          />
-                          <p className="mt-1 text-center text-[11px] font-medium text-muted-foreground">/ {row.max_package_count}</p>
-                        </td>
-                        <td className="border-r border-border px-4 py-3">
-                          <input
-                            type="number"
-                            min={1}
-                            value={row.loading_position}
-                            onChange={(e) => updateRow(row.waybill_id, { loading_position: e.target.value })}
-                            placeholder="VT"
-                            className="h-11 w-full min-w-[88px] rounded-lg border border-yellow-300 bg-yellow-50 px-2 text-center text-[15px] font-bold outline-none focus:border-primary"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-center text-[15px] font-bold text-emerald-800">{row.expected_arrival_label}</td>
-                      </tr>
-                    ))}
+                    {rows.map((row) => {
+                      const waybill = waybills.find((item) => String(item.id) === row.waybill_id);
+                      return (
+                        <tr key={row.waybill_id} className="border-b border-border align-top">
+                          <td className="border-r border-border px-3 py-3 text-[14px] font-extrabold text-primary">{row.waybill_code}</td>
+                          <td className="border-r border-border px-3 py-3">
+                            <p className="font-bold text-slate-900">{waybill?.receiver_info || waybill?.receiver_phone || '—'}</p>
+                            <p className="mt-1 text-[12px] font-medium text-muted-foreground">{waybill?.receiver_address || waybill?.dest_hub?.name || '—'}</p>
+                          </td>
+                          <td className="border-r border-border px-3 py-3">
+                            <input type="number" min={1} max={row.max_package_count} value={row.package_count} onChange={(e) => updateRow(row.waybill_id, { package_count: e.target.value })} title={`Tối đa ${row.max_package_count} kiện`} className="h-10 w-full min-w-[72px] rounded-lg border border-violet-300 bg-violet-50 px-2 text-center text-[14px] font-extrabold outline-none focus:border-primary" />
+                            <p className="mt-1 text-center text-[11px] font-medium text-muted-foreground">/ {row.max_package_count}</p>
+                          </td>
+                          <td className="border-r border-border px-3 py-3"><input type="number" min={1} value={row.loading_position} onChange={(e) => updateRow(row.waybill_id, { loading_position: e.target.value })} placeholder="VT" className="h-10 w-full min-w-[72px] rounded-lg border border-yellow-300 bg-yellow-50 px-2 text-center text-[14px] font-bold outline-none focus:border-primary" /></td>
+                          <td className="border-r border-border px-3 py-3 text-center text-[14px] font-bold text-emerald-800">{row.expected_arrival_label}</td>
+                          <td className="border-r border-border px-3 py-3"><select value={row.delivery_instruction} onChange={(e) => updateRow(row.waybill_id, { delivery_instruction: e.target.value })} className="h-10 w-full min-w-[150px] rounded-lg border border-slate-300 bg-white px-2 text-[13px] font-bold outline-none focus:border-primary">{DELIVERY_INSTRUCTION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select></td>
+                          <td className="px-3 py-3 text-center"><button type="button" onClick={() => removeRow(row.waybill_id)} className="inline-flex h-9 items-center gap-1 rounded-lg border border-red-100 bg-red-50 px-3 text-[12px] font-black text-red-600 hover:bg-red-100"><Trash2 size={14} />Bỏ đơn</button></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
