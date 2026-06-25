@@ -24,19 +24,18 @@ export class ApiError extends Error {
   }
 }
 
-const DEV_API_PORT = 3001;
-const DEV_API_ORIGIN = `http://127.0.0.1:${DEV_API_PORT}`;
+const DEV_API_ORIGIN = 'http://127.0.0.1:3001';
 
 const STATUS_MESSAGES: Record<number, string> = {
   401: 'Phiên đăng nhập hết hạn hoặc chưa đăng nhập. Vui lòng đăng nhập lại.',
   403: 'Bạn không có quyền thực hiện thao tác này.',
   404: 'Không tìm thấy API. Kiểm tra backend NestJS đang chạy (npm run dev trong thư mục server).',
-  502: `Không kết nối được backend. Chạy server trên cổng ${DEV_API_PORT} và restart Vite.`,
+  502: 'Không kết nối được backend. Chạy `cd server && npm run dev`, đợi dòng "API listening..." rồi thử lại.',
   503: 'Backend tạm thời không khả dụng.',
 };
 
 const resolveApiBaseUrl = () => {
-  // Dev: mặc định proxy Vite (/api/v1 → 127.0.0.1:3001). Tránh .env trỏ nhầm frontend.
+  // Dev: mặc định proxy Vite (/api/v1 → backend theo PORT trong server/.env). Tránh .env trỏ nhầm frontend.
   if (import.meta.env.DEV && import.meta.env.VITE_API_URL_DIRECT !== 'true') {
     return '/api/v1';
   }

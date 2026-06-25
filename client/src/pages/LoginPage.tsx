@@ -50,7 +50,7 @@ const mapLoginError = (error: unknown) => {
     if (error.status === 401) return 'Email/mã nhân viên hoặc mật khẩu không đúng.';
     if (error.status === 403) return 'Tài khoản đang bị khóa hoặc chưa được cấp quyền truy cập.';
     if (error.status === 0 || error.status === 502 || error.status === 503) {
-      return 'Backend chưa chạy hoặc đang khởi động. Chờ terminal server hiện "API listening on http://127.0.0.1:3001" rồi thử lại.';
+      return 'Backend chưa chạy hoặc đang khởi động. Chờ terminal server hiện dòng "API listening on http://127.0.0.1:..." rồi thử lại.';
     }
     if (error.status >= 500) return 'Server đang gặp sự cố. Vui lòng thử lại sau.';
     return error.message;

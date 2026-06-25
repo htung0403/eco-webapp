@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Loader2, Printer } from 'lucide-react';
 import { ApiError, apiRequest } from '../../lib/api';
@@ -12,14 +12,42 @@ import './waybill-invoice.css';
 
 const MANAGER_ROLES = 32 | 64;
 
+type PrintFormat = 'a5' | 'standard' | 'a4-2up';
+
+const resolvePrintFormat = (value: string | null): PrintFormat => {
+  if (value === 'standard') return 'standard';
+  if (value === 'a4-2up') return 'a4-2up';
+  return 'a5';
+};
+
+const printFormatLabel: Record<PrintFormat, string> = {
+  a5: 'A5 ngang (1 phiếu)',
+  standard: 'Bill thường (A4 dọc)',
+  'a4-2up': 'A4 ghép 2 phiếu A5',
+};
+
+const printFormatHint: Record<PrintFormat, string> = {
+  a5: 'Khi in: chọn khổ A5 ngang, tắt header/footer trình duyệt.',
+  standard: 'Khi in: chọn khổ A4 dọc, tắt header/footer trình duyệt.',
+  'a4-2up': 'Khi in: chọn khổ A4 dọc — 1 trang in 2 phiếu A5 (liên gửi + liên nhận).',
+};
+
 export default function PrintWaybillPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const preview = searchParams.get('preview') === '1';
   const autoPrint = searchParams.get('print') === '1';
-  const printFormat = searchParams.get('format') === 'standard' ? 'standard' : 'a5';
+  const printFormat = resolvePrintFormat(searchParams.get('format'));
   const pricingParam = searchParams.get('pricing');
+
+  const setPrintFormat = useCallback((format: PrintFormat) => {
+    const next = new URLSearchParams(searchParams);
+    if (format === 'a5') next.delete('format');
+    else next.set('format', format);
+    const query = next.toString();
+    navigate({ pathname: `/print/waybill/${id}`, search: query ? `?${query}` : '' }, { replace: true });
+  }, [id, navigate, searchParams]);
 
   const [waybill, setWaybill] = useState<WaybillDetail | null>(null);
   const [customer, setCustomer] = useState<CustomerListItem | null>(null);
@@ -95,8 +123,15 @@ export default function PrintWaybillPage() {
     };
   }, [waybill, customer, showPricing]);
 
+  const wrapClassName =
+    printFormat === 'standard'
+      ? 'waybill-invoice-wrap waybill-invoice-wrap--standard'
+      : printFormat === 'a4-2up'
+        ? 'waybill-invoice-wrap waybill-invoice-wrap--a4-2up'
+        : 'waybill-invoice-wrap';
+
   return (
-    <div className={printFormat === 'standard' ? 'waybill-invoice-wrap waybill-invoice-wrap--standard' : 'waybill-invoice-wrap'}>
+    <div className={wrapClassName}>
       <div className="print-toolbar mb-4 flex w-full max-w-[210mm] flex-wrap items-center gap-2">
         <button
           type="button"
@@ -106,6 +141,22 @@ export default function PrintWaybillPage() {
           <ArrowLeft size={15} />
           Quay lại
         </button>
+        <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-white p-1">
+          {(['a5', 'a4-2up', 'standard'] as PrintFormat[]).map((format) => (
+            <button
+              key={format}
+              type="button"
+              onClick={() => setPrintFormat(format)}
+              className={`inline-flex h-8 items-center rounded-md px-2.5 text-[12px] font-bold transition-colors ${
+                printFormat === format
+                  ? 'bg-primary text-white'
+                  : 'text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              {printFormatLabel[format]}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => window.print()}
@@ -113,14 +164,12 @@ export default function PrintWaybillPage() {
           className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-bold text-white disabled:opacity-50"
         >
           <Printer size={15} />
-          {printFormat === 'standard' ? 'In phiếu (bill thường)' : 'In phiếu (A5 ngang)'}
+          In phiếu
         </button>
         {preview && (
-          <span className="text-[12px] text-muted-foreground">Chế độ xem trước A5 — kiểm tra nội dung trước khi in.</span>
+          <span className="text-[12px] text-muted-foreground">Chế độ xem trước — kiểm tra nội dung trước khi in.</span>
         )}
-        <span className="text-[12px] text-muted-foreground">
-          Khi in: chọn khổ <strong>A5 ngang</strong>, tắt header/footer trình duyệt để khớp preview.
-        </span>
+        <span className="w-full text-[12px] text-muted-foreground">{printFormatHint[printFormat]}</span>
         {!showPricing && (
           <span className="text-[12px] text-muted-foreground">Cước phí ẩn theo quyền — chỉ in thông tin vận chuyển.</span>
         )}
@@ -140,7 +189,15 @@ export default function PrintWaybillPage() {
         </div>
       )}
 
-      {printData && <WaybillInvoiceTemplate data={printData} />}
+      {printData && printFormat === 'a4-2up' ? (
+        <div className="waybill-a4-sheet">
+          <WaybillInvoiceTemplate data={printData} />
+          <div className="waybill-a4-cut-line" aria-hidden="true" />
+          <WaybillInvoiceTemplate data={printData} />
+        </div>
+      ) : printData ? (
+        <WaybillInvoiceTemplate data={printData} />
+      ) : null}
     </div>
   );
 }

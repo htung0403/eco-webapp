@@ -9,6 +9,11 @@
   margin: 8mm;
 }
 
+@page a4-two-up {
+  size: A4 portrait;
+  margin: 2mm;
+}
+
 .waybill-invoice {
   --fs-xs: 6.6pt;
   --fs-sm: 7pt;
@@ -401,6 +406,30 @@
   page: standard-bill;
 }
 
+/* A4 dọc — ghép 2 phiếu A5 ngang trên 1 trang */
+.waybill-invoice-wrap--a4-2up .waybill-a4-sheet {
+  width: 210mm;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 10%);
+  page: a4-two-up;
+}
+
+.waybill-invoice-wrap--a4-2up .waybill-a4-sheet .waybill-invoice {
+  width: 204mm;
+  max-width: 100%;
+  height: 143mm;
+  margin: 0 auto;
+  box-shadow: none;
+}
+
+.waybill-a4-cut-line {
+  height: 0;
+  margin: 2.5mm 6mm;
+  border-top: 1px dashed #bbb;
+}
+
 /* ================= PRINT — giữ y nguyên giao diện xem ================= */
 
 @media print {
@@ -420,7 +449,7 @@
   }
 
   .print-toolbar,
-  .waybill-invoice-wrap > *:not(.waybill-invoice) {
+  .waybill-invoice-wrap > *:not(.waybill-invoice):not(.waybill-a4-sheet) {
     display: none !important;
   }
 
@@ -448,6 +477,42 @@
     width: 190mm !important;
     max-width: 190mm !important;
     page: standard-bill;
+  }
+
+  .waybill-invoice-wrap--a4-2up {
+    min-height: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .waybill-invoice-wrap--a4-2up .waybill-a4-sheet {
+    display: block !important;
+    width: 206mm !important;
+    max-width: 206mm !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    page: a4-two-up;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .waybill-invoice-wrap--a4-2up .waybill-a4-sheet .waybill-invoice {
+    width: 204mm !important;
+    max-width: 204mm !important;
+    height: 143mm !important;
+    margin: 0 auto !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    page-break-after: avoid;
+  }
+
+  .waybill-invoice-wrap--a4-2up .waybill-a4-cut-line {
+    display: block !important;
+    margin: 1mm 0 !important;
+    border-top: 1px dashed #ccc !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .waybill-invoice,
