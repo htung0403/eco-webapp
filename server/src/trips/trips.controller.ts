@@ -46,7 +46,7 @@ export class TripsController {
 
   @Get('expected-arrivals')
   @RequireRoles(Roles.WAREHOUSE, Roles.PACKER, Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
-  @ApiOperation({ summary: 'List in-transit trips sorted by expected arrival (for destination hub)' })
+  @ApiOperation({ summary: 'List in-transit and arrived trips for destination hub (departing & arrived trucks)' })
   getExpectedArrivals(@Query() query: QueryExpectedArrivalsDto, @CurrentUser() currentUser: UserEntity) {
     return this.tripsService.getExpectedArrivals(query, currentUser);
   }
@@ -87,7 +87,7 @@ export class TripsController {
   }
 
   @Patch(':id/arrive')
-  @RequireRoles(Roles.DISPATCHER, Roles.DRIVER, Roles.MANAGER, Roles.DIRECTOR)
+  @RequireRoles(Roles.WAREHOUSE, Roles.PACKER, Roles.DISPATCHER, Roles.DRIVER, Roles.MANAGER, Roles.DIRECTOR)
   @ApiOperation({ summary: 'Mark an in-transit trip as arrived' })
   arriveTrip(@Param('id') id: string, @Body() dto: ArriveTripDto, @CurrentUser() currentUser: UserEntity) {
     return this.tripsService.arriveTrip(id, dto, currentUser);

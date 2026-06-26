@@ -12,6 +12,7 @@ import { CloseManifestDto } from './dto/close-manifest.dto';
 import { CreateManifestDto } from './dto/create-manifest.dto';
 import { QueryManifestsDto } from './dto/query-manifests.dto';
 import { UpdateManifestDto } from './dto/update-manifest.dto';
+import { UpdateManifestKanbanDto } from './dto/update-manifest-kanban.dto';
 import { ManifestsService } from './manifests.service';
 
 @ApiTags('Manifests')
@@ -46,6 +47,13 @@ export class ManifestsController {
   @ApiOperation({ summary: 'Update a draft manifest' })
   update(@Param('id') id: string, @Body() dto: UpdateManifestDto, @CurrentUser() currentUser: UserEntity) {
     return this.manifestsService.update(id, dto, currentUser);
+  }
+
+  @Patch(':id/kanban')
+  @RequireRoles(Roles.WAREHOUSE, Roles.PACKER, Roles.DISPATCHER, Roles.DRIVER, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Update manifest kanban status (Đang chạy / Đã tới) and editable fields' })
+  updateKanban(@Param('id') id: string, @Body() dto: UpdateManifestKanbanDto, @CurrentUser() currentUser: UserEntity) {
+    return this.manifestsService.updateKanban(id, dto, currentUser);
   }
 
   @Patch(':id/expected-arrival')

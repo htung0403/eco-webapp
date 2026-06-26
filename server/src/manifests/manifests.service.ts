@@ -17,6 +17,7 @@ import { CreateManifestDto } from './dto/create-manifest.dto';
 import { ManifestStatus } from './dto/manifest.enums';
 import { QueryManifestsDto } from './dto/query-manifests.dto';
 import { UpdateManifestDto } from './dto/update-manifest.dto';
+import { UpdateManifestKanbanDto } from './dto/update-manifest-kanban.dto';
 import { ManifestWaybillEntity } from './manifest-waybill.entity';
 import { ManifestEntity } from './manifest.entity';
 
@@ -104,6 +105,47 @@ export class ManifestsService {
       updated_by: currentUser.id,
     });
     return await this.manifestsRepository.save(manifest) as ManifestRecord;
+  }
+
+  async updateKanban(id: string, dto: UpdateManifestKanbanDto, currentUser: UserEntity): Promise<ManifestRecord> {
+    this.assertRole(currentUser, [Roles.WAREHOUSE, Roles.PACKER, Roles.DISPATCHER, Roles.DRIVER, Roles.MANAGER, Roles.DIRECTOR]);
+    const manifest = await this.findOne(id, currentUser);
+    let changed = false;
+
+    if (dto.seal_code !== undefined) {
+      manifest.seal_code = dto.seal_code;
+      changed = true;
+    }
+    if (dto.note !== undefined) {
+      manifest.note = dto.note;
+      changed = true;
+    }
+    if (changed) {
+      manifest.updated_by = currentUser.id;
+      await this.manifestsRepository.save(manifest);
+    }
+
+    if (!dto.status) return this.findOne(id, currentUser);
+
+    const tripId = manifest.trip_id ?? manifest.trip?.id;
+    if (!tripId) {
+      if (dto.status === 'ARRIVED') {
+        throw new BadRequestException('Bảng kê chưa gán chuyến xe, không thể chuyển sang Đã tới');
+      }
+      return this.findOne(id, currentUser);
+    }
+
+    let trip = await this.tripsRepository.findOne({ where: { id: String(tripId) } as any }) as TripRecord | null;
+    if (!trip) throw new NotFoundException('Trip not found');
+
+    if (dto.status === 'ARRIVED') {
+      trip = await this.ensureTripInTransit(trip, manifest);
+      await this.ensureTripArrived(trip);
+    } else {
+      await this.ensureTripRunning(trip);
+    }
+
+    return this.findOne(id, currentUser);
   }
 
   async updateExpectedArrival(id: string, dto: { expected_arrival_time?: Date | string | null }, currentUser: UserEntity): Promise<ManifestRecord> {
@@ -581,6 +623,48 @@ export class ManifestsService {
     if (!allowed.includes(manifest.status as ManifestStatus)) {
       throw new ConflictException('Cannot remove waybills after manifest is assigned to a trip');
     }
+  }
+
+  private async ensureTripInTransit(trip: TripRecord, manifest: ManifestRecord): Promise<TripRecord> {
+    if (trip.status !== TripStatus.PLANNED) return trip;
+    trip.status = TripStatus.IN_TRANSIT;
+    trip.departure_time = trip.departure_time ?? new Date();
+    manifest.status = ManifestStatus.IN_TRANSIT;
+    await this.manifestsRepository.save(manifest);
+    await this.tripsRepository.save(trip);
+    if (trip.manifest_id) {
+      await this.moveManifestWaybills(String(trip.manifest_id), WaybillState.LOADED, WaybillState.IN_TRANSIT);
+      await this.moveManifestWaybills(String(trip.manifest_id), WaybillState.MANIFEST_CLOSED, WaybillState.IN_TRANSIT);
+    }
+    return trip;
+  }
+
+  private async ensureTripArrived(trip: TripRecord): Promise<TripRecord> {
+    if (trip.status === TripStatus.ARRIVED || trip.status === TripStatus.COMPLETED) return trip;
+    if (trip.status !== TripStatus.IN_TRANSIT) {
+      throw new BadRequestException('Chỉ chuyển sang Đã tới khi chuyến đang chạy');
+    }
+    trip.status = TripStatus.ARRIVED;
+    trip.arrival_time = trip.arrival_time ?? new Date();
+    await this.tripsRepository.save(trip);
+    if (trip.manifest_id) {
+      await this.moveManifestWaybills(String(trip.manifest_id), WaybillState.IN_TRANSIT, WaybillState.AT_DEST_HUB);
+    }
+    return trip;
+  }
+
+  private async ensureTripRunning(trip: TripRecord): Promise<TripRecord> {
+    if (trip.status === TripStatus.COMPLETED) {
+      throw new BadRequestException('Chuyến đã hoàn tất, không thể chuyển về Đang chạy');
+    }
+    if (trip.status !== TripStatus.ARRIVED) return trip;
+    trip.status = TripStatus.IN_TRANSIT;
+    trip.arrival_time = null;
+    await this.tripsRepository.save(trip);
+    if (trip.manifest_id) {
+      await this.moveManifestWaybills(String(trip.manifest_id), WaybillState.AT_DEST_HUB, WaybillState.IN_TRANSIT);
+    }
+    return trip;
   }
 
   /** Tự động chuyển chuyến IN_TRANSIT → ARRIVED khi quá expected_arrival_time. */

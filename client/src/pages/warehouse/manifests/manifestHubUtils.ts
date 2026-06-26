@@ -4,7 +4,14 @@ import type { HubSummary, LoadPlanningManifest } from './types';
 export type HubViewCode = 'HAN' | 'HCM';
 
 export const IN_TRANSIT_TRIP_STATUSES = ['PLANNED', 'ASSIGNED', 'ASSIGNED_TO_TRIP', 'IN_TRANSIT'];
-export const ARRIVED_TRIP_STATUSES = ['ARRIVED', 'COMPLETED', 'AT_DEST_HUB'];
+export const ARRIVED_TRIP_STATUSES = ['ARRIVED', 'COMPLETED', 'AT_DEST_HUB', 'DELIVERED', 'DONE', 'FINISHED'];
+
+export function isArrivedTripStatus(status?: string | null): boolean {
+  const normalized = String(status || '').trim().toUpperCase();
+  if (ARRIVED_TRIP_STATUSES.includes(normalized)) return true;
+  const raw = String(status || '').trim();
+  return /đã\s*(đến|tới)|xe\s*đã\s*đến/i.test(raw);
+}
 
 export const HUB_DELIVERY_STATUS_OPTIONS = [
   { value: 'Giao thành công', waybillStatus: 'DELIVERED', requiresPhoto: true },
@@ -84,7 +91,30 @@ export function compareManifestBoardRows(
 }
 
 export function isArrivedManifest(manifest: LoadPlanningManifest): boolean {
-  return ARRIVED_TRIP_STATUSES.includes(getTripStatus(manifest));
+  return isArrivedTripStatus(getTripStatus(manifest));
+}
+
+const ON_ROAD_TRIP_STATUSES = ['IN_TRANSIT', 'DEPARTED'];
+
+export function isDepartedNotArrivedManifest(manifest: LoadPlanningManifest): boolean {
+  if (isArrivedManifest(manifest)) return false;
+  const tripStatus = getTripStatus(manifest);
+  if (ON_ROAD_TRIP_STATUSES.includes(tripStatus)) return true;
+  return String(manifest.status || '') === 'IN_TRANSIT';
+}
+
+export function filterDepartedFromOrigin(manifests: LoadPlanningManifest[], origin: HubViewCode): LoadPlanningManifest[] {
+  return manifests
+    .filter((manifest) => manifestOriginLane(manifest) === origin && isDepartedNotArrivedManifest(manifest))
+    .sort((left, right) => {
+      const etaLeft = manifestTrip(left)?.expected_arrival_time || '';
+      const etaRight = manifestTrip(right)?.expected_arrival_time || '';
+      if (etaLeft && etaRight) return etaLeft.localeCompare(etaRight);
+      const depLeft = manifestTrip(left)?.departure_time || '';
+      const depRight = manifestTrip(right)?.departure_time || '';
+      if (depLeft && depRight) return depRight.localeCompare(depLeft);
+      return String(right.created_at || '').localeCompare(String(left.created_at || ''));
+    });
 }
 
 export function manifestOriginLane(manifest: LoadPlanningManifest): HubViewCode | null {

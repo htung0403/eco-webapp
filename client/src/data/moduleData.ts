@@ -65,7 +65,7 @@ export const moduleGroups: ModuleGroup[] = [
       { icon: Warehouse, title: 'Danh sách đơn', description: 'Xem toàn bộ vận đơn theo ngày và mã bill.', colorScheme: 'blue', path: '/warehouse/orders', requiredRoleMask: WAREHOUSE_ROLES },
       { icon: Warehouse, title: 'Đơn tồn', description: 'Theo dõi vận đơn tồn kho chưa phân đủ kiện lên xe.', colorScheme: 'slate', path: '/warehouse/inventory', requiredRoleMask: WAREHOUSE_ROLES, isHidden: true },
       { icon: Building2, title: 'Danh sách Bưu cục', description: 'Tra cứu danh sách bưu cục HAN, HCM và thông tin vận hành.', colorScheme: 'blue', path: '/warehouse/hubs', requiredRoleMask: WAREHOUSE_ROLES },
-      { icon: AlertTriangle, title: 'Thông báo hàng đến dự kiến', description: 'Theo dõi danh sách hàng sắp về bưu cục.', colorScheme: 'orange', path: '/warehouse/incoming', requiredRoleMask: WAREHOUSE_ROLES, isHidden: true },
+      { icon: AlertTriangle, title: 'Hàng đã tới bưu cục', description: 'Xe đã đến, tách theo bưu cục xuất phát Hà Nội và TP.HCM.', colorScheme: 'orange', path: '/warehouse/incoming', requiredRoleMask: WAREHOUSE_ROLES },
       { icon: FileText, title: 'Chi tiết bảng kê', description: 'Xem danh sách bảng kê và mở bảng phát hàng ECO.', colorScheme: 'slate', path: '/warehouse/manifests', requiredRoleMask: WAREHOUSE_ROLES },
     ],
   },

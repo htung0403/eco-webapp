@@ -259,26 +259,44 @@ export class TripsService {
 
   async getExpectedArrivals(query: QueryExpectedArrivalsDto, currentUser: UserEntity) {
     const limit = clampPaginationLimit(query.limit, 50);
-    const endHubId = query.end_hub_id != null ? String(query.end_hub_id) : currentUser.hub_id;
-    if (endHubId) {
-      await this.waybillsService.backfillInTransitTripsForHub(endHubId);
+    const hubId = query.end_hub_id != null ? String(query.end_hub_id) : currentUser.hub_id;
+    if (hubId) {
+      await this.waybillsService.backfillInTransitTripsForHub(hubId);
     }
 
+    const inboundStatuses = [TripStatus.IN_TRANSIT, TripStatus.ARRIVED, TripStatus.COMPLETED];
     const qb = this.tripsRepository.createQueryBuilder('trip')
       .leftJoinAndSelect('trip.truck', 'truck')
       .leftJoinAndSelect('truck.vendor', 'vendor')
       .leftJoinAndSelect('trip.manifest', 'manifest')
       .leftJoinAndSelect('trip.start_hub', 'start_hub')
       .leftJoinAndSelect('trip.end_hub', 'end_hub')
-      .where('trip.status = :status', { status: TripStatus.IN_TRANSIT })
-      .orderBy('trip.expected_arrival_time', 'ASC')
-      .addOrderBy('trip.arrival_time', 'ASC')
-      .take(limit);
+      .where('trip.status IN (:...statuses)', { statuses: inboundStatuses });
 
-    if (endHubId) qb.andWhere('trip.end_hub_id = :endHubId', { endHubId });
+    if (hubId) {
+      qb.andWhere(new Brackets((inner) => {
+        inner
+          .where('(trip.start_hub_id = :hubId AND trip.status = :inTransit)', {
+            hubId,
+            inTransit: TripStatus.IN_TRANSIT,
+          })
+          .orWhere('(trip.end_hub_id = :hubId AND trip.status IN (:...inboundStatuses))', {
+            hubId,
+            inboundStatuses,
+          });
+      }));
+    }
+
     this.applyHubScope(qb, currentUser);
 
-    const trips = await qb.getMany();
+    const trips = (await qb.getMany()).sort((left, right) => {
+      const leftInTransit = left.status === TripStatus.IN_TRANSIT ? 0 : 1;
+      const rightInTransit = right.status === TripStatus.IN_TRANSIT ? 0 : 1;
+      if (leftInTransit !== rightInTransit) return leftInTransit - rightInTransit;
+      const leftTime = new Date(left.expected_arrival_time || left.arrival_time || left.departure_time || 0).getTime();
+      const rightTime = new Date(right.expected_arrival_time || right.arrival_time || right.departure_time || 0).getTime();
+      return leftTime - rightTime;
+    }).slice(0, limit);
     const data = await Promise.all(trips.map(async (trip) => {
       const waybills = await this.getManifestWaybills(trip.manifest_id);
       const weight = waybills.reduce((sum, wb) => sum + Number(wb.weight ?? 0), 0);

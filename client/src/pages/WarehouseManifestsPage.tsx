@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Edit, Eye, FilePlus2, Filter, Loader2, PackageCheck, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Eye, FilePlus2, Filter, Loader2, PackageCheck, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
@@ -13,16 +13,11 @@ import PrintManifestDialog from './warehouse/manifests/dialogs/PrintManifestDial
 import type { AuthUserProfile } from './login/types';
 import AssignManifestTripDialog from './warehouse/manifests/dialogs/AssignManifestTripDialog';
 import ManifestDetailDialog from './warehouse/manifests/dialogs/ManifestDetailDialog';
-import ArrivedTruckWaybillDialog from './warehouse/manifests/dialogs/ArrivedTruckWaybillDialog';
 import {
-  compareManifestBoardRows,
-  filterManifestsForHub,
-  manifestBoardGroupLabel,
+  filterDepartedFromOrigin,
+  manifestOriginLane,
   manifestTrip as resolveManifestTrip,
-  resolveManifestBoardGroup,
   resolveUserHubView,
-  type HubViewCode,
-  type ManifestBoardGroup,
 } from './warehouse/manifests/manifestHubUtils';
 import type { AddWaybillsFormState, AssignTripFormState, BadgeConfig, FilterOption, HubSummary, LoadPlanningFilters, LoadPlanningManifest, ManifestFormState, ManifestListResponse, ManifestWaybill, TripListResponse, TripSummary } from './warehouse/manifests/types';
 import { canAddWaybillsToManifest, addWaybillsDisabledReason } from './warehouse/manifests/types';
@@ -48,17 +43,6 @@ const statusConfig: Record<string, BadgeConfig> = {
   IN_TRANSIT: { label: 'Đang chạy', className: 'bg-amber-50 text-amber-700' },
   CANCELLED: { label: 'Đã hủy', className: 'bg-red-50 text-red-600' },
 };
-const tripStatusConfig: Record<string, BadgeConfig> = {
-  PLANNED: { label: 'Đã lên kế hoạch', className: 'bg-blue-50 text-blue-700' },
-  READY: { label: 'Sẵn sàng', className: 'bg-emerald-50 text-emerald-700' },
-  IN_TRANSIT: { label: 'Đang chạy', className: 'bg-amber-50 text-amber-700' },
-  ARRIVED: { label: 'Xe đã đến', className: 'bg-emerald-50 text-emerald-700' },
-  COMPLETED: { label: 'Hoàn tất', className: 'bg-slate-100 text-slate-600' },
-  WAITING_LOAD: { label: 'Chờ bốc', className: 'bg-slate-100 text-slate-600' },
-  LOADED: { label: 'Đã bốc', className: 'bg-blue-50 text-blue-700' },
-  DEPARTED: { label: 'Đã khởi hành', className: 'bg-amber-50 text-amber-700' },
-  DELIVERED: { label: 'Đã giao', className: 'bg-emerald-50 text-emerald-700' },
-};
 const statusOptions: FilterOption[] = [
   { value: 'DRAFT', label: 'Nháp' }, { value: 'OPEN', label: 'Đang gom' }, { value: 'CLOSED', label: 'Đã đóng' }, { value: 'ASSIGNED', label: 'Đã gán chuyến' }, { value: 'IN_TRANSIT', label: 'Đang chạy' },
 ];
@@ -83,7 +67,6 @@ const normalizeList = (response: ManifestListResponse | LoadPlanningManifest[]) 
 const normalizeTripList = (response: TripListResponse | TripSummary[]) => Array.isArray(response) ? response : response.data || response.items || response.trips || [];
 const normalizeTotal = (response: ManifestListResponse | LoadPlanningManifest[], fallback: number) => Array.isArray(response) ? fallback : response.total ?? response.meta?.total ?? fallback;
 const formatNumber = (value?: string | number | null, suffix = '') => value == null || value === '' ? '—' : `${Number(value).toLocaleString('vi-VN')}${suffix}`;
-const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
 const manifestCode = (manifest: LoadPlanningManifest) => manifest.manifest_code || manifest.code || `MF-${manifest.id}`;
 const hubLabel = (hub?: HubSummary | null, id?: string | number | null) => hub?.code || hub?.name || (id ? `Hub #${id}` : '—');
 const normalizeHubCode = (hub?: HubSummary | null) => {
@@ -93,12 +76,6 @@ const normalizeHubCode = (hub?: HubSummary | null) => {
   if (/HÀ NỘI|HA NOI|HAN/.test(name)) return 'HAN';
   if (/HỒ CHÍ MINH|HO CHI MINH|TP\.?HCM|HCM/.test(name)) return 'HCM';
   return code || '';
-};
-type ManifestOriginLane = 'HAN' | 'HCM';
-const manifestOriginLane = (manifest: LoadPlanningManifest): ManifestOriginLane | null => {
-  const origin = normalizeHubCode(manifest.origin_hub);
-  if (origin === 'HAN' || origin === 'HCM') return origin;
-  return null;
 };
 const resolveManifestOriginHubId = (manifest: LoadPlanningManifest, hubList: HubSummary[]) => {
   const direct = String(manifest.origin_hub_id || manifest.origin_hub?.id || '').trim();
@@ -127,19 +104,36 @@ const tripLabel = (trip?: TripSummary | null, manifestTripId?: string | number |
   if (tripId && !String(tripId).startsWith('split-')) return `Chuyến #${tripId}`;
   return resolveTruckPlate(trip) || 'Chưa gán chuyến';
 };
-const expectedArrival = (manifest: LoadPlanningManifest) => manifestTrip(manifest)?.expected_arrival_time || manifestTrip(manifest)?.arrival_time || null;
 const truckLabel = (manifest: LoadPlanningManifest) => resolveTruckPlate(manifestTrip(manifest)) || 'Chưa có xe';
 const driverLabel = (manifest: LoadPlanningManifest) => { const trip = manifestTrip(manifest); return trip?.driver_name || trip?.driver?.name || trip?.driver?.full_name || trip?.truck?.ten_lai_xe || trip?.truck?.driver?.name || trip?.truck?.driver?.full_name || 'Chưa gán'; };
 const getWaybillCount = (manifest: LoadPlanningManifest) => Number(manifest.waybill_count ?? manifest.total_waybills ?? manifest.waybills?.length ?? 0);
-
-function resolveManifestDisplayStatus(manifest: LoadPlanningManifest): { config?: BadgeConfig; fallback: string } {
-  const tripStatus = String(manifestTrip(manifest)?.status || '').trim();
-  if (tripStatus) {
-    return { config: tripStatusConfig[tripStatus], fallback: tripStatus };
-  }
-  const manifestStatus = String(manifest.status || '').trim();
-  return { config: statusConfig[manifestStatus], fallback: manifestStatus };
-}
+const getManifestWeight = (manifest: LoadPlanningManifest) => Number(manifest.total_weight ?? manifest.weight_total ?? 0);
+const formatTime = (value?: string | null) => value ? new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }).format(new Date(value)) : null;
+const formatManifestSubline = (manifest: LoadPlanningManifest) => {
+  const trip = manifestTrip(manifest);
+  const parts = [
+    truckLabel(manifest),
+    driverLabel(manifest),
+    `${getWaybillCount(manifest).toLocaleString('vi-VN')} đơn`,
+    `${formatNumber(getManifestWeight(manifest))} kg`,
+    trip?.departure_time ? `Khởi hành ${formatTime(trip.departure_time)}` : null,
+    trip?.expected_arrival_time ? `ETA ${formatTime(trip.expected_arrival_time)}` : null,
+  ].filter(Boolean);
+  return parts.join(' · ');
+};
+const matchesManifestKeyword = (manifest: LoadPlanningManifest, keyword: string) => {
+  if (!keyword) return true;
+  const haystack = [
+    manifestCode(manifest),
+    manifest.seal_code,
+    truckLabel(manifest),
+    driverLabel(manifest),
+    tripLabel(manifestTrip(manifest)),
+    hubLabel(manifest.origin_hub, manifest.origin_hub_id),
+    hubLabel(manifest.dest_hub, manifest.dest_hub_id),
+  ].join(' ').toLowerCase();
+  return haystack.includes(keyword);
+};
 
 export default function WarehouseManifestsPage() {
   const navigate = useNavigate();
@@ -190,13 +184,18 @@ export default function WarehouseManifestsPage() {
   const [isPrintClosing, setIsPrintClosing] = useState(false);
   const [isPrintLoading, setIsPrintLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
-  const [arrivedTruckManifest, setArrivedTruckManifest] = useState<LoadPlanningManifest | null>(null);
-  const [isArrivedTruckOpen, setIsArrivedTruckOpen] = useState(false);
-  const [isArrivedTruckClosing, setIsArrivedTruckClosing] = useState(false);
-  const [isArrivedTruckLoading, setIsArrivedTruckLoading] = useState(false);
 
   const userHubView = useMemo(() => resolveUserHubView(user, hubs), [user, hubs]);
-  const hubManifests = useMemo(() => filterManifestsForHub(manifests, userHubView), [manifests, userHubView]);
+  const keyword = filters.keyword.trim().toLowerCase();
+  const expectedFromHcmManifests = useMemo(
+    () => filterDepartedFromOrigin(manifests, 'HCM').filter((manifest) => matchesManifestKeyword(manifest, keyword)),
+    [manifests, keyword],
+  );
+  const departedFromHanManifests = useMemo(
+    () => filterDepartedFromOrigin(manifests, 'HAN').filter((manifest) => matchesManifestKeyword(manifest, keyword)),
+    [manifests, keyword],
+  );
+  const transitManifestCount = expectedFromHcmManifests.length + departedFromHanManifests.length;
 
   const hubOptions = useMemo(() => hubs.map(hub => ({ value: String(hub.id), label: hub.code ? `${hub.code} · ${hub.name || 'Bưu cục'}` : hub.name || `Hub #${hub.id}` })), [hubs]);
   const tripOptions = useMemo(() => trips.map(trip => ({ value: String(trip.id), label: tripLabel(trip) })), [trips]);
@@ -254,28 +253,6 @@ export default function WarehouseManifestsPage() {
     try { setDetailManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}`)); }
     catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể tải chi tiết bảng kê.'); }
     finally { setIsDetailLoading(false); }
-  }
-
-  const closeArrivedTruck = () => {
-    setIsArrivedTruckClosing(true);
-    window.setTimeout(() => {
-      setIsArrivedTruckOpen(false);
-      setArrivedTruckManifest(null);
-      setIsArrivedTruckClosing(false);
-    }, 180);
-  };
-
-  async function openArrivedTruckDetail(manifest: LoadPlanningManifest) {
-    setIsArrivedTruckOpen(true);
-    setIsArrivedTruckLoading(true);
-    setArrivedTruckManifest(manifest);
-    try {
-      setArrivedTruckManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}`));
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Không thể tải danh sách đơn trên xe.');
-    } finally {
-      setIsArrivedTruckLoading(false);
-    }
   }
 
   async function updateDetailDispatchFields(waybill: ManifestWaybill, fields: Record<string, string>) {
@@ -460,14 +437,24 @@ export default function WarehouseManifestsPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
-          {isLoading ? <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải danh sách bảng kê..." /> : error ? <StateBlock icon={<AlertTriangle size={22} />} title={error} /> : !hubManifests.length ? <StateBlock icon={<PackageCheck size={22} />} title="Chưa có bảng kê phù hợp." /> : <ManifestAllTable hubView={userHubView} manifests={hubManifests} canManage={canManageManifest} canAddWaybills={canAddWaybills} onDetail={openDetail} onArrivedDetail={openArrivedTruckDetail} onEdit={openEdit} onAddWaybills={openAddWaybills} onPrint={openPrint} onDelete={confirmDeleteManifest} />}
+          {isLoading ? (
+            <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải danh sách bảng kê..." />
+          ) : error ? (
+            <StateBlock icon={<AlertTriangle size={22} />} title={error} />
+          ) : (
+            <ManifestTransitBoard
+              expectedFromHcm={expectedFromHcmManifests}
+              departedFromHan={departedFromHanManifests}
+              onDetail={openDetail}
+              onPrint={openPrint}
+            />
+          )}
         </div>
 
-        <div className="shrink-0 border-t border-border bg-card px-3 py-2"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[12px] font-bold text-muted-foreground">{`${rangeStart}-${rangeEnd}/Tổng:${total}`}</p><div className="flex items-center gap-2"><SearchableSelect value={String(filters.limit)} onValueChange={value => updateFilters({ limit: Number(value), page: 1 })} options={[{ value: '20', label: '20' }, { value: '50', label: '50' }, { value: '100', label: '100' }]} className="h-9 w-[88px] rounded-lg bg-white px-3 text-[13px] text-muted-foreground" searchPlaceholder="Tìm số dòng..." /><span className="hidden text-[12px] text-muted-foreground sm:inline">/ trang</span><button disabled={filters.page <= 1} onClick={() => updateFilters({ page: filters.page - 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronLeft size={16} /></button><button disabled={filters.page >= totalPages} onClick={() => updateFilters({ page: filters.page + 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronRight size={16} /></button><span className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-primary px-2 text-[13px] font-bold text-white">{filters.page}</span><span className="text-[13px] font-bold text-foreground">/ {totalPages}</span></div></div></div>
+        <div className="shrink-0 border-t border-border bg-card px-3 py-2"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[12px] font-bold text-muted-foreground">{`${transitManifestCount} xe đang chạy · ${rangeStart}-${rangeEnd}/Tổng:${total}`}</p><div className="flex items-center gap-2"><SearchableSelect value={String(filters.limit)} onValueChange={value => updateFilters({ limit: Number(value), page: 1 })} options={[{ value: '20', label: '20' }, { value: '50', label: '50' }, { value: '100', label: '100' }]} className="h-9 w-[88px] rounded-lg bg-white px-3 text-[13px] text-muted-foreground" searchPlaceholder="Tìm số dòng..." /><span className="hidden text-[12px] text-muted-foreground sm:inline">/ trang</span><button disabled={filters.page <= 1} onClick={() => updateFilters({ page: filters.page - 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronLeft size={16} /></button><button disabled={filters.page >= totalPages} onClick={() => updateFilters({ page: filters.page + 1 })} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground disabled:opacity-50"><ChevronRight size={16} /></button><span className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-primary px-2 text-[13px] font-bold text-white">{filters.page}</span><span className="text-[13px] font-bold text-foreground">/ {totalPages}</span></div></div></div>
       </div>
       <FilterBottomSheet isOpen={isFilterOpen} draftFilters={draftFilters} setDraftFilters={setDraftFilters} openGroups={openGroups} setOpenGroups={setOpenGroups} groupSearch={groupSearch} setGroupSearch={setGroupSearch} hubOptions={hubOptions} tripOptions={tripOptions} onClose={() => setIsFilterOpen(false)} onApply={applyFilters} />
       <ManifestDetailDialog isOpen={isDetailOpen} isClosing={isDetailClosing} isLoading={isDetailLoading} isSubmitting={isSubmitting} manifest={detailManifest} statusConfig={statusConfig} canManage={canManageManifest} showHubDeliveryStatus={userHubView === 'HCM'} onClose={closeDetail} onRemoveWaybill={confirmRemoveWaybill} onUpdateDispatchFields={updateDetailDispatchFields} onUpdateExpectedArrival={updateExpectedArrival} />
-      <ArrivedTruckWaybillDialog isOpen={isArrivedTruckOpen} isClosing={isArrivedTruckClosing} isLoading={isArrivedTruckLoading} manifest={arrivedTruckManifest} canManage={canManageManifest} onClose={closeArrivedTruck} onSaved={async () => { await fetchManifests(); if (arrivedTruckManifest) setArrivedTruckManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${arrivedTruckManifest.id}`)); }} />
       <AddEditManifestDialog isOpen={isFormOpen} isClosing={isFormClosing} isEditMode={isEditMode} isSubmitting={isSubmitting} formState={formState} hubs={hubs} onChange={(key, value) => setFormState(prev => ({ ...prev, [key]: value }))} onClose={closeForm} onSubmit={submitForm} />
       <AddWaybillsToManifestDialog isOpen={isAddWaybillsOpen} isClosing={isAddWaybillsClosing} isLoading={isWaybillLoading} isSubmitting={isSubmitting} error={addWaybillsError} manifest={addWaybillsManifest} originHubLabel={addWaybillsManifest ? resolveManifestOriginHubLabel(addWaybillsManifest, hubs) : '—'} waybills={waybillChoices} total={waybillTotal} formState={addWaybillsForm} onChange={patch => setAddWaybillsForm(prev => ({ ...prev, ...patch }))} onClose={closeAddWaybills} onSubmit={submitAddWaybills} />
       <PrintManifestDialog isOpen={isPrintOpen} isClosing={isPrintClosing} isLoading={isPrintLoading} manifest={printManifest} showPricing={canViewPricing(roleMask)} onClose={closePrint} />
@@ -477,119 +464,99 @@ export default function WarehouseManifestsPage() {
   );
 }
 
-function ManifestAllTable({
-  hubView,
-  manifests,
-  canManage,
-  canAddWaybills,
+function ManifestTransitBoard({
+  expectedFromHcm,
+  departedFromHan,
   onDetail,
-  onArrivedDetail,
-  onEdit,
-  onAddWaybills,
   onPrint,
-  onDelete,
 }: {
-  hubView: HubViewCode;
-  manifests: LoadPlanningManifest[];
-  canManage: boolean;
-  canAddWaybills: boolean;
+  expectedFromHcm: LoadPlanningManifest[];
+  departedFromHan: LoadPlanningManifest[];
   onDetail: (manifest: LoadPlanningManifest) => void;
-  onArrivedDetail: (manifest: LoadPlanningManifest) => void;
-  onEdit: (manifest: LoadPlanningManifest) => void;
-  onAddWaybills: (manifest: LoadPlanningManifest) => void;
   onPrint: (manifest: LoadPlanningManifest) => void;
-  onDelete: (manifest: LoadPlanningManifest) => void;
 }) {
-  const rows = useMemo(
-    () => [...manifests].sort((a, b) => compareManifestBoardRows(a, b, hubView)),
-    [manifests, hubView],
-  );
-
-  const groupTone = (group: ManifestBoardGroup) => {
-    if (group === 'arrived') return 'bg-emerald-50 text-emerald-700';
-    if (group === 'expected') return 'bg-amber-50 text-amber-700';
-    if (group === 'departed') return 'bg-blue-50 text-blue-700';
-    return 'bg-slate-100 text-slate-600';
-  };
-
   return (
-    <div className="p-3">
-      <div className="mb-3 flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
-        <h2 className="text-[14px] font-black text-primary">Bảng kê · {hubView === 'HAN' ? 'Bưu cục Hà Nội' : 'Bưu cục TP.HCM'}</h2>
-        <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-black text-foreground">{manifests.length} bảng kê</span>
-      </div>
-
-      <div className="overflow-auto custom-scrollbar rounded-xl border border-border bg-white">
-        <table className="w-full min-w-[1080px] border-collapse text-left">
-          <thead className="bg-slate-100 text-[11px] uppercase tracking-wider text-slate-600">
-            <tr>
-              <th className="px-3 py-2.5 font-bold">Nhóm</th>
-              <th className="px-3 py-2.5 font-bold">Mã bảng kê</th>
-              <th className="px-3 py-2.5 font-bold">BSX</th>
-              <th className="px-3 py-2.5 font-bold">Tài xế</th>
-              <th className="px-3 py-2.5 font-bold">Kho đi</th>
-              <th className="px-3 py-2.5 font-bold">Kho đến</th>
-              <th className="px-3 py-2.5 font-bold text-center">Số đơn</th>
-              <th className="px-3 py-2.5 font-bold">Trạng thái</th>
-              <th className="px-3 py-2.5 font-bold">Dự kiến đến</th>
-              <th className="px-3 py-2.5 font-bold">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((manifest) => {
-              const group = resolveManifestBoardGroup(manifest, hubView);
-              const openMode: 'detail' | 'arrived' = group === 'arrived' ? 'arrived' : 'detail';
-              const open = () => (openMode === 'arrived' ? onArrivedDetail(manifest) : onDetail(manifest));
-              const isDraft = manifest.status === 'DRAFT';
-              const mayAddWaybills = canAddWaybillsToManifest(manifest);
-              const addWaybillsHint = addWaybillsDisabledReason(manifest, canAddWaybills);
-
-              return (
-                <tr key={manifest.id} className="border-b border-border hover:bg-muted/10">
-                  <td className="px-3 py-3 align-top">
-                    <span className={clsx('inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold', groupTone(group))}>
-                      {manifestBoardGroupLabel(group, hubView)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 align-top">
-                    <button type="button" onClick={open} className="text-left text-[13px] font-extrabold text-primary hover:underline">
-                      {manifestCode(manifest)}
-                    </button>
-                    {manifest.seal_code && <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">Seal: {manifest.seal_code}</p>}
-                  </td>
-                  <td className="px-3 py-3 align-top text-[13px] font-bold">{truckLabel(manifest)}</td>
-                  <td className="px-3 py-3 align-top text-[13px]">{driverLabel(manifest)}</td>
-                  <td className="px-3 py-3 align-top text-[13px] font-bold">{hubLabel(manifest.origin_hub, manifest.origin_hub_id)}</td>
-                  <td className="px-3 py-3 align-top text-[13px] font-bold">{hubLabel(manifest.dest_hub, manifest.dest_hub_id)}</td>
-                  <td className="px-3 py-3 align-top text-center text-[13px] font-bold">{formatNumber(getWaybillCount(manifest))}</td>
-                  <td className="px-3 py-3 align-top">
-                    {(() => {
-                      const displayStatus = resolveManifestDisplayStatus(manifest);
-                      return <Badge config={displayStatus.config} fallback={displayStatus.fallback} />;
-                    })()}
-                  </td>
-                  <td className="px-3 py-3 align-top text-[13px]">{formatDate(expectedArrival(manifest))}</td>
-                  <td className="px-3 py-3 align-top">
-                    <div className="inline-flex flex-nowrap gap-1">
-                      <IconAction label="Xem" onClick={open} icon={<Eye size={14} />} />
-                      <IconAction label="Sửa" disabled={!canManage || !isDraft} onClick={() => onEdit(manifest)} icon={<Edit size={14} />} />
-                      <IconAction label="Thêm đơn" hint={addWaybillsHint || undefined} disabled={Boolean(addWaybillsHint) || !mayAddWaybills} onClick={() => onAddWaybills(manifest)} icon={<FilePlus2 size={14} />} />
-                      <IconAction label="In bảng kê" onClick={() => onPrint(manifest)} icon={<Printer size={14} />} />
-                      <IconAction label="Xóa" danger disabled={!canManage || !isDraft} onClick={() => onDelete(manifest)} icon={<Trash2 size={14} />} />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+    <div className="grid min-h-full grid-cols-1 gap-3 p-3 md:grid-cols-2 md:gap-4">
+      <ManifestTransitTable
+        title="Xe dự kiến tới"
+        tone="border-orange-200 bg-orange-50 text-orange-800"
+        emptyText="Chưa có xe khởi hành từ TP.HCM."
+        manifests={expectedFromHcm}
+        onDetail={onDetail}
+        onPrint={onPrint}
+      />
+      <ManifestTransitTable
+        title="Xe đi từ Hà Nội"
+        tone="border-blue-200 bg-blue-50 text-blue-800"
+        emptyText="Chưa có xe khởi hành từ Hà Nội."
+        manifests={departedFromHan}
+        onDetail={onDetail}
+        onPrint={onPrint}
+      />
     </div>
   );
 }
+
+function ManifestTransitTable({
+  title,
+  tone,
+  emptyText,
+  manifests,
+  onDetail,
+  onPrint,
+}: {
+  title: string;
+  tone: string;
+  emptyText: string;
+  manifests: LoadPlanningManifest[];
+  onDetail: (manifest: LoadPlanningManifest) => void;
+  onPrint: (manifest: LoadPlanningManifest) => void;
+}) {
+  return (
+    <section className="flex min-h-[280px] flex-col overflow-hidden rounded-xl border border-border bg-white">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 shrink-0">
+        <h2 className="text-[13px] font-extrabold text-foreground">{title}</h2>
+        <span className={clsx('rounded-full border px-2 py-0.5 text-[11px] font-extrabold', tone)}>{manifests.length}</span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
+        {manifests.length === 0 ? (
+          <div className="flex h-full min-h-[220px] items-center justify-center px-4 py-8 text-center text-[12px] font-medium text-muted-foreground">
+            {emptyText}
+          </div>
+        ) : (
+          <table className="w-full text-left border-collapse">
+            <tbody>
+              {manifests.map((manifest) => (
+                <tr key={manifest.id} className="border-b border-border/70 last:border-b-0 hover:bg-muted/20">
+                  <td className="px-3 py-2 align-middle">
+                    <button type="button" onClick={() => onDetail(manifest)} className="w-full text-left">
+                      <p className="truncate text-[13px] font-extrabold text-foreground">
+                        {manifestCode(manifest)} · {hubLabel(manifest.origin_hub, manifest.origin_hub_id)} → {hubLabel(manifest.dest_hub, manifest.dest_hub_id)}
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
+                        {formatManifestSubline(manifest)}
+                      </p>
+                    </button>
+                  </td>
+                  <td className="w-[88px] px-2 py-2 align-middle">
+                    <div className="flex justify-end gap-1">
+                      <IconAction label="Xem chi tiết" onClick={() => onDetail(manifest)} icon={<Eye size={14} />} />
+                      <IconAction label="In bảng kê" onClick={() => onPrint(manifest)} icon={<Printer size={14} />} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function IconAction({ label, hint, icon, disabled, danger, onClick }: { label: string; hint?: string; icon: ReactNode; disabled?: boolean; danger?: boolean; onClick: () => void }) {
   return <button type="button" title={hint || label} aria-label={label} disabled={disabled} onClick={onClick} className={clsx('inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45', danger && 'text-red-500 hover:bg-red-50')}>{icon}</button>;
-}function Badge({ config, fallback }: { config?: BadgeConfig; fallback?: string | null }) { return <span className={`inline-flex h-7 items-center rounded-full px-3 text-[12px] font-bold ${config?.className || 'bg-slate-100 text-slate-600'}`}>{config?.label || fallback || '—'}</span>; }
+}
 function StateBlock({ icon, title }: { icon: ReactNode; title: string }) { return <div className="flex-1 min-h-[360px] flex items-center justify-center"><div className="flex flex-col items-center gap-3 text-center text-muted-foreground"><div className="text-primary">{icon}</div><p className="text-[13px] font-bold">{title}</p></div></div>; }
 function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-white px-3 text-[13px] font-bold text-muted-foreground"><CalendarDays size={15} /><span>{label}</span><input type="date" value={value} onChange={event => onChange(event.target.value)} className="bg-transparent text-foreground outline-none" /></label>; }
 
