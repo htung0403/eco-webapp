@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Loader2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, FileSpreadsheet, Loader2, ShieldAlert } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
 import { getLoginDisplayName, getStoredAuthUser } from '../lib/authUser';
 import CreateWaybillSuccessDialog from './warehouse/orders/dialogs/CreateWaybillSuccessDialog';
+import OrderBulkImportDialog from './warehouse/orders/dialogs/OrderBulkImportDialog';
 import NewOrderWorkbench from './warehouse/orders/components/NewOrderWorkbench';
 import { emptyOrderForm } from './warehouse/orders/orderFormData';
 import { applyReceiverByDestination, customerToOrderPatch } from './warehouse/customers/customerOrderPatch';
@@ -84,6 +85,7 @@ export default function WarehouseOrderNewPage() {
   const [isSuccessClosing, setIsSuccessClosing] = useState(false);
   const [showPricingOnPrint, setShowPricingOnPrint] = useState(true);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   const canCreate = hasCreateRole(user?.role_mask ?? 0);
   const loginName = getLoginDisplayName(user as Parameters<typeof getLoginDisplayName>[0]);
@@ -407,6 +409,14 @@ export default function WarehouseOrderNewPage() {
           <h1 className="text-[15px] font-extrabold text-foreground">Nhập đơn mới</h1>
           <p className="text-[12px] font-medium text-muted-foreground">Thông tin đơn hàng · NVGN: {loginName}</p>
         </div>
+        <button
+          type="button"
+          onClick={() => setIsBulkImportOpen(true)}
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-[12px] font-extrabold text-emerald-800 hover:bg-emerald-100"
+        >
+          <FileSpreadsheet size={15} />
+          <span className="hidden sm:inline">Nhập loạt Excel</span>
+        </button>
         {isSubmitting && <Loader2 size={18} className="animate-spin text-primary" />}
       </div>
 
@@ -459,6 +469,15 @@ export default function WarehouseOrderNewPage() {
         onClose={closeSuccess}
         onCreateAnother={handleCreateAnother}
         onPrint={() => createdId && navigate(`/print/waybill/${createdId}`)}
+      />
+
+      <OrderBulkImportDialog
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        hubs={hubs}
+        existingWaybillCodes={bills.map((bill) => bill.waybill_code)}
+        defaultNvgn={loginName !== 'bạn' ? loginName : 'ADMIN'}
+        onImported={loadBills}
       />
     </div>
   );
