@@ -249,17 +249,33 @@ export class VendorsService {
     const trips = await this.tripsRepository.find({ where: { id: In(tripIds) }, relations: ['truck'] });
     if (trips.length !== tripIds.length) throw new NotFoundException('One or more trips not found');
 
+    if (dto.payment_status === VendorTripPaymentStatus.PAID) {
+      if (dto.paid_amount == null || dto.paid_amount <= 0) {
+        throw new BadRequestException('Đã thanh toán phải nhập số tiền lớn hơn 0.');
+      }
+      if (!dto.proof_image_url?.trim()) {
+        throw new BadRequestException('Đã thanh toán phải có ảnh chứng từ.');
+      }
+    }
+
     for (const trip of trips) {
       const payable = this.tripCost(trip);
       let paid = dto.paid_amount;
       if (paid == null) {
-        if (dto.payment_status === VendorTripPaymentStatus.PAID) paid = payable;
-        else if (dto.payment_status === VendorTripPaymentStatus.UNPAID) paid = 0;
+        if (dto.payment_status === VendorTripPaymentStatus.UNPAID) paid = 0;
         else paid = Number(trip.vendor_paid_amount ?? 0);
       }
-      if (paid > payable) paid = payable;
+      if (paid > payable && payable > 0) paid = payable;
       trip.vendor_paid_amount = String(paid);
       trip.vendor_payment_status = this.resolveVendorPaymentStatus(paid, payable, dto.payment_status);
+      if (dto.payment_status === VendorTripPaymentStatus.PAID && dto.proof_image_url?.trim()) {
+        trip.vendor_payment_proof_url = dto.proof_image_url.trim();
+      } else if (dto.payment_status !== VendorTripPaymentStatus.PAID) {
+        trip.vendor_payment_proof_url = null;
+      }
+      if (dto.payment_note !== undefined) {
+        trip.vendor_payment_note = dto.payment_note.trim() || null;
+      }
       await this.tripsRepository.save(trip);
     }
 

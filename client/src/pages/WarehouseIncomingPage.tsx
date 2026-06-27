@@ -1,49 +1,245 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { IncomingTripTable } from './warehouse/incoming/IncomingTripTable';
 import { IncomingTripsPageLayout } from './warehouse/incoming/IncomingTripsPageLayout';
+import { IncomingTripDeleteDialog } from './warehouse/incoming/dialogs/IncomingTripDeleteDialog';
+import { IncomingTripDetailDialog } from './warehouse/incoming/dialogs/IncomingTripDetailDialog';
+import { IncomingTripPaymentDialog } from './warehouse/incoming/dialogs/IncomingTripPaymentDialog';
 import {
-  filterTripsByDate,
-  filterTripsByOrigin,
+  collectPaymentStatusOptions,
+  collectPlateOptions,
+  collectStatusOptions,
+  collectVendorOptions,
+  filterTripsByDateRange,
+  filterTripsByPaymentStatuses,
+  filterTripsByPlates,
+  filterTripsByStatuses,
+  filterTripsByVendors,
+  formatFilterDateRangeLabel,
+  hasActiveIncomingFilters,
+  sortTrips,
   summarizeIncomingTrips,
 } from './warehouse/incoming/incomingTripUtils';
+import { useIncomingTripActions } from './warehouse/incoming/useIncomingTripActions';
 import { useIncomingTrips } from './warehouse/incoming/useIncomingTrips';
 
 export default function WarehouseIncomingPage() {
-  const { trips, isLoading, error, updatedAt } = useIncomingTrips();
-  const [filterDate, setFilterDate] = useState('');
+  const { trips, isLoading, error, updatedAt, refresh } = useIncomingTrips();
+  const [filterFromDate, setFilterFromDate] = useState('');
+  const [filterToDate, setFilterToDate] = useState('');
+  const [enabledVendors, setEnabledVendors] = useState<Set<string>>(new Set());
+  const [enabledPlates, setEnabledPlates] = useState<Set<string>>(new Set());
+  const [enabledStatuses, setEnabledStatuses] = useState<Set<string>>(new Set());
+  const [enabledPaymentStatuses, setEnabledPaymentStatuses] = useState<Set<string>>(new Set());
 
-  const filteredTrips = useMemo(() => filterTripsByDate(trips, filterDate), [trips, filterDate]);
+  const actions = useIncomingTripActions(refresh);
+
+  const vendorOptions = useMemo(() => collectVendorOptions(trips), [trips]);
+  const plateOptions = useMemo(() => collectPlateOptions(trips), [trips]);
+  const statusOptions = useMemo(() => collectStatusOptions(trips), [trips]);
+  const statusValues = useMemo(() => statusOptions.map((option) => option.value), [statusOptions]);
+  const paymentStatusOptions = useMemo(() => collectPaymentStatusOptions(trips), [trips]);
+  const paymentStatusValues = useMemo(() => paymentStatusOptions.map((option) => option.value), [paymentStatusOptions]);
+
+  useEffect(() => {
+    setEnabledVendors((previous) => {
+      const next = new Set(previous);
+      let changed = false;
+      vendorOptions.forEach((vendor) => {
+        if (!next.has(vendor)) {
+          next.add(vendor);
+          changed = true;
+        }
+      });
+      [...next].forEach((vendor) => {
+        if (!vendorOptions.includes(vendor)) {
+          next.delete(vendor);
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [vendorOptions]);
+
+  useEffect(() => {
+    setEnabledPlates((previous) => {
+      const next = new Set(previous);
+      let changed = false;
+      plateOptions.forEach((plate) => {
+        if (!next.has(plate)) {
+          next.add(plate);
+          changed = true;
+        }
+      });
+      [...next].forEach((plate) => {
+        if (!plateOptions.includes(plate)) {
+          next.delete(plate);
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [plateOptions]);
+
+  useEffect(() => {
+    setEnabledStatuses((previous) => {
+      const next = new Set(previous);
+      let changed = false;
+      statusValues.forEach((status) => {
+        if (!next.has(status)) {
+          next.add(status);
+          changed = true;
+        }
+      });
+      [...next].forEach((status) => {
+        if (!statusValues.includes(status)) {
+          next.delete(status);
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [statusValues]);
+
+  useEffect(() => {
+    setEnabledPaymentStatuses((previous) => {
+      const next = new Set(previous);
+      let changed = false;
+      paymentStatusValues.forEach((status) => {
+        if (!next.has(status)) {
+          next.add(status);
+          changed = true;
+        }
+      });
+      [...next].forEach((status) => {
+        if (!paymentStatusValues.includes(status)) {
+          next.delete(status);
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+  }, [paymentStatusValues]);
+
+  const handleVendorToggle = useCallback((vendor: string) => {
+    setEnabledVendors((previous) => {
+      const next = new Set(previous);
+      if (next.has(vendor)) next.delete(vendor);
+      else next.add(vendor);
+      return next;
+    });
+  }, []);
+
+  const handlePlatesChange = useCallback((plates: string[]) => {
+    setEnabledPlates(new Set(plates));
+  }, []);
+
+  const handleStatusesChange = useCallback((statuses: string[]) => {
+    setEnabledStatuses(new Set(statuses));
+  }, []);
+
+  const handlePaymentStatusesChange = useCallback((statuses: string[]) => {
+    setEnabledPaymentStatuses(new Set(statuses));
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setFilterFromDate('');
+    setFilterToDate('');
+    setEnabledVendors(new Set(vendorOptions));
+    setEnabledPlates(new Set(plateOptions));
+    setEnabledStatuses(new Set(statusValues));
+    setEnabledPaymentStatuses(new Set(paymentStatusValues));
+  }, [vendorOptions, plateOptions, statusValues, paymentStatusValues]);
+
+  const filteredTrips = useMemo(() => {
+    let result = filterTripsByDateRange(trips, filterFromDate, filterToDate);
+    result = filterTripsByPlates(result, enabledPlates, plateOptions);
+    result = filterTripsByStatuses(result, enabledStatuses, statusValues);
+    result = filterTripsByPaymentStatuses(result, enabledPaymentStatuses, paymentStatusValues);
+    result = filterTripsByVendors(result, enabledVendors, vendorOptions);
+    return result;
+  }, [trips, filterFromDate, filterToDate, enabledPlates, plateOptions, enabledStatuses, statusValues, enabledPaymentStatuses, paymentStatusValues, enabledVendors, vendorOptions]);
+
   const summary = useMemo(() => summarizeIncomingTrips(filteredTrips), [filteredTrips]);
-  const tripsFromHan = useMemo(() => filterTripsByOrigin(filteredTrips, 'HAN'), [filteredTrips]);
-  const tripsFromHcm = useMemo(() => filterTripsByOrigin(filteredTrips, 'HCM'), [filteredTrips]);
+  const displayTrips = useMemo(() => sortTrips(filteredTrips), [filteredTrips]);
+  const viewTrip = useMemo(() => {
+    if (!actions.viewTrip) return null;
+    return displayTrips.find((item) => String(item.id) === String(actions.viewTrip?.id)) ?? actions.viewTrip;
+  }, [actions.viewTrip, displayTrips]);
+  const filtersActive = hasActiveIncomingFilters(
+    filterFromDate,
+    filterToDate,
+    enabledVendors,
+    vendorOptions,
+    enabledPlates,
+    plateOptions,
+    enabledStatuses,
+    statusValues,
+    enabledPaymentStatuses,
+    paymentStatusValues,
+  );
+
+  const emptyHint = filtersActive
+    ? `Không có chuyến phù hợp bộ lọc${filterFromDate || filterToDate ? ` (${formatFilterDateRangeLabel(filterFromDate, filterToDate)})` : ''}.`
+    : '';
 
   return (
-    <IncomingTripsPageLayout
-      title="Tất cả chuyến xe"
-      subtitle="Theo dõi chuyến xe, ngày đến, BKS, tài xế và nhà cung cấp."
-      isLoading={isLoading}
-      error={error}
-      updatedAt={updatedAt}
-      filterDate={filterDate}
-      onFilterDateChange={setFilterDate}
-      summary={summary}
-    >
-      <div className="grid min-h-full grid-cols-1 gap-3 xl:grid-cols-2 xl:gap-4">
+    <>
+      <IncomingTripsPageLayout
+        title="Tất cả chuyến xe"
+        subtitle="Theo dõi chuyến xe, ngày đến, BKS, tài xế và nhà cung cấp."
+        isLoading={isLoading}
+        error={error}
+        updatedAt={updatedAt}
+        filterFromDate={filterFromDate}
+        filterToDate={filterToDate}
+        onFilterFromDateChange={setFilterFromDate}
+        onFilterToDateChange={setFilterToDate}
+        vendorOptions={vendorOptions}
+        enabledVendors={enabledVendors}
+        onVendorToggle={handleVendorToggle}
+        plateOptions={plateOptions}
+        enabledPlates={enabledPlates}
+        onPlatesChange={handlePlatesChange}
+        statusOptions={statusOptions}
+        enabledStatuses={enabledStatuses}
+        onStatusesChange={handleStatusesChange}
+        paymentStatusOptions={paymentStatusOptions}
+        enabledPaymentStatuses={enabledPaymentStatuses}
+        onPaymentStatusesChange={handlePaymentStatusesChange}
+        onClearFilters={handleClearFilters}
+        summary={summary}
+      >
         <IncomingTripTable
-          title="Chuyến từ Hà Nội"
-          count={tripsFromHan.length}
-          tone="border-blue-200 bg-blue-50 text-blue-700"
-          emptyText={filterDate ? 'Không có chuyến từ Hà Nội trong ngày đã chọn.' : 'Chưa có chuyến xe từ Hà Nội.'}
-          trips={tripsFromHan}
+          trips={displayTrips}
+          emptyText={emptyHint || 'Chưa có chuyến xe.'}
+          showOriginColumn
+          canDelete={actions.canDelete}
+          canPay={actions.canPay}
+          onView={actions.handleView}
+          onEdit={actions.handleEdit}
+          onDelete={actions.handleDelete}
+          onPayment={actions.handlePayment}
         />
-        <IncomingTripTable
-          title="Chuyến từ TP.HCM"
-          count={tripsFromHcm.length}
-          tone="border-orange-200 bg-orange-50 text-orange-700"
-          emptyText={filterDate ? 'Không có chuyến từ TP.HCM trong ngày đã chọn.' : 'Chưa có chuyến xe từ TP.HCM.'}
-          trips={tripsFromHcm}
-        />
-      </div>
-    </IncomingTripsPageLayout>
+      </IncomingTripsPageLayout>
+
+      <IncomingTripDeleteDialog
+        trip={actions.deleteTrip}
+        isSubmitting={actions.isSubmitting}
+        error={actions.actionError}
+        onClose={actions.closeDelete}
+        onConfirm={() => void actions.confirmDelete()}
+      />
+      <IncomingTripPaymentDialog
+        trip={actions.paymentTrip}
+        isSubmitting={actions.isSubmitting}
+        error={actions.actionError}
+        onClose={actions.closePayment}
+        onConfirm={(payload) => void actions.confirmPayment(payload)}
+      />
+      <IncomingTripDetailDialog
+        trip={viewTrip}
+        onClose={actions.closeView}
+      />
+    </>
   );
 }

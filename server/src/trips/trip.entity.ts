@@ -64,6 +64,12 @@ export class TripEntity {
   @Column({ type: 'decimal', default: 0 })
   vendor_paid_amount: string;
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  vendor_payment_proof_url: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  vendor_payment_note: string | null;
+
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;
 

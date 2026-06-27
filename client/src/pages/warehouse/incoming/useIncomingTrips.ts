@@ -81,5 +81,5 @@ export function useIncomingTrips(options?: { queryHubCode?: HubCode }) {
     return () => window.clearInterval(intervalId);
   }, [fetchIncomingTrips, hubReady]);
 
-  return { trips, isLoading: isLoading || !hubReady, error, updatedAt };
+  return { trips, isLoading: isLoading || !hubReady, error, updatedAt, refresh: fetchIncomingTrips };
 }

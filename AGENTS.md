@@ -274,11 +274,13 @@ Khi bắt đầu task mới, paste thêm phần phù hợp:
 ## Thiết kế giao diện
 Xem STYLE_GUIDE.md ở root để hiểu pattern UI, component và quy ước đặt tên.
 Mọi trang/component mới phải tuân theo STYLE_GUIDE.md trước khi viết code.
+**Định dạng số tiền VNĐ** (hiển thị + ô nhập) và **bộ lọc trang hàng đến**: xem `docs/MONEY_FORMAT.md` và dùng `client/src/lib/formatMoney.ts`.
 
 ## Skills
 
 Các skill được lưu tại .agents/skills/, áp dụng như sau:
 
+- **Định dạng tiền VNĐ:** đọc `docs/MONEY_FORMAT.md` và áp dụng `.agents/skills/money-format/`
 - Backend NestJS: đọc và áp dụng .agents/skills/nestjs-expert/
 - Deploy Vercel: đọc và áp dụng .agents/skills/deploy-to-vercel/
 - Supabase: đọc và áp dụng .agents/skills/supabase-postgres-best-practices/

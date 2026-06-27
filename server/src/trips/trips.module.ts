@@ -5,6 +5,7 @@ import { ManifestWaybillEntity } from '../manifests/manifest-waybill.entity';
 import { ManifestEntity } from '../manifests/manifest.entity';
 import { TruckEntity } from '../trucks/truck.entity';
 import { VendorDebtEntryEntity } from '../vendors/vendor-debt-entry.entity';
+import { VendorPaymentEntity } from '../vendors/vendor-payment.entity';
 import { VendorEntity } from '../vendors/vendor.entity';
 import { ExpensesModule } from '../expenses/expenses.module';
 import { VendorsModule } from '../vendors/vendors.module';
@@ -17,7 +18,7 @@ import { TripsService } from './trips.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TripEntity, TruckEntity, ManifestEntity, ManifestWaybillEntity, WaybillEntity, WaybillSplitEntity, HubEntity, VendorEntity, VendorDebtEntryEntity]),
+    TypeOrmModule.forFeature([TripEntity, TruckEntity, ManifestEntity, ManifestWaybillEntity, WaybillEntity, WaybillSplitEntity, HubEntity, VendorEntity, VendorDebtEntryEntity, VendorPaymentEntity]),
     VendorsModule,
     ExpensesModule,
     WaybillsModule,

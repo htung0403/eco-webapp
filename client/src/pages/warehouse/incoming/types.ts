@@ -44,11 +44,19 @@ export interface IncomingTrip {
   total_volumetric_weight?: number | string | null;
   total_m3?: number | string | null;
   planned_total_volume?: number | string | null;
+  total_collect?: number | string | null;
   license_plate?: string | null;
   driver_name?: string | null;
   driver_phone?: string | null;
   vendor_name?: string | null;
   vehicle_type?: string | null;
+  vendor_payment_status?: string | null;
+  vendor_paid_amount?: number | string | null;
+  vendor_payment_proof_url?: string | null;
+  vendor_payment_note?: string | null;
+  trip_cost?: number | string | null;
+  other_costs?: number | string | null;
+  fuel_cost?: number | string | null;
   truck?: {
     license_plate?: string | null;
     bks?: string | null;

@@ -2,6 +2,16 @@
 
 > Hướng dẫn này được rút ra trực tiếp từ các file hiện có trong project. Lưu ý: file trang ứng viên thực tế đang nằm ở `client/src/pages/CandidatesPage.tsx` và import dữ liệu từ `client/src/pages/candidates/*`; đường dẫn `src/pages/candidates/CandidatesPage.tsx` trong yêu cầu không tồn tại trong workspace hiện tại.
 
+### Định dạng số tiền VNĐ
+
+Xem chi tiết **`docs/MONEY_FORMAT.md`**. Tóm tắt:
+
+- Hiển thị: `formatMoney(value)` → `1.500.000 đ` (`client/src/lib/formatMoney.ts`)
+- Ô nhập: `type="text"` + `inputMode="numeric"`, `formatAmountInput` khi gõ, `parseAmountInput` trước API
+- Xem ảnh chứng từ: `ProofImageButton` trong modal — không `target="_blank"` (xem `docs/MONEY_FORMAT.md`)
+- Bộ lọc hàng đến (`/warehouse/incoming`): `FilterSelect` multiple + search; trạng thái TT `UNPAID`/`PARTIAL`/`PAID` — xem `docs/MONEY_FORMAT.md`
+- Không dùng `type="number"` cho tiền; không copy helper format cục bộ
+
 ## 1. Cấu trúc thư mục chuẩn cho module mới
 
 Module đang có pattern tách **page chính** ở `pages/` và phần riêng của module ở thư mục con cùng domain.

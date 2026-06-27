@@ -436,7 +436,7 @@ export default function WarehouseManifestsPage() {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
+        <div className="flex flex-1 min-h-0 w-full flex-col overflow-auto custom-scrollbar">
           {isLoading ? (
             <StateBlock icon={<Loader2 size={22} className="animate-spin" />} title="Đang tải danh sách bảng kê..." />
           ) : error ? (
@@ -476,7 +476,7 @@ function ManifestTransitBoard({
   onPrint: (manifest: LoadPlanningManifest) => void;
 }) {
   return (
-    <div className="grid min-h-full grid-cols-1 gap-3 p-3 md:grid-cols-2 md:gap-4">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-3 p-3 lg:flex-row lg:gap-4">
       <ManifestTransitTable
         title="Xe dự kiến tới"
         tone="border-orange-200 bg-orange-50 text-orange-800"
@@ -513,7 +513,7 @@ function ManifestTransitTable({
   onPrint: (manifest: LoadPlanningManifest) => void;
 }) {
   return (
-    <section className="flex min-h-[280px] flex-col overflow-hidden rounded-xl border border-border bg-white">
+    <section className="flex min-h-[280px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-white lg:min-h-0 lg:h-full">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 shrink-0">
         <h2 className="text-[13px] font-extrabold text-foreground">{title}</h2>
         <span className={clsx('rounded-full border px-2 py-0.5 text-[11px] font-extrabold', tone)}>{manifests.length}</span>

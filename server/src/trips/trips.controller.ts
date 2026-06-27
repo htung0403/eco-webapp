@@ -51,6 +51,13 @@ export class TripsController {
     return this.tripsService.getExpectedArrivals(query, currentUser);
   }
 
+  @Get(':id/incoming-detail')
+  @RequireRoles(Roles.WAREHOUSE, Roles.PACKER, Roles.DISPATCHER, Roles.ACCOUNTANT, Roles.MANAGER, Roles.DIRECTOR)
+  @ApiOperation({ summary: 'Chi tiết chuyến xe cho màn hàng đến (tab tổng quan + lịch sử thanh toán)' })
+  getIncomingTripDetail(@Param('id') id: string, @CurrentUser() currentUser: UserEntity) {
+    return this.tripsService.getIncomingTripDetail(id, currentUser);
+  }
+
   @Get('allocation-board')
   @RequireRoles(Roles.WAREHOUSE, Roles.PACKER, Roles.DISPATCHER, Roles.MANAGER, Roles.DIRECTOR)
   @ApiOperation({ summary: 'Trip allocation board — truck and loading position per waybill' })

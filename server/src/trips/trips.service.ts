@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, In, Not, Repository } from 'typeorm';
-import { TripStatus, WaybillState } from '../common/enums';
+import { PaymentType, TripStatus, VendorTripPaymentStatus, WaybillState } from '../common/enums';
 import { clampPaginationLimit } from '../common/pagination';
 import { Roles, isManager } from '../common/roles';
 import { HubEntity } from '../hubs/hub.entity';
@@ -12,6 +12,7 @@ import { TruckStatus } from '../trucks/dto/truck.enums';
 import { TruckEntity } from '../trucks/truck.entity';
 import { UserEntity } from '../users/user.entity';
 import { VendorsService } from '../vendors/vendors.service';
+import { VendorPaymentEntity } from '../vendors/vendor-payment.entity';
 import { WaybillsService } from '../waybills/waybills.service';
 import { WaybillEntity } from '../waybills/waybill.entity';
 import { WaybillSplitEntity } from '../waybills/waybill-split.entity';
@@ -43,6 +44,7 @@ export class TripsService {
     @InjectRepository(WaybillEntity) private readonly waybillsRepository: Repository<WaybillEntity>,
     @InjectRepository(HubEntity) private readonly hubsRepository: Repository<HubEntity>,
     @InjectRepository(WaybillSplitEntity) private readonly waybillSplitsRepository: Repository<WaybillSplitEntity>,
+    @InjectRepository(VendorPaymentEntity) private readonly vendorPaymentsRepository: Repository<VendorPaymentEntity>,
     private readonly vendorsService: VendorsService,
     private readonly waybillsService: WaybillsService,
   ) {}
@@ -303,6 +305,7 @@ export class TripsService {
       const waybills = await this.getManifestWaybills(trip.manifest_id);
       const weight = waybills.reduce((sum, wb) => sum + Number(wb.weight ?? 0), 0);
       const volume = waybills.reduce((sum, wb) => sum + Number(wb.the_tich_m3 ?? 0), 0);
+      const total_collect = waybills.reduce((sum, wb) => sum + this.calcWaybillCollectAmount(wb), 0);
       return {
         ...trip,
         manifest_code: trip.manifest?.manifest_code ?? null,
@@ -310,10 +313,11 @@ export class TripsService {
         waybill_count: waybills.length,
         planned_total_weight: weight,
         planned_total_volume: volume,
+        total_collect,
         license_plate: trip.truck?.license_plate ?? trip.truck?.bks ?? null,
         driver_name: trip.driver_name?.trim()
           || trip.truck?.ten_lai_xe?.trim()
-          || trip.truck?.driver?.name?.trim()
+          || trip.truck?.driver?.full_name?.trim()
           || null,
         driver_phone: trip.driver_phone?.trim()
           || trip.truck?.driver?.phone?.trim()
@@ -325,6 +329,110 @@ export class TripsService {
       };
     }));
     return { data, total: data.length };
+  }
+
+  async getIncomingTripDetail(id: string, currentUser: UserEntity) {
+    const qb = this.tripsRepository.createQueryBuilder('trip')
+      .leftJoinAndSelect('trip.truck', 'truck')
+      .leftJoinAndSelect('truck.vendor', 'vendor')
+      .leftJoinAndSelect('truck.driver', 'driver')
+      .leftJoinAndSelect('trip.manifest', 'manifest')
+      .leftJoinAndSelect('manifest.origin_hub', 'manifest_origin_hub')
+      .leftJoinAndSelect('manifest.dest_hub', 'manifest_dest_hub')
+      .leftJoinAndSelect('trip.start_hub', 'start_hub')
+      .leftJoinAndSelect('trip.end_hub', 'end_hub')
+      .where('trip.id = :id', { id });
+    this.applyHubScope(qb, currentUser);
+    const trip = await qb.getOne();
+    if (!trip) throw new NotFoundException('Trip not found');
+    const waybills = await this.getManifestWaybills(trip.manifest_id);
+    const weight = waybills.reduce((sum, wb) => sum + Number(wb.weight ?? 0), 0);
+    const volume = waybills.reduce((sum, wb) => sum + Number(wb.the_tich_m3 ?? 0), 0);
+    const total_collect = waybills.reduce((sum, wb) => sum + this.calcWaybillCollectAmount(wb), 0);
+    const payable = Number(trip.trip_cost ?? trip.other_costs ?? 0) || 0;
+    const paid = Number(trip.vendor_paid_amount ?? 0) || 0;
+
+    const payments = await this.vendorPaymentsRepository
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.creator', 'creator')
+      .leftJoinAndSelect('payment.vendor', 'vendor')
+      .innerJoin('payment.trips', 'linked_trip')
+      .where('linked_trip.id = :tripId', { tripId: id })
+      .orderBy('payment.payment_date', 'DESC')
+      .addOrderBy('payment.id', 'DESC')
+      .getMany();
+
+    const payment_history = [
+      ...(paid > 0 || trip.vendor_payment_proof_url || trip.vendor_payment_status !== VendorTripPaymentStatus.UNPAID
+        ? [{
+          id: `trip-${trip.id}`,
+          type: 'TRIP_STATUS' as const,
+          amount: paid,
+          payment_date: trip.created_at,
+          description: trip.vendor_payment_note?.trim() || `Ghi nhận thanh toán chuyến · ${trip.vendor_payment_status}`,
+          proof_image_url: trip.vendor_payment_proof_url,
+          created_by_name: null,
+          vendor_name: trip.truck?.vendor?.name?.trim() || trip.truck?.nha_xe?.trim() || null,
+        }]
+        : []),
+      ...payments.map((payment) => ({
+      id: payment.id,
+      type: 'VENDOR_PAYMENT' as const,
+      amount: Number(payment.amount ?? 0),
+      payment_date: payment.payment_date,
+      description: payment.description,
+      proof_image_url: null,
+      created_by_name: payment.creator?.full_name?.trim() || payment.creator?.username?.trim() || null,
+      vendor_name: payment.vendor?.name?.trim() || null,
+    })),
+    ];
+
+    return {
+      id: trip.id,
+      manifest_id: trip.manifest_id,
+      manifest_code: trip.manifest?.manifest_code ?? null,
+      seal_code: trip.manifest?.seal_code ?? null,
+      status: trip.status,
+      departure_time: trip.departure_time,
+      arrival_time: trip.arrival_time,
+      expected_arrival_time: trip.expected_arrival_time,
+      start_hub: trip.start_hub ? { id: trip.start_hub.id, code: trip.start_hub.code, name: trip.start_hub.name } : null,
+      end_hub: trip.end_hub ? { id: trip.end_hub.id, code: trip.end_hub.code, name: trip.end_hub.name } : null,
+      origin_hub: trip.manifest?.origin_hub
+        ? { id: trip.manifest.origin_hub.id, code: trip.manifest.origin_hub.code, name: trip.manifest.origin_hub.name }
+        : null,
+      dest_hub: trip.manifest?.dest_hub
+        ? { id: trip.manifest.dest_hub.id, code: trip.manifest.dest_hub.code, name: trip.manifest.dest_hub.name }
+        : null,
+      license_plate: trip.truck?.license_plate ?? trip.truck?.bks ?? null,
+      driver_name: trip.driver_name?.trim()
+        || trip.truck?.ten_lai_xe?.trim()
+        || trip.truck?.driver?.full_name?.trim()
+        || null,
+      driver_phone: trip.driver_phone?.trim()
+        || trip.truck?.driver?.phone?.trim()
+        || null,
+      vendor_name: trip.truck?.vendor?.name?.trim()
+        || trip.truck?.nha_xe?.trim()
+        || null,
+      vehicle_type: trip.truck?.loai_xe?.trim() || null,
+      waybill_count: waybills.length,
+      planned_total_weight: weight,
+      planned_total_volume: volume,
+      total_collect,
+      trip_cost: payable,
+      fuel_cost: Number(trip.fuel_cost ?? 0) || 0,
+      other_costs: Number(trip.other_costs ?? 0) || 0,
+      payment_summary: {
+        status: trip.vendor_payment_status,
+        paid_amount: paid,
+        payable_amount: payable,
+        proof_image_url: trip.vendor_payment_proof_url,
+        payment_note: trip.vendor_payment_note,
+        vendor_paid_amount: trip.vendor_paid_amount,
+      },
+      payment_history,
+    };
   }
 
   async getAllocationBoard(query: QueryAllocationBoardDto, currentUser: UserEntity) {
@@ -597,6 +705,16 @@ export class TripsService {
     if (!manifestId) return [];
     const rows = await this.manifestWaybillsRepository.find({ where: { manifest_id: manifestId }, relations: ['waybill'] });
     return rows.map((row) => row.waybill).filter(Boolean);
+  }
+
+  private calcWaybillCollectAmount(waybill: WaybillEntity): number {
+    const cod = Number(waybill.cod_amount ?? 0) || 0;
+    const cc = Number((waybill as WaybillEntity & { cc_amount?: string | number | null }).cc_amount ?? 0) || 0;
+    if (cc || cod) return cc + cod;
+    if (waybill.payment_type === PaymentType.CC) {
+      return Number(waybill.freight_amount ?? waybill.cost_amount ?? 0) || 0;
+    }
+    return cod;
   }
 
   private async setTruckStatus(truckId: string | null, status: TruckStatus): Promise<void> {

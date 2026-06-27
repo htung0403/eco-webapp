@@ -31,6 +31,7 @@ import { WaybillsModule } from './waybills/waybills.module';
 import { WarehouseModule } from './warehouses/warehouse.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { OrdersModule } from './orders/orders.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 const getPositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -107,6 +108,7 @@ const getPositiveInteger = (value: string | undefined, fallback: number) => {
     FundBalanceModule,
     WarehouseModule,
     AttendanceModule,
+    UploadsModule,
   ],
   controllers: [AppController],
 })

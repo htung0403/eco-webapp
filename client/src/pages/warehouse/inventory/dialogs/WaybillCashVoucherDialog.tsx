@@ -3,6 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Banknote, ImagePlus, Loader2, Receipt, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ApiError, apiRequest } from '../../../../lib/api';
+import {
+  formatAmountInput,
+  formatMoney,
+  parseAmountInput,
+} from '../../../../lib/formatMoney';
 import type { AuthUserProfile } from '../../../login/types';
 import type { WaybillInventoryItem } from '../types';
 
@@ -27,16 +32,7 @@ interface Props {
   onClose: () => void;
 }
 
-const parseAmount = (value: string) => Number(String(value).replace(/\D/g, '') || 0);
-
-const formatAmountInput = (value: string) => {
-  const digits = String(value).replace(/\D/g, '');
-  if (!digits) return '';
-  return Number(digits).toLocaleString('vi-VN');
-};
-
-const formatMoney = (value?: number | string | null) =>
-  value == null || value === '' ? '—' : `${Number(value).toLocaleString('vi-VN')} đ`;
+const parseAmount = parseAmountInput;
 
 const formatDateTime = (value?: string | null) =>
   value ? new Date(value).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';

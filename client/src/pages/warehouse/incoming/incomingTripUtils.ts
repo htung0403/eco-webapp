@@ -1,10 +1,12 @@
 import type { IncomingHub, IncomingManifest, IncomingTrip } from './types';
+import { formatMoney, normalizeMoney } from '../../../lib/formatMoney';
 import { isArrivedTripStatus } from '../manifests/manifestHubUtils';
 
 export type OriginLane = 'HAN' | 'HCM';
 
 export const POLLING_INTERVAL_MS = 30_000;
 export const MANAGER_ROLES = 32 | 64;
+export const FINANCE_ROLES = 16 | 32 | 64;
 
 export const tripStatusLabel: Record<string, string> = {
   PLANNED: 'Đã lên kế hoạch',
@@ -20,10 +22,41 @@ export const tripStatusTone: Record<string, string> = {
   COMPLETED: 'border-blue-200 bg-blue-50 text-blue-800',
 };
 
-export const normalizeNumber = (value?: number | string | null) => {
-  const numeric = Number(value ?? 0);
-  return Number.isFinite(numeric) ? numeric : 0;
+export type IncomingVendorPaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
+
+export const vendorPaymentStatusLabel: Record<IncomingVendorPaymentStatus, string> = {
+  UNPAID: 'Chờ TT',
+  PARTIAL: 'Đề xuất TT',
+  PAID: 'Đã TT',
 };
+
+export const vendorPaymentStatusTone: Record<IncomingVendorPaymentStatus, string> = {
+  UNPAID: 'border-red-200 bg-red-50 text-red-700',
+  PARTIAL: 'border-amber-200 bg-amber-50 text-amber-800',
+  PAID: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+};
+
+export const vendorPaymentStatusOptions: Array<{ value: IncomingVendorPaymentStatus; label: string }> = [
+  { value: 'UNPAID', label: vendorPaymentStatusLabel.UNPAID },
+  { value: 'PARTIAL', label: vendorPaymentStatusLabel.PARTIAL },
+  { value: 'PAID', label: vendorPaymentStatusLabel.PAID },
+];
+
+export const normalizeVendorPaymentStatus = (status?: string | null): IncomingVendorPaymentStatus => {
+  const normalized = (status ?? '').trim().toUpperCase();
+  if (normalized === 'PARTIAL' || normalized === 'PAID') return normalized;
+  return 'UNPAID';
+};
+
+export const getVendorPaymentStatusLabel = (trip: IncomingTrip) => (
+  vendorPaymentStatusLabel[normalizeVendorPaymentStatus(trip.vendor_payment_status)]
+);
+
+export const getVendorPaymentStatusTone = (trip: IncomingTrip) => (
+  vendorPaymentStatusTone[normalizeVendorPaymentStatus(trip.vendor_payment_status)]
+);
+
+export const normalizeNumber = (value?: number | string | null) => normalizeMoney(value);
 
 export const formatNumber = (value?: number | string | null, digits = 1) => (
   normalizeNumber(value).toLocaleString('vi-VN', { maximumFractionDigits: digits })
@@ -49,6 +82,10 @@ export const getArrivalTime = (trip: IncomingTrip) => (
 
 export const getManifestCode = (trip: IncomingTrip) => (
   trip.manifest_code || getManifest(trip)?.manifest_code || trip.manifest?.manifest_code || 'Chưa có BK'
+);
+
+export const getManifestId = (trip: IncomingTrip) => (
+  trip.manifest_id ?? trip.manifest?.id ?? null
 );
 
 export const getWaybillCount = (trip: IncomingTrip) => (
@@ -134,18 +171,163 @@ export const filterTripsByDate = (trips: IncomingTrip[], filterDate: string) => 
   return trips.filter((trip) => getTripDateKey(trip) === filterDate);
 };
 
+export const filterTripsByDateRange = (trips: IncomingTrip[], fromDate: string, toDate: string) => {
+  if (!fromDate && !toDate) return trips;
+  const from = fromDate || toDate;
+  const to = toDate || fromDate;
+  return trips.filter((trip) => {
+    const key = getTripDateKey(trip);
+    if (!key) return false;
+    return key >= from && key <= to;
+  });
+};
+
+export const collectVendorOptions = (trips: IncomingTrip[]) => {
+  const names = new Set<string>();
+  trips.forEach((trip) => {
+    const name = getVendorName(trip);
+    if (name && name !== '—') names.add(name);
+  });
+  return [...names].sort((left, right) => left.localeCompare(right, 'vi'));
+};
+
+export const getPlateFilterKey = (trip: IncomingTrip) => {
+  const plate = trip.license_plate?.trim()
+    || trip.truck?.license_plate?.trim()
+    || trip.truck?.bks?.trim();
+  return plate || `Chuyến #${trip.id}`;
+};
+
+export const collectPlateOptions = (trips: IncomingTrip[]) => {
+  const plates = new Set<string>();
+  trips.forEach((trip) => {
+    plates.add(getPlateFilterKey(trip));
+  });
+  return [...plates].sort((left, right) => left.localeCompare(right, 'vi'));
+};
+
+export const filterTripsByVendors = (
+  trips: IncomingTrip[],
+  enabledVendors: Set<string>,
+  allVendors: string[],
+) => {
+  if (!allVendors.length) return trips;
+  if (enabledVendors.size === allVendors.length) return trips;
+  if (enabledVendors.size === 0) return [];
+  return trips.filter((trip) => enabledVendors.has(getVendorName(trip)));
+};
+
+export const filterTripsByPlates = (
+  trips: IncomingTrip[],
+  enabledPlates: Set<string>,
+  allPlates: string[],
+) => {
+  if (!allPlates.length) return trips;
+  if (enabledPlates.size === allPlates.length) return trips;
+  if (enabledPlates.size === 0) return [];
+  return trips.filter((trip) => enabledPlates.has(getPlateFilterKey(trip)));
+};
+
+export interface IncomingStatusOption {
+  value: string;
+  label: string;
+}
+
+const STATUS_FILTER_ORDER = ['IN_TRANSIT', 'ARRIVED', 'COMPLETED', 'PLANNED'] as const;
+
+export const collectStatusOptions = (trips: IncomingTrip[]): IncomingStatusOption[] => {
+  const statuses = new Set<string>();
+  trips.forEach((trip) => {
+    const status = normalizeTripStatus(trip.status);
+    if (status) statuses.add(status);
+  });
+  return [...statuses]
+    .sort((left, right) => {
+      const leftIndex = STATUS_FILTER_ORDER.indexOf(left as (typeof STATUS_FILTER_ORDER)[number]);
+      const rightIndex = STATUS_FILTER_ORDER.indexOf(right as (typeof STATUS_FILTER_ORDER)[number]);
+      if (leftIndex !== -1 || rightIndex !== -1) {
+        return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex);
+      }
+      return left.localeCompare(right, 'vi');
+    })
+    .map((value) => ({
+      value,
+      label: tripStatusLabel[value] || value,
+    }));
+};
+
+export const filterTripsByStatuses = (
+  trips: IncomingTrip[],
+  enabledStatuses: Set<string>,
+  allStatuses: string[],
+) => {
+  if (!allStatuses.length) return trips;
+  if (enabledStatuses.size === allStatuses.length) return trips;
+  if (enabledStatuses.size === 0) return [];
+  return trips.filter((trip) => enabledStatuses.has(normalizeTripStatus(trip.status)));
+};
+
+const PAYMENT_STATUS_FILTER_ORDER: IncomingVendorPaymentStatus[] = ['UNPAID', 'PARTIAL', 'PAID'];
+
+export interface IncomingPaymentStatusOption {
+  value: IncomingVendorPaymentStatus;
+  label: string;
+}
+
+export const collectPaymentStatusOptions = (trips: IncomingTrip[]): IncomingPaymentStatusOption[] => {
+  const statuses = new Set<IncomingVendorPaymentStatus>();
+  trips.forEach((trip) => {
+    statuses.add(normalizeVendorPaymentStatus(trip.vendor_payment_status));
+  });
+  return PAYMENT_STATUS_FILTER_ORDER
+    .filter((value) => statuses.has(value))
+    .map((value) => ({
+      value,
+      label: vendorPaymentStatusLabel[value],
+    }));
+};
+
+export const filterTripsByPaymentStatuses = (
+  trips: IncomingTrip[],
+  enabledPaymentStatuses: Set<string>,
+  allPaymentStatuses: string[],
+) => {
+  if (!allPaymentStatuses.length) return trips;
+  if (enabledPaymentStatuses.size === allPaymentStatuses.length) return trips;
+  if (enabledPaymentStatuses.size === 0) return [];
+  return trips.filter((trip) => (
+    enabledPaymentStatuses.has(normalizeVendorPaymentStatus(trip.vendor_payment_status))
+  ));
+};
+
 export const isExpectedArrivingTrip = (trip: IncomingTrip) => normalizeTripStatus(trip.status) === 'IN_TRANSIT';
+
+export const getTotalCollect = (trip: IncomingTrip) => normalizeNumber(trip.total_collect);
+
+export const getTripPayableAmount = (trip: IncomingTrip) => normalizeNumber(trip.trip_cost);
+
+export const getTripPaidAmount = (trip: IncomingTrip) => normalizeNumber(trip.vendor_paid_amount);
+
+export const getTripOtherCosts = (trip: IncomingTrip) => normalizeNumber(trip.other_costs);
+
+export const getDriverCollectedAmount = (trip: IncomingTrip) => getTotalCollect(trip);
+
+export const getPaymentNote = (trip: IncomingTrip) => trip.vendor_payment_note?.trim() || '';
+
+export const formatCollectAmount = (value?: number | string | null) => formatMoney(value);
 
 export interface IncomingTripSummary {
   total: number;
   expectedArriving: number;
   arrived: number;
+  totalCollect: number;
 }
 
 export const summarizeIncomingTrips = (trips: IncomingTrip[]): IncomingTripSummary => ({
   total: trips.length,
   expectedArriving: trips.filter(isExpectedArrivingTrip).length,
   arrived: trips.filter(isArrivedTrip).length,
+  totalCollect: trips.reduce((sum, trip) => sum + getTotalCollect(trip), 0),
 });
 
 export const formatFilterDateLabel = (filterDate: string) => {
@@ -154,6 +336,34 @@ export const formatFilterDateLabel = (filterDate: string) => {
   if (Number.isNaN(date.getTime())) return filterDate;
   return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 };
+
+export const formatFilterDateRangeLabel = (fromDate: string, toDate: string) => {
+  if (!fromDate && !toDate) return 'Tất cả ngày';
+  if (fromDate && toDate && fromDate !== toDate) {
+    return `${formatFilterDateLabel(fromDate)} – ${formatFilterDateLabel(toDate)}`;
+  }
+  return formatFilterDateLabel(fromDate || toDate);
+};
+
+export const hasActiveIncomingFilters = (
+  fromDate: string,
+  toDate: string,
+  enabledVendors: Set<string>,
+  allVendors: string[],
+  enabledPlates: Set<string>,
+  allPlates: string[],
+  enabledStatuses: Set<string>,
+  allStatuses: string[],
+  enabledPaymentStatuses?: Set<string>,
+  allPaymentStatuses?: string[],
+) => (
+  Boolean(fromDate || toDate)
+  || (allVendors.length > 0 && enabledVendors.size !== allVendors.length)
+  || (allPlates.length > 0 && enabledPlates.size !== allPlates.length)
+  || (allStatuses.length > 0 && enabledStatuses.size !== allStatuses.length)
+  || (allPaymentStatuses && allPaymentStatuses.length > 0 && enabledPaymentStatuses
+    && enabledPaymentStatuses.size !== allPaymentStatuses.length)
+);
 
 export const normalizeHubCode = (hub?: IncomingHub | null): OriginLane | null => {
   const code = hub?.code?.trim().toUpperCase();
