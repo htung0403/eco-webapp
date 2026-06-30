@@ -501,7 +501,7 @@ export default function WarehouseOrderNewPage() {
         hubs={hubs}
         existingWaybillCodes={bills.map((bill) => bill.waybill_code)}
         defaultNvgn={loginName !== 'bạn' ? loginName : 'ADMIN'}
-        onImported={loadBills}
+        onImported={async () => { await loadBills(); }}
       />
     </div>
   );

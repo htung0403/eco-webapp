@@ -1,7 +1,6 @@
 import { ApiError } from './api';
 
 const ACCESS_TOKEN_KEY = 'eco_access_token';
-const REFRESH_TOKEN_KEY = 'eco_refresh_token';
 
 const resolveApiBaseUrl = () => {
   if (import.meta.env.DEV && import.meta.env.VITE_API_URL_DIRECT !== 'true') {

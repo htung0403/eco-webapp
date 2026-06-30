@@ -77,7 +77,7 @@ export default function BillListSidebar({
     });
   };
 
-  const toggleDateGroup = (dateKey: string, billIds: string[]) => {
+  const toggleDateGroup = (billIds: string[]) => {
     const allChecked = billIds.every((id) => checkedIds[id]);
     setCheckedIds((current) => {
       const updated = { ...current };
@@ -175,7 +175,7 @@ export default function BillListSidebar({
                             <input
                               type="checkbox"
                               checked={groupAllChecked}
-                              onChange={() => toggleDateGroup(dateKey, groupIds)}
+                              onChange={() => toggleDateGroup(groupIds)}
                               className="h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary"
                               title={`Chọn ngày ${bill.date || 'Không rõ'}`}
                             />

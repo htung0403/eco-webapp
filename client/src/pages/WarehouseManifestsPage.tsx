@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Eye, FilePlus2, Filter, Loader2, PackageCheck, Plus, Printer, Search, Trash2, Truck, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Eye, Filter, Loader2, PackageCheck, Plus, Printer, Search, Truck, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../lib/api';
@@ -20,7 +20,6 @@ import {
   resolveUserHubView,
 } from './warehouse/manifests/manifestHubUtils';
 import type { AddWaybillsFormState, AssignTripFormState, BadgeConfig, FilterOption, HubSummary, LoadPlanningFilters, LoadPlanningManifest, ManifestFormState, ManifestListResponse, ManifestWaybill, TripListResponse, TripSummary } from './warehouse/manifests/types';
-import { canAddWaybillsToManifest, addWaybillsDisabledReason } from './warehouse/manifests/types';
 import {
   buildInventoryTripLinesQuery,
   filterManifestAddableInventoryRows,
@@ -61,7 +60,6 @@ const canViewPage = (mask: number) =>
   hasRole(mask, MANAGER) ||
   hasRole(mask, DIRECTOR);
 const canAssignTrip = (mask: number) => hasRole(mask, DISPATCHER) || hasRole(mask, MANAGER) || hasRole(mask, DIRECTOR);
-const canAddWaybillsAction = (mask: number) => hasRole(mask, PACKER) || canAssignTrip(mask);
 const canViewPricing = (mask: number) => hasRole(mask, MANAGER) || hasRole(mask, DIRECTOR);
 const normalizeList = (response: ManifestListResponse | LoadPlanningManifest[]) => Array.isArray(response) ? response : response.data || response.items || response.manifests || [];
 const normalizeTripList = (response: TripListResponse | TripSummary[]) => Array.isArray(response) ? response : response.data || response.items || response.trips || [];
@@ -144,7 +142,6 @@ export default function WarehouseManifestsPage() {
   const allowed = canViewPage(roleMask);
   const mayAssign = canAssignTrip(roleMask);
   const canManageManifest = mayAssign;
-  const canAddWaybills = canAddWaybillsAction(roleMask);
   const [filters, setFilters] = useState<LoadPlanningFilters>(defaultFilters);
   const [draftFilters, setDraftFilters] = useState<LoadPlanningFilters>(defaultFilters);
   const [manifests, setManifests] = useState<LoadPlanningManifest[]>([]);
@@ -295,7 +292,6 @@ export default function WarehouseManifestsPage() {
   }
   function closeForm() { setIsFormClosing(true); window.setTimeout(() => { setIsFormOpen(false); setIsFormClosing(false); }, 180); }
   function openAdd() { setIsEditMode(false); setFormManifest(null); setFormState(toForm(null)); setIsFormOpen(true); }
-  function openEdit(manifest: LoadPlanningManifest) { if (!canManageManifest || manifest.status !== 'DRAFT') return; setIsEditMode(true); setFormManifest(manifest); setFormState(toForm(manifest)); setIsFormOpen(true); }
   async function submitForm() {
     setIsSubmitting(true); setActionError('');
     const body = { origin_hub_id: formState.origin_hub_id, dest_hub_id: formState.dest_hub_id, seal_code: formState.seal_code || undefined, note: formState.note || undefined };
@@ -304,18 +300,6 @@ export default function WarehouseManifestsPage() {
     finally { setIsSubmitting(false); }
   }
   function closeAddWaybills() { setIsAddWaybillsClosing(true); window.setTimeout(() => { setIsAddWaybillsOpen(false); setAddWaybillsManifest(null); setIsAddWaybillsClosing(false); }, 180); }
-  async function openAddWaybills(manifest: LoadPlanningManifest) {
-    if (!canAddWaybills || !canAddWaybillsToManifest(manifest)) return;
-    setAddWaybillsForm({ keyword: '', page: 1, limit: 200 });
-    setAddWaybillsError('');
-    setAddWaybillsManifest(manifest);
-    setIsAddWaybillsOpen(true);
-    try {
-      setAddWaybillsManifest(await apiRequest<LoadPlanningManifest>(`/manifests/${manifest.id}`));
-    } catch {
-      setAddWaybillsManifest(manifest);
-    }
-  }
   async function fetchWaybillChoices() {
     if (!addWaybillsManifest) return;
     setIsWaybillLoading(true);
@@ -390,7 +374,6 @@ export default function WarehouseManifestsPage() {
     finally { setIsSubmitting(false); }
   }
   function confirmRemoveWaybill(waybill: ManifestWaybill) { if (!detailManifest) return; setConfirmDialog({ title: 'Gỡ vận đơn', message: `Gỡ vận đơn ${waybill.waybill_code || waybill.id} khỏi bảng kê?`, confirmLabel: 'Gỡ', danger: true, onConfirm: async () => { try { await apiRequest(`/manifests/${detailManifest.id}/waybills/${waybill.id}`, { method: 'DELETE' }); await openDetail(detailManifest); await fetchManifests(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể gỡ vận đơn.'); } } }); }
-  function confirmDeleteManifest(manifest: LoadPlanningManifest) { if (!canManageManifest) return; setConfirmDialog({ title: 'Xóa bảng kê', message: `Xóa bảng kê nháp ${manifestCode(manifest)}?`, confirmLabel: 'Xóa', danger: true, onConfirm: async () => { try { await apiRequest(`/manifests/${manifest.id}`, { method: 'DELETE' }); await fetchManifests(); } catch (err) { setActionError(err instanceof ApiError ? err.message : 'Không thể xóa bảng kê.'); } } }); }
   function closePrint() { setIsPrintClosing(true); window.setTimeout(() => { setIsPrintOpen(false); setPrintManifest(null); setIsPrintClosing(false); }, 180); }
   async function openPrint(manifest: LoadPlanningManifest) {
     setIsPrintOpen(true);

@@ -19,6 +19,7 @@ import {
   sortTrips,
   summarizeIncomingTrips,
 } from './warehouse/incoming/incomingTripUtils';
+import type { IncomingVendorPaymentStatus } from './warehouse/incoming/incomingTripUtils';
 import { useIncomingTripActions } from './warehouse/incoming/useIncomingTripActions';
 import { useIncomingTrips } from './warehouse/incoming/useIncomingTrips';
 
@@ -29,7 +30,7 @@ export default function WarehouseIncomingPage() {
   const [enabledVendors, setEnabledVendors] = useState<Set<string>>(new Set());
   const [enabledPlates, setEnabledPlates] = useState<Set<string>>(new Set());
   const [enabledStatuses, setEnabledStatuses] = useState<Set<string>>(new Set());
-  const [enabledPaymentStatuses, setEnabledPaymentStatuses] = useState<Set<string>>(new Set());
+  const [enabledPaymentStatuses, setEnabledPaymentStatuses] = useState<Set<IncomingVendorPaymentStatus>>(new Set());
 
   const actions = useIncomingTripActions(refresh);
 
@@ -138,7 +139,7 @@ export default function WarehouseIncomingPage() {
   }, []);
 
   const handlePaymentStatusesChange = useCallback((statuses: string[]) => {
-    setEnabledPaymentStatuses(new Set(statuses));
+    setEnabledPaymentStatuses(new Set(statuses as IncomingVendorPaymentStatus[]));
   }, []);
 
   const handleClearFilters = useCallback(() => {
